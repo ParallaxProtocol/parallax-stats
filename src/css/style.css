@@ -4,7 +4,6 @@ html {
 
 body {
 	width: 100%;
-	min-width: 1900px;
 	font-smooth: auto;
 	-webkit-font-smoothing: antialiased;
 	-moz-osx-font-smoothing: grayscale;
@@ -181,6 +180,14 @@ span.small-title span.small {
 	position: absolute;
 	top: 15px;
 	left: 99px;
+	right: 10px;
+}
+
+.big-info .big-details-holder .big-details,
+.big-info .big-details-holder span.small-title {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .big-info.chart {
@@ -355,6 +362,14 @@ nodepropagchart {
 	width: 100px;
 }
 
+.th-sync {
+	width: 80px;
+}
+
+.th-peerlatency {
+	width: 100px;
+}
+
 .th-blockhash {
 	width: 150px;
 }
@@ -517,14 +532,16 @@ svg .y.axis .tick:first-child text {
 	}
 
 	.big-info .icon-full-width i {
-		width: 75px;
-		height: 67px;
-		font-size: 67px;
-		margin-left: -25px;
+		width: 56px;
+		height: 56px;
+		font-size: 50px;
+		line-height: 56px;
+		margin-left: 0;
+		margin-right: 0;
 	}
 
 	.big-info .big-details-holder {
-		left: 75px;
+		left: 80px;
 	}
 
 	.big-info .big-details {
@@ -555,4 +572,165 @@ svg .y.axis .tick:first-child text {
 	.blocks-holder div.small-title-miner {
 		font-size: 10px;
 	}
+}
+
+/* Parallax brand bar */
+.brand-bar {
+	padding: 14px 0 12px;
+	margin-bottom: 10px;
+	border-bottom: 2px solid;
+	border-image: linear-gradient(90deg, #00ff80, #0080ff) 1;
+}
+
+.brand-logo {
+	height: 30px;
+	vertical-align: middle;
+}
+
+.brand-title {
+	margin-left: 14px;
+	vertical-align: middle;
+	font-size: 15px;
+	font-weight: 300;
+	letter-spacing: 2px;
+	text-transform: uppercase;
+	color: #888;
+}
+
+/* Responsive layout. Bootstrap 3 tops out at lg (1200px); the six-up
+ * tile rows and the side-by-side charts and map need more room than
+ * that, so they switch over at a wider xl breakpoint. */
+@media (min-width: 1600px) {
+	.col-xl-2 {
+		width: 16.66666667%;
+	}
+
+	.col-xl-4 {
+		width: 33.33333333%;
+	}
+
+	.col-xl-8 {
+		width: 66.66666667%;
+	}
+}
+
+@media (max-width: 1199px) {
+	.hide-narrow {
+		display: none;
+	}
+}
+
+.table-responsive {
+	border: none !important;
+}
+
+@media (max-width: 768px) {
+	.brand-title {
+		display: block;
+		margin: 6px 0 0;
+		font-size: 12px;
+	}
+
+	#mapHolder {
+		height: 180px;
+	}
+}
+
+/* Add your node */
+.brand-join {
+	float: right;
+	margin-top: 6px;
+	padding: 4px 12px;
+	border: 1px solid #0080ff;
+	border-radius: 3px;
+	font-size: 13px;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	color: #8fc7ff;
+}
+
+.brand-join:hover,
+.brand-join:focus {
+	color: #fff;
+	text-decoration: none;
+	background: #0080ff;
+}
+
+.join-panel {
+	margin-top: 30px;
+	padding: 10px 0 40px;
+	border-top: 1px solid #222;
+	color: #aaa;
+}
+
+.join-title {
+	font-weight: 300;
+	color: #eee;
+}
+
+.join-lead {
+	max-width: 760px;
+	font-size: 16px;
+}
+
+.join-step {
+	margin-top: 24px;
+	font-weight: 700;
+	font-size: 14px;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	color: #ddd;
+}
+
+.join-note {
+	color: #888;
+}
+
+.join-panel code {
+	padding: 1px 4px;
+	color: #7fd4ff;
+	background: #111;
+}
+
+.join-input {
+	max-width: 360px;
+	color: #eee;
+	background: #111;
+	border-color: #333;
+}
+
+.join-code {
+	position: relative;
+	margin-bottom: 10px;
+}
+
+.join-code pre {
+	padding: 12px 70px 12px 12px;
+	white-space: pre-wrap;
+	word-break: break-all;
+	color: #7bcc3a;
+	background: #090909;
+	border: 1px solid #222;
+}
+
+.join-copy {
+	position: absolute;
+	top: 8px;
+	right: 8px;
+	padding: 2px 10px;
+	font-size: 12px;
+	color: #aaa;
+	background: #1a1a1a;
+	border: 1px solid #333;
+	border-radius: 3px;
+}
+
+.join-copy:hover {
+	color: #fff;
+	border-color: #0080ff;
+}
+
+.join-list {
+	padding-left: 18px;
+	line-height: 1.8;
 }

@@ -3,8 +3,13 @@ extends ./layout.pug
 
 block content
   div.container-fluid(ng-controller='StatsCtrl')
+    div.row.brand-bar
+      div.col-xs-12
+        img.brand-logo(src="/logo.svg", alt="Parallax")
+        span.brand-title network status
+        a.brand-join(href="#join") add your node
     div.row(ng-cloak)
-      div.col-xs-2.stat-holder
+      div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder
         div.big-info.bestblock.text-info
           div.pull-left.icon-full-width
             i.icon-block
@@ -12,16 +17,7 @@ block content
             span.small-title best block
             span.big-details {{'#'}}{{ bestBlock | number}}
           div.clearfix
-      div.col-xs-2.stat-holder
-        div.big-info.uncleCount.text-info
-          div.pull-left.icon-full-width
-            i.icon-uncle
-          div.big-details-holder
-            span.small-title uncles&nbsp;
-              span.small (current / last 50)
-            span.big-details {{ bestStats.block.uncles.length }}/{{ uncleCount }}
-          div.clearfix
-      div.col-xs-2.stat-holder
+      div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder
         div.big-info.blocktime(class="{{ lastBlock | timeClass : true }}")
           div.pull-left.icon-full-width
             i.icon-time
@@ -30,15 +26,7 @@ block content
             span.big-details {{ lastBlock | blockTimeFilter }}
             //- span.big-details(time-ago="lastBlock")
           div.clearfix
-      div.col-xs-2.stat-holder
-        div.big-info.avgblocktime(class="{{ avgBlockTime | avgTimeClass }}")
-          div.pull-left.icon-full-width
-            i.icon-gas
-          div.big-details-holder
-            span.small-title avg block time
-            span.big-details {{ avgBlockTime | avgTimeFilter }}
-          div.clearfix
-      div.col-xs-2.stat-holder
+      div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder
         div.big-info.difficulty.text-orange
           div.pull-left.icon-full-width
             i.icon-hashrate
@@ -46,14 +34,30 @@ block content
             span.small-title avg network hashrate
             span.big-details(ng-bind-html="avgHashrate | networkHashrateFilter")
           div.clearfix
-      div.col-xs-2.stat-holder
-        div.big-info.difficulty.text-danger
+      div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder
+        div.big-info.avgblocktime(class="{{ avgBlockTime | avgTimeClass }}")
           div.pull-left.icon-full-width
-            i.icon-difficulty
+            i.icon-gas
           div.big-details-holder
-            span.small-title difficulty
-            span.big-details
-              span.small-hash {{ lastDifficulty | totalDifficultyFilter }}
+            span.small-title avg block time
+            span.big-details {{ avgBlockTime | avgTimeFilter }}
+          div.clearfix
+      div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder
+        div.big-info.synced-nodes(class="{{ nodesSynced | syncedNodesClass : nodesActive }}")
+          div.pull-left.icon-full-width
+            i.icon-check-o
+          div.big-details-holder
+            span.small-title synced nodes
+            span.big-details {{ nodesSynced }}/{{ nodesActive }}
+          div.clearfix
+      div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder
+        div.big-info.peer-latency(class="{{ networkPeerLatency | networkPeerLatencyClass }}")
+          div.pull-left.icon-full-width
+            i.icon-network
+          div.big-details-holder
+            span.small-title peer latency&nbsp;
+              span.small (median)
+            span.big-details {{ networkPeerLatency ? networkPeerLatency + ' ms' : 'n/a' }}
           div.clearfix
 
       div.clearfix
@@ -62,58 +66,62 @@ block content
     div.row(ng-cloak)
       div.col-xs-12.stats-boxes(style="padding-top: 0px;")
         div.row.second-row
-          div.col-xs-2.stat-holder.box
+          div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder.box
             div.active-nodes(class="{{ nodesActive | nodesActiveClass : nodesTotal }}")
               i.icon-node
               span.small-title active nodes
               span.small-value {{nodesActive}}/{{nodesTotal}}
-          div.col-xs-2.stat-holder.box
+          div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder.box
             div.gasprice.text-info
               i.icon-gasprice
               span.small-title gas price
               span.small-value {{ bestStats.gasPrice.toString() | gasPriceFilter }}
-          div.col-xs-2.stat-holder.box
+          div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder.box
             div.gasprice.text-info
               i.icon-gasprice
               span.small-title gas limit
-              span.small-value {{ bestStats.block.gasLimit }} gas
-          div.col-xs-2.stat-holder.box
+              span.small-value {{ bestStats.block.gasLimit | number }} gas
+          div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder.box
             div.page-latency(class="{{ {active: true, latency: latency} | latencyClass }}")
               i.icon-clock
               span.small-title page latency
               span.small-value {{latency}} ms
-          div.col-xs-2.stat-holder.box
+          div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder.box
             div.uptime(class="{{ upTimeTotal | upTimeClass : true }}")
               i.icon-bulb
               span.small-title uptime
               span.small-value {{ upTimeTotal | upTimeFilter }}
-          div.col-xs-2.stat-holder.box
+          div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder.box
+            div.difficulty.text-danger
+              i.icon-difficulty
+              span.small-title difficulty
+              span.small-value {{ lastDifficulty | totalDifficultyFilter }}
 
         div.row
-          div.col-xs-8
+          div.col-xs-12.col-xl-8
             div.row
-              div.col-xs-3.stat-holder
+              div.col-xs-12.col-sm-6.col-md-3.stat-holder
                 div.big-info.chart(class="{{ avgBlockTime | avgTimeClass }}")
                   //- i.icon-time
                   span.small-title block time
                   //- span.small-value {{ avgBlockTime | avgTimeFilter }}
-                  sparkchart.big-details.spark-blocktimes(data="{{lastBlocksTime.join(',')}}", tooltipsuffix="s")
+                  sparkchart.big-details.spark-blocktimes(data="{{lastBlocksTime.join(',')}}", tooltipsuffix="s", colormap="blocktime")
 
-              div.col-xs-3.stat-holder
+              div.col-xs-12.col-sm-6.col-md-3.stat-holder
                 div.big-info.chart.text-info
                   //- i.icon-difficulty
                   span.small-title difficulty
                   //- span.small-value {{ lastDifficulty | number }}
                   sparkchart.big-details.spark-difficulty(data="{{difficultyChart.join(',')}}")
 
-              div.col-xs-3.stat-holder.xpull-right
+              div.col-xs-12.col-sm-6.col-md-3.stat-holder.xpull-right
                 div.big-info.chart.xdouble-chart(class="{{ blockPropagationAvg | propagationAvgTimeClass : true }}")
                   //- i.icon-gas
                   span.small-title block propagation
                   //- span.small-value {{ blockPropagationAvg | blockPropagationFilter : '' }}
                   histogram.big-details.d3-blockpropagation(data="blockPropagationChart")
 
-              div.col-xs-3.stat-holder.xpull-right
+              div.col-xs-12.col-sm-6.col-md-3.stat-holder.xpull-right
                 div.big-info.chart.xdouble-chart
                   span.small-title last blocks miners
                   div.blocks-holder(ng-repeat='miner in miners track by miner.miner', data-toggle="tooltip", data-placement="right", data-original-title="{{miner.blocks}}")
@@ -123,27 +131,19 @@ block content
                     minerblock(blocks="{{miner.blocks}}")
                     div.clearfix
 
-              div.col-xs-3.stat-holder
-                div.big-info.chart.text-info
-                  //- i.icon-uncle
-                  span.small-title uncle count&nbsp;
-                    span.small (25 blocks per bar)
-                  //- span.small-value {{ bestStats.block.uncles.length }}/{{ uncleCount }}
-                  sparkchart.big-details.spark-uncles(data="{{uncleCountChart.join(',')}}")
-
-              div.col-xs-3.stat-holder
+              div.col-xs-12.col-sm-6.col-md-3.stat-holder
                 div.big-info.chart.text-info
                   //- i.icon-uncle
                   span.small-title transactions
                   sparkchart.big-details.spark-transactions(data="{{transactionDensity.join(',')}}")
 
-              div.col-xs-3.stat-holder
+              div.col-xs-12.col-sm-6.col-md-3.stat-holder
                 div.big-info.chart.text-info
                   //- i.icon-gasprice
                   span.small-title gas spending
                   sparkchart.big-details.spark-gasspending(data="{{gasSpending.join(',')}}")
 
-              div.col-xs-3.stat-holder
+              div.col-xs-12.col-sm-6.col-md-3.stat-holder
                 div.big-info.chart.text-info
                   //- i.icon-difficulty
                   span.small-title gas limit
@@ -152,77 +152,128 @@ block content
 
 
 
-          div.col-xs-4.stat-holder.map-holder
+          div.col-xs-12.col-xl-4.stat-holder.map-holder
             //- div.col-xs-12
             nodemap#mapHolder(data="map")
 
     div.row(ng-cloak, style="padding-top: 10px")
-      table.table.table-striped
-        thead
-          tr.text-info
-            th.th-nodecheck
-              i.icon-check-o(data-toggle="tooltip", data-placement="top", title="Pin nodes to display first", ng-click="orderTable(['-stats.block.number', 'stats.block.propagation'], false)")
-            th.th-nodename
-              i.icon-node(data-toggle="tooltip", data-placement="top", title="Node name", ng-click="orderTable(['info.name'], false)")
-            th.th-nodetype
-              i.icon-laptop(data-toggle="tooltip", data-placement="top", title="Node type", ng-click="orderTable(['info.node'], false)")
-            th.th-latency
-              i.icon-clock(data-toggle="tooltip", data-placement="top", title="Node latency", ng-click="orderTable(['stats.latency'], false)")
-            th
-              i.icon-mining(data-toggle="tooltip", data-placement="top", title="Is mining", ng-click="orderTable(['-stats.hashrate'], false)")
-            th
-              i.icon-group(data-toggle="tooltip", data-placement="top", title="Peers", ng-click="orderTable(['-stats.peers'], false)")
-            th
-              i.icon-network(data-toggle="tooltip", data-placement="top", title="Pending transactions", ng-click="orderTable(['-stats.pending'], false)")
-            th
-              i.icon-block(data-toggle="tooltip", data-placement="top", title="Last block", ng-click="orderTable(['-stats.block.number', 'stats.block.propagation'], false)")
-            th.th-blockhash &nbsp;
-            th.th-blockhash
-              i.icon-difficulty(data-toggle="tooltip", data-placement="top", title="Total difficulty", ng-click="orderTable(['-stats.block.totalDifficulty'], false)")
-            th
-              i.icon-check-o(data-toggle="tooltip", data-placement="top", title="Block transactions", ng-click="orderTable(['-stats.block.transactions.length'], false)")
-            th
-              i.icon-uncle(data-toggle="tooltip", data-placement="top", title="Uncles", ng-click="orderTable(['-stats.block.uncles.length'], false)")
-            th.th-blocktime
-              i.icon-time(data-toggle="tooltip", data-placement="top", title="Last block time", ng-click="orderTable(['-stats.block.received'], false)")
-            th.th-peerPropagationTime
-              i.icon-gas(data-toggle="tooltip", data-placement="top", title="Propagation time", ng-click="orderTable(['-stats.block.number', 'stats.block.propagation'], false)")
-            th.th-peerPropagationChart
-            th.th-peerPropagationAvg
-              i.icon-gas(data-toggle="tooltip", data-placement="top", title="Average propagation time", ng-click="orderTable(['stats.propagationAvg'], false)")
-            th
-              i.icon-bulb(data-toggle="tooltip", data-placement="top", title="Up-time", ng-click="orderTable(['-stats.uptime'], false)")
-        tbody(ng-cloak)
-          tr(ng-repeat='node in nodes | orderBy:predicate track by node.id', class="{{ node.stats | mainClass : bestBlock }}", id="node_{{node.id}}")
-            td.td-nodecheck
-              i(ng-click="pinNode(node.id)", class="{{ node.pinned | nodePinClass }}", data-toggle="tooltip", data-placement="right", data-original-title="Click to {{ node.pinned ? 'un' : '' }}pin")
-            td.nodeInfo(rel="{{node.id}}")
-              span.small(data-toggle="tooltip", data-placement="top", data-html="true", data-original-title="{{node | geoTooltip}}") {{node.info.name}}
-              //- span.small &nbsp;({{node.info.ip}})
-              a.small(href="https://github.com/ethereum/wiki/wiki/Network-Status#updating", target="_blank", data-toggle="tooltip", data-placement="top", data-html="true", data-original-title="Netstats client needs update.<br>Click this icon for instructions.", class="{{ node.info | nodeClientClass : currentApiVersion }}")
-                i.icon-warning-o
-            td
-              div.small(ng-bind-html="node.info.node | nodeVersion")
-            td(class="{{ node.readable.latencyClass }}")
-              span.small {{ node.readable.latency }}
-            td(class="{{ node.stats.mining | hashrateClass : node.stats.active }}", ng-bind-html="node.stats.hashrate | hashrateFilter : node.stats.mining")
-            td(class="{{ node.stats.peers | peerClass : node.stats.active }}", style="padding-left: 11px;") {{node.stats.peers}}
-            td(style="padding-left: 15px;") {{node.stats.pending}}
-            td(class="{{ node.stats | blockClass : bestBlock }}")
-              span(class="{{ node.readable.forkMessage ? node.readable.forkClass : '' }}") {{'#'}}{{ node.stats.block.number | number }}
-              //- a.small(data-toggle="tooltip", data-placement="top", data-html="true", data-original-title="{{ node.readable.forkMessage }}", class="{{ node.readable.forkClass }}")
-                i.icon-warning-o
-            td(class="{{ node.stats | blockClass : bestBlock }}")
-              span.small {{node.stats.block.hash | hashFilter}}
-            td(class="{{ node.stats | blockClass : bestBlock }}")
-              span.small {{node.stats.block.totalDifficulty | number}}
-            td(style="padding-left: 14px;") {{node.stats.block.transactions.length || 0}}
-            td(style="padding-left: 14px;") {{node.stats.block.uncles.length || 0}}
-            td(class="{{ node.stats.block.received | timeClass : node.stats.active }}") {{node.stats.block.received | blockTimeFilter }}
-            td(class="{{ node.stats | propagationTimeClass : bestBlock }}")
-              div.propagationBox
-              span {{node.stats.block.propagation | blockPropagationFilter}}
-            td.peerPropagationChart(class="{{node.id}}")
-              nodepropagchart(data="{{node.history.join(',')}}")
-            td(class="{{ node.stats | propagationNodeAvgTimeClass : bestBlock }}") {{ node.stats | blockPropagationAvgFilter : bestBlock }}
-            td(class="{{ node.stats.uptime | upTimeClass : node.stats.active }}") {{ node.stats.uptime | upTimeFilter }}
+      div.table-responsive
+        table.table.table-striped
+          thead
+            tr.text-info
+              th.th-nodecheck
+                i.icon-check-o(data-toggle="tooltip", data-placement="top", title="Pin nodes to display first", ng-click="orderTable(['-stats.block.number', 'stats.block.propagation'], false)")
+              th.th-nodename
+                i.icon-node(data-toggle="tooltip", data-placement="top", title="Node name", ng-click="orderTable(['info.name'], false)")
+              th.th-nodetype.hide-narrow
+                i.icon-laptop(data-toggle="tooltip", data-placement="top", title="Node type", ng-click="orderTable(['info.node'], false)")
+              th.th-latency
+                i.icon-clock(data-toggle="tooltip", data-placement="top", title="Latency to this dashboard", ng-click="orderTable(['stats.latency'], false)")
+              th.th-sync
+                i.icon-check-o(data-toggle="tooltip", data-placement="top", title="Sync state", ng-click="orderTable(['stats.syncing'], false)")
+              th.th-peerlatency
+                i.icon-network(data-toggle="tooltip", data-placement="top", title="Median peer latency (min ping)", ng-click="orderTable(['stats.peerLatency'], false)")
+              th
+                i.icon-mining(data-toggle="tooltip", data-placement="top", title="Is mining", ng-click="orderTable(['-stats.hashrate'], false)")
+              th
+                i.icon-group(data-toggle="tooltip", data-placement="top", title="Peers", ng-click="orderTable(['-stats.peers'], false)")
+              th
+                i.icon-network(data-toggle="tooltip", data-placement="top", title="Pending transactions", ng-click="orderTable(['-stats.pending'], false)")
+              th
+                i.icon-block(data-toggle="tooltip", data-placement="top", title="Last block", ng-click="orderTable(['-stats.block.number', 'stats.block.propagation'], false)")
+              th.th-blockhash.hide-narrow &nbsp;
+              th.th-blockhash.hide-narrow
+                i.icon-difficulty(data-toggle="tooltip", data-placement="top", title="Total difficulty", ng-click="orderTable(['-stats.block.totalDifficulty'], false)")
+              th.hide-narrow
+                i.icon-check-o(data-toggle="tooltip", data-placement="top", title="Block transactions", ng-click="orderTable(['-stats.block.transactions.length'], false)")
+              th.th-blocktime
+                i.icon-time(data-toggle="tooltip", data-placement="top", title="Last block time", ng-click="orderTable(['-stats.block.received'], false)")
+              th.th-peerPropagationTime
+                i.icon-gas(data-toggle="tooltip", data-placement="top", title="Propagation time", ng-click="orderTable(['-stats.block.number', 'stats.block.propagation'], false)")
+              th.th-peerPropagationChart.hide-narrow
+              th.th-peerPropagationAvg.hide-narrow
+                i.icon-gas(data-toggle="tooltip", data-placement="top", title="Average propagation time", ng-click="orderTable(['stats.propagationAvg'], false)")
+              th
+                i.icon-bulb(data-toggle="tooltip", data-placement="top", title="Up-time", ng-click="orderTable(['-stats.uptime'], false)")
+          tbody(ng-cloak)
+            tr(ng-repeat='node in nodes | orderBy:predicate track by node.id', class="{{ node.stats | mainClass : bestBlock }}", id="node_{{node.id}}")
+              td.td-nodecheck
+                i(ng-click="pinNode(node.id)", class="{{ node.pinned | nodePinClass }}", data-toggle="tooltip", data-placement="right", data-original-title="Click to {{ node.pinned ? 'un' : '' }}pin")
+              td.nodeInfo(rel="{{node.id}}")
+                span.small(data-toggle="tooltip", data-placement="top", data-html="true", data-original-title="{{node | geoTooltip}}") {{node.info.name}}
+                //- span.small &nbsp;({{node.info.ip}})
+                a.small(href="https://docs.parallaxprotocol.org", target="_blank", data-toggle="tooltip", data-placement="top", data-html="true", data-original-title="Netstats client needs update.<br>Click this icon for instructions.", class="{{ node.info | nodeClientClass : currentApiVersion }}")
+                  i.icon-warning-o
+              td.hide-narrow
+                div.small(ng-bind-html="node.info.node | nodeVersion")
+              td(class="{{ node.readable.latencyClass }}")
+                span.small {{ node.readable.latency }}
+              td(class="{{ node.stats | syncClass }}", ng-bind-html="node.stats | syncFilter")
+              td(class="{{ node.stats | peerLatencyClass }}")
+                span.small {{ node.stats | peerLatencyFilter }}
+              td(class="{{ node.stats.mining | hashrateClass : node.stats.active }}", ng-bind-html="node.stats.hashrate | hashrateFilter : node.stats.mining")
+              td(class="{{ node.stats.peers | peerClass : node.stats.active }}", style="padding-left: 11px;") {{node.stats.peers}}
+              td(style="padding-left: 15px;") {{node.stats.pending}}
+              td(class="{{ node.stats | blockClass : bestBlock }}")
+                span(class="{{ node.readable.forkMessage ? node.readable.forkClass : '' }}") {{'#'}}{{ node.stats.block.number | number }}
+                //- a.small(data-toggle="tooltip", data-placement="top", data-html="true", data-original-title="{{ node.readable.forkMessage }}", class="{{ node.readable.forkClass }}")
+                  i.icon-warning-o
+              td.hide-narrow(class="{{ node.stats | blockClass : bestBlock }}")
+                span.small {{node.stats.block.hash | hashFilter}}
+              td.hide-narrow(class="{{ node.stats | blockClass : bestBlock }}")
+                span.small {{node.stats.block.totalDifficulty | number}}
+              td.hide-narrow(style="padding-left: 14px;") {{node.stats.block.transactions.length || 0}}
+              td(class="{{ node.stats.block.received | timeClass : node.stats.active }}") {{node.stats.block.received | blockTimeFilter }}
+              td(class="{{ node.stats | propagationTimeClass : bestBlock }}")
+                div.propagationBox
+                span {{node.stats.block.propagation | blockPropagationFilter}}
+              td.peerPropagationChart.hide-narrow(class="{{node.id}}")
+                nodepropagchart(data="{{node.history.join(',')}}")
+              td.hide-narrow(class="{{ node.stats | propagationNodeAvgTimeClass : bestBlock }}") {{ node.stats | blockPropagationAvgFilter : bestBlock }}
+              td(class="{{ node.stats.uptime | upTimeClass : node.stats.active }}") {{ node.stats.uptime | upTimeFilter }}
+
+    div.row.join-panel#join(ng-cloak)
+      div.col-xs-12
+        h2.join-title Add your node
+        p.join-lead
+          | Nodes appear here by reporting their own stats. Start
+          code parallaxd
+          |  with the
+          code --prlstats
+          |  flag and your node will show up within a few seconds.
+          |  It connects out to this dashboard, so no extra ports need to be opened.
+
+        div.row
+          div.col-xs-12.col-md-6
+            h4.join-step 1. Pick a name
+            p.join-note Shown publicly in the table. Colons, @ and quotes are removed.
+            input.form-control.join-input(type="text", ng-model="join.name", maxlength="64", spellcheck="false")
+
+            h4.join-step 2. Get the reporting secret
+            p.join-note(ng-if="join.secret") This dashboard is open: the secret is included in the command below.
+            p.join-note(ng-if="!join.secret", ng-bind-html="join.contact")
+
+            h4.join-step 3. Start your node with
+            div.join-code
+              pre {{ joinFlag() }}
+              button.join-copy(type="button", ng-click="copyText(joinFlag())") copy
+            p.join-note Or add this to the config file passed with
+              code  --config
+              | :
+            div.join-code
+              pre {{ joinToml() }}
+              button.join-copy(type="button", ng-click="copyText(joinToml())") copy
+
+          div.col-xs-12.col-md-6
+            h4.join-step What gets published
+            ul.join-list
+              li The node name you choose and the client version string
+              li Head block, total difficulty, transactions per block and block propagation time
+              li Whether the node is synced, its peer count and its median peer latency
+              li Pending transaction count, and hashrate if the node is mining
+              li Approximate location (country and city) looked up from the node's IP address. The address itself is never shown.
+            h4.join-step Removing your node
+            p.join-note
+              | Restart without
+              code  --prlstats
+              | . Disconnected nodes are greyed out and drop off the list after four hours.

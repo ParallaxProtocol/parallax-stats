@@ -8,7 +8,9 @@ html(ng-app="netStatsApp")
     link(rel='stylesheet', href='/css/netstats.min.css')
     meta(name='robots', content='index,follow')
     meta(name='googlebot', content='index,follow')
-    link(rel='shortcut icon', type="image/x-icon", href="{{$root.faviconPath}}")
+    link(rel='icon', type="image/svg+xml", href="/favicon.svg")
+    link(rel='alternate icon', type="image/x-icon", href="{{$root.faviconPath}}")
+    link(rel='apple-touch-icon', href="/favicon.png")
   body
     block content
     script(src="/js/netstats.min.js")

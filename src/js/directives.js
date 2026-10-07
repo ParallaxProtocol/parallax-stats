@@ -126,7 +126,8 @@ angular.module('netStatsApp.directives', [])
 						element.addClass("big-details");
 						element.sparkline('html', {
 							type: 'bar',
-							tooltipSuffix: (attrs.tooltipsuffix || '')
+							tooltipSuffix: (attrs.tooltipsuffix || ''),
+							colorMap: sparkColorMaps[attrs.colormap] || sparkColorMaps.plain
 						});
 					});
 				};
@@ -219,7 +220,7 @@ angular.module('netStatsApp.directives', [])
 								'<div class="hoverinfo ' + data.fillClass + '">',
 									'<div class="propagationBox"></div>',
 									'<strong>',
-									data.nodeName,
+									escapeHtml(data.nodeName),
 									'</strong>',
 								'</div>'].join('');
 					}
@@ -257,6 +258,11 @@ angular.module('netStatsApp.directives', [])
 						},
 						done: function(datamap) {
 							var ev;
+
+							// Scale the fixed-size map to its container
+							datamap.svg
+								.attr('viewBox', '0 0 ' + width + ' 242')
+								.attr('preserveAspectRatio', 'xMidYMid meet');
 
 							var zoomListener = d3.behavior.zoom()
 								.size([width, height])

@@ -4,18 +4,7 @@
 angular.module('netStatsApp.filters', [])
 .filter('nodesActiveClass', function() {
 	return function(active, total) {
-		var ratio = active/total;
-
-		if(ratio >= 0.9)
-			return 'text-success';
-
-		if(ratio >= 0.75)
-			return 'text-info';
-
-		if(ratio >= 0.5)
-			return 'text-warning';
-
-		return 'text-danger';
+		return nodesRatioClass(active/total);
 	};
 })
 .filter('nodePinClass', function() {
@@ -101,14 +90,7 @@ angular.module('netStatsApp.filters', [])
 	return function(version) {
 		if(version)
 		{
-			var tmp = version.split('/');
-
-			tmp[0] = tmp[0].replace('Ethereum(++)', 'Eth');
-
-			if(tmp[0].indexOf('pyethapp') === 0)
-			{
-				tmp[0] = 'pyeth';
-			}
+			var tmp = escapeHtml(version).split('/');
 
 			if(tmp[1] && tmp[1][0] !== 'v' && tmp[1][2] !== '.')
 			{
@@ -145,25 +127,13 @@ angular.module('netStatsApp.filters', [])
 		if(typeof price === 'undefined')
 			return "0 wei";
 
-		if(price.length < 4)
+		if(price.length < 7)
 			return numberFilter(price) + " wei";
 
-		if(price.length < 7)
-			return numberFilter(price/1000) + " kwei";
-
-		if(price.length < 10)
-			return numberFilter(price/1000000) + " mwei";
-
-		if(price.length < 13)
+		if(price.length < 19)
 			return numberFilter(price/1000000000) + " gwei";
 
-		if(price.length < 16)
-			return numberFilter(price/1000000000000) + " szabo";
-
-		if(price.length < 19)
-			return numberFilter(price.substr(0, price.length - 15)) + " finney";
-
-		return numberFilter(price.substr(0, price.length - 18)) + " ether";
+		return numberFilter(price/1000000000000000000) + " LAX";
 	}
 }])
 .filter('gasFilter', function() {
@@ -381,15 +351,28 @@ angular.module('netStatsApp.filters', [])
 })
 .filter('avgTimeFilter', function() {
 	return function(time) {
+		if( ! time)
+			return 'n/a';
+
 		if(time < 60)
 			return parseFloat(time).toFixed(2) + ' s';
 
-		return moment.duration(Math.round(time), 's').humanize();
+		var minutes = Math.floor(time / 60);
+		var seconds = Math.round(time - minutes * 60);
+
+		if(seconds === 60) {
+			minutes++;
+			seconds = 0;
+		}
+		return minutes + 'm ' + (seconds < 10 ? '0' : '') + seconds + 's';
 	};
 })
 .filter('avgTimeClass', function() {
 	return function(time) {
-		return blockTimeClass(time);
+		if( ! time)
+			return 'text-gray';
+
+		return avgBlockTimeClass(time);
 	}
 })
 .filter('upTimeFilter', function() {
@@ -425,46 +408,46 @@ angular.module('netStatsApp.filters', [])
 				  eth_version.splice(1,1);
 			  }
 
-			  string = "<b>" + node.info.node + "</b>";
+			  string = "<b>" + escapeHtml(node.info.node) + "</b>";
 			  tooltip.push(string);
 
-			  string = "Version: <b>" + (eth_version[1]) + "</b>";
+			  string = "Version: <b>" + escapeHtml(eth_version[1]) + "</b>";
 			  tooltip.push(string);
       }
 		}
 
 		if(node.info.net !== '') {
-			string = "Network: <b>" + (typeof node.info.net !== 'undefined' ? node.info.net : '-') + "</b>";
+			string = "Network: <b>" + (typeof node.info.net !== 'undefined' ? escapeHtml(node.info.net) : '-') + "</b>";
 
 			tooltip.push(string);
 		}
 
 		if(node.info.protocol !== '') {
-			string = "Protocol: <b>" + (typeof node.info.protocol !== 'undefined' ? node.info.protocol : '-') + "</b>";
+			string = "Protocol: <b>" + (typeof node.info.protocol !== 'undefined' ? escapeHtml(node.info.protocol) : '-') + "</b>";
 
 			tooltip.push(string);
 		}
 
 		if(node.info.port !== '') {
-			string = "Port: <b>" + (typeof node.info.port !== 'undefined' ? node.info.port : '30303') + "</b>";
+			string = "Port: <b>" + (typeof node.info.port !== 'undefined' ? escapeHtml(node.info.port) : '32110') + "</b>";
 
 			tooltip.push(string);
 		}
 
 		if(node.info.api !== '') {
-			string = "Web3: <b>" + node.info.api + "</b>";
+			string = "Web3: <b>" + escapeHtml(node.info.api) + "</b>";
 
 			tooltip.push(string);
 		}
 
 		if(node.info.client !== '') {
-			string = "API: <b>" + (typeof node.info.client !== 'undefined' ? node.info.client : '<= 0.0.3') + "</b>";
+			string = "API: <b>" + (typeof node.info.client !== 'undefined' ? escapeHtml(node.info.client) : '&lt;= 0.0.3') + "</b>";
 
 			tooltip.push(string);
 		}
 
 		if(node.info.os !== '') {
-			string = "OS: <b>" + (typeof node.info.os !== 'undefined' ? node.info.os + ' ' + node.info.os_v : '?') + "</b>";
+			string = "OS: <b>" + (typeof node.info.os !== 'undefined' ? escapeHtml(node.info.os + ' ' + node.info.os_v) : '?') + "</b>";
 
 			tooltip.push(string);
 		}
@@ -474,19 +457,73 @@ angular.module('netStatsApp.filters', [])
 			string = "Location: <b>";
 
 			if(node.geo.city !== '')
-				string += node.geo.city + ", ";
-			string += node.geo.country + "</b>";
+				string += escapeHtml(node.geo.city) + ", ";
+			string += escapeHtml(node.geo.country) + "</b>";
 
 			tooltip.push(string);
 		}
 
 		if(node.info.contact !== '') {
-			string = "Contact: <b>" + (typeof node.info.contact !== 'undefined' ? node.info.contact : '-') + "</b>";
+			string = "Contact: <b>" + (typeof node.info.contact !== 'undefined' ? escapeHtml(node.info.contact) : '-') + "</b>";
 
 			tooltip.push(string);
 		}
 
 		return tooltip.join("<br>");
+	};
+})
+.filter('syncFilter', ['$sce', function($sce) {
+	return function(stats) {
+		if( ! stats.active)
+			return $sce.trustAsHtml('<i class="icon-cancel"></i>');
+
+		if(stats.syncing)
+			return $sce.trustAsHtml('<span class="small">syncing</span>');
+
+		return $sce.trustAsHtml('<i class="icon-check"></i>');
+	};
+}])
+.filter('syncClass', function() {
+	return function(stats) {
+		if( ! stats.active)
+			return 'text-gray';
+
+		return (stats.syncing ? 'text-warning' : 'text-success');
+	};
+})
+.filter('syncedNodesClass', function() {
+	return function(synced, active) {
+		if(active === 0)
+			return 'text-gray';
+
+		return nodesRatioClass(synced/active);
+	};
+})
+.filter('peerLatencyFilter', function() {
+	return function(stats) {
+		if( ! stats.active)
+			return 'offline';
+
+		if( ! stats.peerLatency)
+			return 'n/a';
+
+		return stats.peerLatency + ' ms';
+	};
+})
+.filter('peerLatencyClass', function() {
+	return function(stats) {
+		if( ! stats.active || ! stats.peerLatency)
+			return 'text-gray';
+
+		return peerLatencyClass(stats.peerLatency);
+	};
+})
+.filter('networkPeerLatencyClass', function() {
+	return function(latency) {
+		if( ! latency)
+			return 'text-gray';
+
+		return peerLatencyClass(latency);
 	};
 })
 .filter('bubbleClass', function() {
@@ -611,16 +648,77 @@ function timeClass(timestamp)
 	return blockTimeClass(diff);
 }
 
+// blockTimeClass grades the time since the last block. Block intervals
+// are exponentially distributed around the target, so a gap of one
+// target is normal, and three targets (~5% likely) is worth flagging.
 function blockTimeClass(diff)
 {
-	if(diff <= 13)
+	if(diff <= targetBlockTime)
 		return 'text-success';
 
-	if(diff <= 20)
+	if(diff <= 2 * targetBlockTime)
 		return 'text-warning';
 
-	if(diff <= 30)
+	if(diff <= 3 * targetBlockTime)
 		return 'text-orange';
 
 	return 'text-danger'
+}
+
+// avgBlockTimeClass grades an average block time by how far it strays
+// from the target in either direction.
+function avgBlockTimeClass(avg)
+{
+	var deviation = Math.abs(avg - targetBlockTime) / targetBlockTime;
+
+	if(deviation <= 0.1)
+		return 'text-success';
+
+	if(deviation <= 0.25)
+		return 'text-warning';
+
+	if(deviation <= 0.5)
+		return 'text-orange';
+
+	return 'text-danger'
+}
+
+function nodesRatioClass(ratio)
+{
+	if(ratio >= 0.9)
+		return 'text-success';
+
+	if(ratio >= 0.75)
+		return 'text-info';
+
+	if(ratio >= 0.5)
+		return 'text-warning';
+
+	return 'text-danger';
+}
+
+function peerLatencyClass(latency)
+{
+	if(latency <= 100)
+		return 'text-success';
+
+	if(latency <= 300)
+		return 'text-warning';
+
+	if(latency <= 1000)
+		return 'text-orange';
+
+	return 'text-danger';
+}
+
+// escapeHtml makes node-supplied strings safe to render in tooltips and
+// other places that interpret HTML.
+function escapeHtml(value)
+{
+	return String(value)
+		.replace(/&/g, '&amp;')
+		.replace(/</g, '&lt;')
+		.replace(/>/g, '&gt;')
+		.replace(/"/g, '&quot;')
+		.replace(/'/g, '&#39;');
 }

@@ -1,16 +1,17 @@
 
 /* Controllers */
 
-netStatsApp.controller('StatsCtrl', function($scope, $filter, $localStorage, socket, _, toastr) {
+netStatsApp.controller('StatsCtrl', function($scope, $filter, $sce, $localStorage, socket, _, toastr) {
 
 	var MAX_BINS = 40;
 
 	// Main Stats init
 	// ---------------
 
-	$scope.frontierHash = '0x11bbe8db4e347b4e8c937c1c8370e4b5ed33adb3db69cbdb7a38e1e50b1b82fa';
 	$scope.nodesTotal = 0;
 	$scope.nodesActive = 0;
+	$scope.nodesSynced = 0;
+	$scope.networkPeerLatency = 0;
 	$scope.bestBlock = 0;
 	$scope.lastBlock = 0;
 	$scope.lastDifficulty = 0;
@@ -18,7 +19,6 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $localStorage, soc
 	$scope.avgBlockTime = 0;
 	$scope.blockPropagationAvg = 0;
 	$scope.avgHashrate = 0;
-	$scope.uncleCount = 0;
 	$scope.bestStats = {};
 
 	$scope.lastGasLimit = _.fill(Array(MAX_BINS), 2);
@@ -32,10 +32,52 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $localStorage, soc
 	$scope.nodes = [];
 	$scope.map = [];
 	$scope.blockPropagationChart = [];
-	$scope.uncleCountChart = _.fill(Array(MAX_BINS), 2);
 	$scope.coinbases = [];
 
 	$scope.latency = 0;
+
+	// Instructions for adding a node to the dashboard
+	$scope.join = {
+		name: 'my-node',
+		host: window.location.host,
+		secret: joinSecret || '',
+		// Operator-supplied config, not node data, so it may hold HTML
+		contact: $sce.trustAsHtml(joinContact || '')
+	};
+
+	$scope.joinName = function()
+	{
+		// The reporter splits the URL on its last ':' and '@', and the
+		// value is quoted for the shell, so keep those out of the name.
+		var name = ($scope.join.name || '').replace(/[:@"'\\`$]/g, '').trim();
+
+		return name || 'my-node';
+	}
+
+	$scope.joinURL = function()
+	{
+		return $scope.joinName() + ':' + ($scope.join.secret || '<secret>') + '@' + $scope.join.host;
+	}
+
+	$scope.joinFlag = function()
+	{
+		return 'parallaxd --prlstats "' + $scope.joinURL() + '"';
+	}
+
+	$scope.joinToml = function()
+	{
+		return '[ParallaxStats]\nURL = "' + $scope.joinURL() + '"';
+	}
+
+	$scope.copyText = function(text)
+	{
+		if( !navigator.clipboard )
+			return;
+
+		navigator.clipboard.writeText(text).then(function () {
+			toastr['success']("Copied to clipboard");
+		});
+	}
 
 	$scope.currentApiVersion = "0.1.1";
 
@@ -275,6 +317,8 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $localStorage, soc
 					if( !_.isUndefined(node) && !_.isUndefined(node.stats) )
 					{
 						$scope.nodes[index].stats.active = data.stats.active;
+						$scope.nodes[index].stats.syncing = data.stats.syncing;
+						$scope.nodes[index].stats.peerLatency = data.stats.peerLatency;
 						$scope.nodes[index].stats.mining = data.stats.mining;
 						$scope.nodes[index].stats.hashrate = data.stats.hashrate;
 						$scope.nodes[index].stats.peers = data.stats.peers;
@@ -318,13 +362,6 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $localStorage, soc
 
 				break;
 
-			case "uncleCount":
-				$scope.uncleCount = data[0] + data[1];
-				data.reverse();
-				$scope.uncleCountChart = data;
-
-				break;
-
 			case "charts":
 				if( !_.isEqual($scope.avgBlockTime, data.avgBlocktime) )
 					$scope.avgBlockTime = data.avgBlocktime;
@@ -344,13 +381,6 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $localStorage, soc
 				if( !_.isEqual($scope.blockPropagationChart, data.propagation.histogram) ) {
 					$scope.blockPropagationChart = data.propagation.histogram;
 					$scope.blockPropagationAvg = data.propagation.avg;
-				}
-
-				data.uncleCount.reverse();
-
-				if( !_.isEqual($scope.uncleCountChart, data.uncleCount) && data.uncleCount.length >= MAX_BINS ) {
-					$scope.uncleCount = data.uncleCount[data.uncleCount.length-2] + data.uncleCount[data.uncleCount.length-1];
-					$scope.uncleCountChart = data.uncleCount;
 				}
 
 				if( !_.isEqual($scope.transactionDensity, data.transactions) && data.transactions.length >= MAX_BINS )
@@ -481,10 +511,32 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $localStorage, soc
 
 		$scope.nodesTotal = $scope.nodes.length;
 
-		$scope.nodesActive = _.filter($scope.nodes, function (node) {
+		var active = _.filter($scope.nodes, function (node) {
 			// forkFilter(node);
 			return node.stats.active == true;
+		});
+
+		$scope.nodesActive = active.length;
+
+		$scope.nodesSynced = _.filter(active, function (node) {
+			return !node.stats.syncing;
 		}).length;
+
+		// Median of the active nodes' own median peer RTTs, skipping
+		// nodes that have not measured any peer yet.
+		var peerLatencies = _(active)
+			.map('stats.peerLatency')
+			.filter(function (latency) { return latency > 0; })
+			.sortBy()
+			.value();
+		var mid = Math.floor(peerLatencies.length / 2);
+
+		if( peerLatencies.length === 0 )
+			$scope.networkPeerLatency = 0;
+		else if( peerLatencies.length % 2 === 0 )
+			$scope.networkPeerLatency = Math.round((peerLatencies[mid-1] + peerLatencies[mid]) / 2);
+		else
+			$scope.networkPeerLatency = peerLatencies[mid];
 
 		$scope.upTimeTotal = _.reduce($scope.nodes, function (total, node) {
 			return total + node.stats.uptime;
