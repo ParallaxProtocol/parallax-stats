@@ -1,15 +1,15 @@
 {
-  "name": "ethstats-server",
-  "description": "Ethstats Network Dashboard",
-  "version": "0.2.1",
+  "name": "parallax-stats",
+  "description": "Parallax network status dashboard",
+  "version": "0.3.0",
   "private": true,
   "engines": {
-    "node": "16.17.0",
-    "npm": "8.15.0"
+    "node": ">=18"
   },
   "scripts": {
     "dist": "grunt",
-    "start": "node ./bin/www"
+    "start": "node ./bin/www",
+    "test": "node --test test/"
   },
   "dependencies": {
     "body-parser": "^1.20.4",
@@ -32,14 +32,6 @@
     "primus-emit": "^1.0.0",
     "primus-spark-latency": "^0.1.1",
     "ws": "^6.2.3"
-  },
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/goerli/netstats-server.git"
-  },
-  "homepage": "https://github.com/goerli/netstats-server",
-  "bugs": {
-    "url": "https://github.com/goerli/netstats-server/issues"
   },
   "authors": [
     {
