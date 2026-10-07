@@ -2,39 +2,37 @@ var _ = require('lodash');
 var logger = require('./lib/utils/logger');
 var chalk = require('chalk');
 var http = require('http');
-const v8 = require('v8')
+var guard = require('./lib/guard');
+var settings = guard.settings;
 
-// Init WS SECRET
-var WS_SECRET;
-
-if( !_.isEmpty(process.env.WS_SECRET) )
-{
-	WS_SECRET = process.env.WS_SECRET.split('|');
-}
-else
+// Init secrets. WS_SECRET holds private secrets whose nodes are trusted,
+// PUBLIC_SECRET the secret published on the page for everyone else.
+if( settings.privateSecrets.length === 0 )
 {
 	try {
 		var tmp_secret_json = require('./ws_secret.json');
-		WS_SECRET = _.values(tmp_secret_json);
+
+		settings.privateSecrets = _.without(_.filter(_.values(tmp_secret_json), function (secret) {
+			return _.isString(secret) && secret.length > 0;
+		}), settings.publicSecret);
 	}
-	catch (e)
-	{
-		console.error("WS_SECRET is not set and ws_secret.json is missing");
-		process.exit(1);
-	}
+	catch (e) {}
 }
 
-// Never accept an empty secret, or nodes without a password could log in
-WS_SECRET = _.filter(WS_SECRET, function (secret) { return _.isString(secret) && secret.length > 0; });
-
-if( WS_SECRET.length === 0 )
+if( settings.privateSecrets.length === 0 && settings.publicSecret.length === 0 )
 {
-	console.error("No non-empty WS_SECRET configured");
+	console.error("Neither WS_SECRET nor PUBLIC_SECRET is set");
 	process.exit(1);
 }
 
 var banned   = require('./lib/utils/config').banned;
 var reserved = require('./lib/utils/config').reserved;
+
+// Init socket vars
+var Primus = require('primus');
+var api;
+var client;
+var server;
 
 // Init http server
 if( process.env.NODE_ENV !== 'production' )
@@ -45,18 +43,13 @@ if( process.env.NODE_ENV !== 'production' )
 else
 	server = http.createServer();
 
-// Init socket vars
-var Primus = require('primus');
-var api;
-var client;
-var server;
-
 
 // Init API Socket connection
 api = new Primus(server, {
 	transformer: 'websockets',
 	pathname: '/api',
-	parser: 'JSON'
+	parser: 'JSON',
+	maxLength: settings.maxMessageBytes
 });
 
 api.plugin('emit', require('primus-emit'));
@@ -67,7 +60,8 @@ api.plugin('spark-latency', require('primus-spark-latency'));
 client = new Primus(server, {
 	transformer: 'websockets',
 	pathname: '/primus',
-	parser: 'JSON'
+	parser: 'JSON',
+	maxLength: 64 * 1024
 });
 
 client.plugin('emit', require('primus-emit'));
@@ -77,7 +71,8 @@ client.plugin('emit', require('primus-emit'));
 external = new Primus(server, {
 	transformer: 'websockets',
 	pathname: '/external',
-	parser: 'JSON'
+	parser: 'JSON',
+	maxLength: 64 * 1024
 });
 
 external.plugin('emit', require('primus-emit'));
@@ -101,213 +96,198 @@ Nodes.setChartsCallback(function (err, charts)
 	}
 });
 
-let connections=0
-const C_LIMIT = 5
-const C_RESET_MS = 30_000
-setInterval(() => {
-	if(connections > C_LIMIT){
-		const stats = v8.getHeapStatistics();
-		if(stats.used_heap_size/1000000 < 1000){
-			console.success('API', 'CON', 'RESET-LIMIT(MB) ', Math.floor(stats.used_heap_size/1000000), 'CON: ' + connections, 'WINDOW(sec): ', Math.floor(C_RESET_MS/1000) , JSON.stringify(stats));
-			connections=0
-		}else{
-			console.success('API', 'CON', 'RESET-SKIP(MB) ', Math.floor(stats.used_heap_size/1000000), 'CON: ' + connections, 'WINDOW(sec):', Math.floor(C_RESET_MS/1000), JSON.stringify(stats));
-		}
-	}
-}, C_RESET_MS);
+var connectionLimiter = new guard.RateLimiter(settings.connPerMinute);
+
+setInterval(function () {
+	connectionLimiter.prune();
+}, 60 * 1000);
 
 
 // Init API Socket events
 api.on('connection', function (spark)
 {
-	if(connections > C_LIMIT){
-		// connection limit reached for the window, skip proceeding with connection
-		console.success('API', 'CON', 'LIMIT: '+connections, spark.address.ip);
-		spark.end(undefined, { reconnect: true }); // trigger a client-side reconnection
-		return false
+	var ip = guard.clientIP(spark);
+
+	if( banned.indexOf(ip) >= 0 || !connectionLimiter.allow(ip) )
+	{
+		console.warn('API', 'CON', 'Refused:', ip);
+		spark.end(undefined, { reconnect: false });
+
+		return;
 	}
-	connections++
-	console.info('API', 'CON', 'Open:', spark.address.ip);
 
-	spark.on('hello', function (data)
+	console.info('API', 'CON', 'Open:', ip);
+
+	// The node this connection logged in as. Every report is attributed
+	// to it, whatever id the message itself claims.
+	var nodeId = null;
+	var bucket = new guard.TokenBucket(settings.msgPerSecond, settings.msgBurst);
+
+	// on registers a handler that enforces the per-connection message
+	// rate and, except for the login itself, a completed login.
+	function on(event, handler)
 	{
-		console.info('API', 'CON', 'Hello', data['id']);
-
-		if( _.isUndefined(data.secret) || WS_SECRET.indexOf(data.secret) === -1 || banned.indexOf(spark.address.ip) >= 0 || _.isUndefined(data.id) || reserved.indexOf(data.id) >= 0 )
+		spark.on(event, function (data)
 		{
+			if( !bucket.take() )
+			{
+				console.warn('API', 'CON', 'Message rate exceeded, closing:', nodeId || ip);
+				spark.end(undefined, { reconnect: true });
+
+				return;
+			}
+
+			if( event !== 'hello' && nodeId === null )
+				return;
+
+			handler(data || {});
+		});
+	}
+
+	on('hello', function (data)
+	{
+		if( nodeId !== null )
+			return;
+
+		var level = guard.authenticate(data.secret);
+		var id = guard.cleanId(data.id);
+		var info = guard.cleanInfo(data.info);
+
+		if( level === null || id === null || info === null || reserved.indexOf(id) >= 0 )
+		{
+			console.error('API', 'CON', 'Closed - wrong auth or invalid login from', ip);
 			spark.end(undefined, { reconnect: false });
-			console.error('API', 'CON', 'Closed - wrong auth', data);
 
-			return false;
+			return;
 		}
 
-		if( !_.isUndefined(data.id) && !_.isUndefined(data.info) )
+		Nodes.add({
+			id: id,
+			info: info,
+			ip: ip,
+			spark: spark.id,
+			latency: spark.latency || 0,
+			trusted: level === 'trusted'
+		}, function (err, nodeInfo)
 		{
-			data.ip = spark.address.ip;
-			data.spark = spark.id;
-			data.latency = spark.latency || 0;
-
-			Nodes.add( data, function (err, info)
+			if(err !== null)
 			{
-				if(err !== null)
-				{
-					console.error('API', 'CON', 'Connection error:', err);
-					return false;
-				}
+				console.warn('API', 'CON', 'Login refused:', id, ip, err);
+				spark.end(undefined, { reconnect: false });
 
-				if(info !== null)
-				{
-					spark.emit('ready');
+				return;
+			}
 
-					console.success('API', 'CON', 'Connected: ' + connections, data.id);
+			nodeId = id;
+			spark.emit('ready');
 
-					client.write({
-						action: 'add',
-						data: info
-					});
-				}
+			console.success('API', 'CON', 'Connected:', id, (level === 'trusted' ? '(trusted)' : ''));
+
+			client.write({
+				action: 'add',
+				data: nodeInfo
 			});
-		}
+		});
 	});
 
 
-	spark.on('update', function (data)
+	on('block', function (data)
 	{
-		if( !_.isUndefined(data.id) && !_.isUndefined(data.stats) )
+		var block = guard.cleanBlock(data.block);
+
+		if( block === null )
 		{
-			Nodes.update(data.id, data.stats, function (err, stats)
+			console.error('API', 'BLK', 'Invalid block from:', nodeId);
+			return;
+		}
+
+		Nodes.addBlock(nodeId, block, function (err, stats)
+		{
+			if(err !== null)
 			{
-				if(err !== null)
-				{
-					console.error('API', 'UPD', 'Update error:', err);
-				}
-				else
-				{
-					if(stats !== null)
-					{
-						client.write({
-							action: 'update',
-							data: stats
-						});
-
-						console.info('API', 'UPD', 'Update from:', data.id, 'for:', stats);
-
-						Nodes.getCharts();
-					}
-				}
-			});
-		}
-		else
-		{
-			console.error('API', 'UPD', 'Update error:', data);
-		}
-	});
-
-
-	spark.on('block', function (data)
-	{
-		if( !_.isUndefined(data.id) && !_.isUndefined(data.block) )
-		{
-			Nodes.addBlock(data.id, data.block, function (err, stats)
+				console.error('API', 'BLK', 'Block error:', err);
+			}
+			else if(stats !== null)
 			{
-				if(err !== null)
-				{
-					console.error('API', 'BLK', 'Block error:', err);
-				}
-				else
-				{
-					if(stats !== null)
-					{
-						client.write({
-							action: 'block',
-							data: stats
-						});
+				client.write({
+					action: 'block',
+					data: stats
+				});
 
-						console.success('API', 'BLK', 'Block:', data.block['number'], 'td:', data.block['totalDifficulty'], 'from:', data.id, 'ip:', spark.address.ip);
+				console.success('API', 'BLK', 'Block:', block.number, 'td:', block.totalDifficulty, 'from:', nodeId);
 
-						Nodes.getCharts();
-					}
-				}
-			});
-		}
-		else
-		{
-			console.error('API', 'BLK', 'Block error:', data);
-		}
+				Nodes.getCharts();
+			}
+		});
 	});
 
 
-	spark.on('pending', function (data)
+	on('pending', function (data)
 	{
-		if( !_.isUndefined(data.id) && !_.isUndefined(data.stats) )
-		{
-			Nodes.updatePending(data.id, data.stats, function (err, stats) {
-				if(err !== null)
-				{
-					console.error('API', 'TXS', 'Pending error:', err);
-				}
+		var stats = guard.cleanPending(data.stats);
 
-				if(stats !== null)
-				{
-					client.write({
-						action: 'pending',
-						data: stats
-					});
+		if( stats === null )
+			return;
 
-					console.success('API', 'TXS', 'Pending:', data.stats['pending'], 'from:', data.id);
-				}
-			});
-		}
-		else
-		{
-			console.error('API', 'TXS', 'Pending error:', data);
-		}
-	});
-
-
-	spark.on('stats', function (data)
-	{
-		if( !_.isUndefined(data.id) && !_.isUndefined(data.stats) )
-		{
-
-			Nodes.updateStats(data.id, data.stats, function (err, stats)
+		Nodes.updatePending(nodeId, stats, function (err, stats) {
+			if(err !== null)
 			{
-				if(err !== null)
-				{
-					console.error('API', 'STA', 'Stats error:', err);
-				}
-				else
-				{
-					if(stats !== null)
-					{
-						client.write({
-							action: 'stats',
-							data: stats
-						});
+				console.error('API', 'TXS', 'Pending error:', err);
+			}
 
-						console.success('API', 'STA', 'Stats from:', data.id);
-					}
-				}
-			});
-		}
-		else
-		{
-			console.error('API', 'STA', 'Stats error:', data);
-		}
+			if(stats !== null)
+			{
+				client.write({
+					action: 'pending',
+					data: stats
+				});
+
+				console.success('API', 'TXS', 'Pending:', stats.pending, 'from:', nodeId);
+			}
+		});
 	});
 
 
-	spark.on('history', function (data)
+	on('stats', function (data)
 	{
-		console.success('API', 'HIS', 'Got history from:', data.id);
+		var stats = guard.cleanStats(data.stats);
 
-		var time = chalk.reset.cyan((new Date()).toJSON()) + " ";
-		console.time(time, 'COL', 'CHR', 'Got charts in');
-
-		Nodes.addHistory(data.id, data.history, function (err, history)
+		if( stats === null )
 		{
-			console.timeEnd(time, 'COL', 'CHR', 'Got charts in');
+			console.error('API', 'STA', 'Invalid stats from:', nodeId);
+			return;
+		}
 
+		Nodes.updateStats(nodeId, stats, function (err, stats)
+		{
+			if(err !== null)
+			{
+				console.error('API', 'STA', 'Stats error:', err);
+			}
+			else if(stats !== null)
+			{
+				client.write({
+					action: 'stats',
+					data: stats
+				});
+
+				console.success('API', 'STA', 'Stats from:', nodeId);
+			}
+		});
+	});
+
+
+	on('history', function (data)
+	{
+		var history = guard.cleanHistory(data.history);
+
+		if( history === null )
+			return;
+
+		console.success('API', 'HIS', 'Got history from:', nodeId);
+
+		Nodes.addHistory(nodeId, history, function (err, history)
+		{
 			if(err !== null)
 			{
 				console.error('COL', 'CHR', 'History error:', err);
@@ -323,50 +303,40 @@ api.on('connection', function (spark)
 	});
 
 
-	spark.on('node-ping', function (data)
+	on('node-ping', function (data)
 	{
-		var start = (!_.isUndefined(data) && !_.isUndefined(data.clientTime) ? data.clientTime : null);
-
 		spark.emit('node-pong', {
-			clientTime: start,
+			clientTime: (_.isString(data.clientTime) ? data.clientTime.substr(0, 64) : null),
 			serverTime: _.now()
 		});
 
-		console.info('API', 'PIN', 'Ping from:', data['id']);
+		console.info('API', 'PIN', 'Ping from:', nodeId);
 	});
 
 
-	spark.on('latency', function (data)
+	on('latency', function (data)
 	{
-		if( !_.isUndefined(data.id) )
+		Nodes.updateLatency(nodeId, guard.cleanLatency(data.latency), function (err, latency)
 		{
-			Nodes.updateLatency(data.id, data.latency, function (err, latency)
+			if(err !== null)
 			{
-				if(err !== null)
-				{
-					console.error('API', 'PIN', 'Latency error:', err);
-				}
-
-				if(latency !== null)
-				{
-					// client.write({
-					// 	action: 'latency',
-					// 	data: latency
-					// });
-
-					console.info('API', 'PIN', 'Latency:', latency, 'from:', data.id);
-				}
-			});
-
-			if( Nodes.requiresUpdate(data.id) )
-			{
-				var range = Nodes.getHistory().getHistoryRequestRange();
-
-				spark.emit('history', range);
-				console.info('API', 'HIS', 'Asked:', data.id, 'for history:', range.min, '-', range.max);
-
-				Nodes.askedForHistory(true);
+				console.error('API', 'PIN', 'Latency error:', err);
 			}
+
+			if(latency !== null)
+			{
+				console.info('API', 'PIN', 'Latency:', latency, 'from:', nodeId);
+			}
+		});
+
+		if( Nodes.requiresUpdate(nodeId) )
+		{
+			var range = Nodes.getHistory().getHistoryRequestRange();
+
+			spark.emit('history', range);
+			console.info('API', 'HIS', 'Asked:', nodeId, 'for history:', range.min, '-', range.max);
+
+			Nodes.askedNodeForHistory(nodeId);
 		}
 	});
 
@@ -386,7 +356,7 @@ api.on('connection', function (spark)
 					data: stats
 				});
 
-				console.warn('API', 'CON', 'Connection with:', spark.id, 'ended:', data);
+				console.warn('API', 'CON', 'Connection with:', nodeId || ip, 'ended:', data);
 			}
 		});
 	});
@@ -398,7 +368,12 @@ client.on('connection', function (clientSpark)
 {
 	clientSpark.on('ready', function (data)
 	{
-		clientSpark.emit('init', { nodes: Nodes.all() });
+		clientSpark.emit('init', {
+			nodes: Nodes.all(),
+			config: {
+				joinSecret: settings.publicSecret
+			}
+		});
 
 		Nodes.getCharts();
 	});
