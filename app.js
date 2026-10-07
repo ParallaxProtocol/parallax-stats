@@ -7,16 +7,9 @@ const v8 = require('v8')
 // Init WS SECRET
 var WS_SECRET;
 
-if( !_.isUndefined(process.env.WS_SECRET) && !_.isNull(process.env.WS_SECRET) )
+if( !_.isEmpty(process.env.WS_SECRET) )
 {
-	if( process.env.WS_SECRET.indexOf('|') > 0 )
-	{
-		WS_SECRET = process.env.WS_SECRET.split('|');
-	}
-	else
-	{
-		WS_SECRET = [process.env.WS_SECRET];
-	}
+	WS_SECRET = process.env.WS_SECRET.split('|');
 }
 else
 {
@@ -26,8 +19,18 @@ else
 	}
 	catch (e)
 	{
-		console.error("WS_SECRET NOT SET!!!");
+		console.error("WS_SECRET is not set and ws_secret.json is missing");
+		process.exit(1);
 	}
+}
+
+// Never accept an empty secret, or nodes without a password could log in
+WS_SECRET = _.filter(WS_SECRET, function (secret) { return _.isString(secret) && secret.length > 0; });
+
+if( WS_SECRET.length === 0 )
+{
+	console.error("No non-empty WS_SECRET configured");
+	process.exit(1);
 }
 
 var banned   = require('./lib/utils/config').banned;
