@@ -734,3 +734,14 @@ svg .y.axis .tick:first-child text {
 	padding-left: 18px;
 	line-height: 1.8;
 }
+
+.verified {
+	margin-left: 6px;
+	padding: 0 5px;
+	font-size: 10px;
+	letter-spacing: 1px;
+	text-transform: uppercase;
+	color: #8fc7ff;
+	border: 1px solid #0080ff;
+	border-radius: 2px;
+}

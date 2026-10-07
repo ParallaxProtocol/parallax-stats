@@ -185,7 +185,7 @@ block content
               th.th-blockhash.hide-narrow
                 i.icon-difficulty(data-toggle="tooltip", data-placement="top", title="Total difficulty", ng-click="orderTable(['-stats.block.totalDifficulty'], false)")
               th.hide-narrow
-                i.icon-check-o(data-toggle="tooltip", data-placement="top", title="Block transactions", ng-click="orderTable(['-stats.block.transactions.length'], false)")
+                i.icon-check-o(data-toggle="tooltip", data-placement="top", title="Block transactions", ng-click="orderTable(['-stats.block.txCount'], false)")
               th.th-blocktime
                 i.icon-time(data-toggle="tooltip", data-placement="top", title="Last block time", ng-click="orderTable(['-stats.block.received'], false)")
               th.th-peerPropagationTime
@@ -201,7 +201,7 @@ block content
                 i(ng-click="pinNode(node.id)", class="{{ node.pinned | nodePinClass }}", data-toggle="tooltip", data-placement="right", data-original-title="Click to {{ node.pinned ? 'un' : '' }}pin")
               td.nodeInfo(rel="{{node.id}}")
                 span.small(data-toggle="tooltip", data-placement="top", data-html="true", data-original-title="{{node | geoTooltip}}") {{node.info.name}}
-                //- span.small &nbsp;({{node.info.ip}})
+                span.verified(ng-if="node.trusted", data-toggle="tooltip", data-placement="top", title="Run by the dashboard operator. The best block follows verified nodes.") verified
                 a.small(href="https://docs.parallaxprotocol.org", target="_blank", data-toggle="tooltip", data-placement="top", data-html="true", data-original-title="Netstats client needs update.<br>Click this icon for instructions.", class="{{ node.info | nodeClientClass : currentApiVersion }}")
                   i.icon-warning-o
               td.hide-narrow
@@ -222,7 +222,7 @@ block content
                 span.small {{node.stats.block.hash | hashFilter}}
               td.hide-narrow(class="{{ node.stats | blockClass : bestBlock }}")
                 span.small {{node.stats.block.totalDifficulty | number}}
-              td.hide-narrow(style="padding-left: 14px;") {{node.stats.block.transactions.length || 0}}
+              td.hide-narrow(style="padding-left: 14px;") {{node.stats.block.txCount || 0}}
               td(class="{{ node.stats.block.received | timeClass : node.stats.active }}") {{node.stats.block.received | blockTimeFilter }}
               td(class="{{ node.stats | propagationTimeClass : bestBlock }}")
                 div.propagationBox
@@ -250,7 +250,11 @@ block content
             input.form-control.join-input(type="text", ng-model="join.name", maxlength="64", spellcheck="false")
 
             h4.join-step 2. Get the reporting secret
-            p.join-note(ng-if="join.secret") This dashboard is open: the secret is included in the command below.
+            p.join-note(ng-if="join.secret")
+              | This dashboard is open: the secret is public and already in the command below.
+              |  Nodes marked
+              span.verified verified
+              |  are run by the operator; while any is online, the best block follows them.
             p.join-note(ng-if="!join.secret", ng-bind-html="join.contact")
 
             h4.join-step 3. Start your node with

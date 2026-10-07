@@ -165,6 +165,11 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $sce, $localStorag
 
 	socket.on('init', function(data)
 	{
+		// The server publishes its public reporting secret, if any, so
+		// the instructions stay right without rebuilding the page.
+		if( data.config && !_.isUndefined(data.config.joinSecret) )
+			$scope.join.secret = data.config.joinSecret;
+
 		$scope.$apply(socketAction("init", data.nodes));
 	});
 
@@ -216,12 +221,10 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $sce, $localStorag
 				break;
 
 			case "add":
-				var index = findIndex({id: data.id});
+				addNewNode(data);
 
-				// if( addNewNode(data) )
-				// 	toastr['success']("New node "+ $scope.nodes[findIndex({id: data.id})].info.name +" connected!", "New node!");
-				// else
-				// 	toastr['info']("Node "+ $scope.nodes[index].info.name +" reconnected!", "Node is back!");
+				if( !_.isUndefined(data.id) )
+					latencyFilter($scope.nodes[findIndex({id: data.id})]);
 
 				break;
 
@@ -484,9 +487,11 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $sce, $localStorag
 				data.stats.hashrate = 0;
 			}
 
-			data.pinned = false;
+			data.pinned = ($scope.pinned.indexOf(data.id) >= 0);
 
 			$scope.nodes.push(data);
+
+			updateActiveNodes();
 
 			return true;
 		}
@@ -602,7 +607,15 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $sce, $localStorag
 			// 	return result;
 			// }, {});
 
-			var bestBlock = _.max($scope.nodes, function (node)
+			// While verified nodes are online the best block follows
+			// them only, so an unverified node reporting a made-up
+			// height cannot make everyone else look behind.
+			var verified = _.filter($scope.nodes, function (node) {
+				return node.trusted && node.stats.active;
+			});
+			var candidates = (verified.length > 0 ? verified : $scope.nodes);
+
+			var bestBlock = _.max(candidates, function (node)
 			{
 				// if( $scope.chains[node.stats.block.number].fork === node.stats.block.fork && $scope.chains[node.stats.block.number].score / $scope.maxScore >= 0.5 )
 				// {
@@ -615,7 +628,7 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $sce, $localStorag
 			if( bestBlock !== $scope.bestBlock )
 			{
 				$scope.bestBlock = bestBlock;
-				$scope.bestStats = _.max($scope.nodes, function (node) {
+				$scope.bestStats = _.max(candidates, function (node) {
 					return parseInt(node.stats.block.number);
 				}).stats;
 

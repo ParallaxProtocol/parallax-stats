@@ -118,6 +118,10 @@ angular.module('netStatsApp.filters', [])
 		if( ! current.active)
 			return 'text-gray';
 
+		// Ahead of the best block means ahead of every verified node
+		if(current.block.number > best)
+			return 'text-danger';
+
 		return (best - current.block.number < 1 ? 'text-success' : (best - current.block.number === 1 ? 'text-warning' : (best - current.block.number > 1 && best - current.block.number < 4 ? 'text-orange' : 'text-danger')));
 	};
 })
