@@ -11,7 +11,6 @@ import {
   HALF_LIFE,
   IDEAL_BLOCK_TIME,
   nextDifficulty,
-  scheduleDrift,
   targetToDifficulty,
 } from "../src/lib/asert.ts";
 
@@ -47,12 +46,6 @@ test("targets clamp to the valid range", () => {
   assert.equal(asertNextTarget(ANCHOR_HEIGHT, ANCHOR_PARENT_TIME, max, ANCHOR_HEIGHT, ANCHOR_PARENT_TIME + 100 * HALF_LIFE), max);
   assert.equal(asertNextTarget(ANCHOR_HEIGHT, ANCHOR_PARENT_TIME, 1n, ANCHOR_HEIGHT, ANCHOR_PARENT_TIME - 100 * HALF_LIFE), 1n);
   assert.equal(targetToDifficulty(0n), 1n);
-});
-
-test("schedule drift is positive behind schedule and negative ahead", () => {
-  // Block 17,559 came 60,055 s after its parent, 59,455 s late
-  assert.equal(scheduleDrift(17_559, T17559), T17559 - ANCHOR_PARENT_TIME - IDEAL_BLOCK_TIME);
-  assert.equal(scheduleDrift(17_560, ANCHOR_PARENT_TIME + 2 * IDEAL_BLOCK_TIME - 60), -60);
 });
 
 test("pool units are raw difficulty over 2^32", async () => {

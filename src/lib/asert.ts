@@ -96,12 +96,3 @@ export function miningDifficulty(block: { number: number; timestamp: number; dif
 
   return ratio > 0.25 && ratio < 4 ? next : null;
 }
-
-/**
- * scheduleDrift is how many seconds the chain is behind the 10 minute
- * schedule after the given block; negative when ahead. It is the quantity
- * ASERT acts on: each half life of drift halves (or doubles) difficulty.
- */
-export function scheduleDrift(height: number, timestamp: number): number {
-  return timestamp - ANCHOR_PARENT_TIME - IDEAL_BLOCK_TIME * (height - ANCHOR_HEIGHT + 1);
-}

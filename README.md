@@ -11,7 +11,7 @@ live:
   the units pools use), active nodes in sync, the recommended fee, peer
   latency, uptime
 - **Charts:** block times, propagation, difficulty with the next block's
-  exact difficulty and the drift from the 10 minute schedule, transactions,
+  exact difficulty and its change over a day and a week, transactions,
   block fullness and fees paid to miners
 - **Supply:** the next halving, coins issued against the 21 million cap,
   and the top miners with how concentrated mining is
@@ -143,9 +143,8 @@ as unavailable and the rest of the dashboard carries on.
   average.
 - **Difficulty** is the chain's own value, as in block headers and over RPC.
   Pools show the same figure divided by 2^32, the Bitcoin convention; both
-  are on the page. On mainnet, the next block's difficulty and the drift
-  from the 10 minute schedule come from a port of the protocol's ASERT
-  difficulty adjustment (`src/lib/asert.ts`), checked against real blocks.
+  are on the page. On mainnet, the next block's difficulty comes from a
+  port of the protocol's ASERT difficulty adjustment (`src/lib/asert.ts`), checked against real blocks.
 - **Supply and halvings** follow the protocol's reward schedule: 50 LAX a
   block, halving every 210,000 blocks, against a 21 million cap. Halving
   dates assume 10 minute blocks, the rate difficulty adjustment holds.

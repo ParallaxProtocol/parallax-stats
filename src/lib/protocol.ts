@@ -145,6 +145,8 @@ export interface Charts {
   difficulty: string[];
   /** Change in difficulty over the last 24 hours, as a fraction; null when the history is shorter. */
   difficultyDay: number | null;
+  /** The same over the last 7 days. */
+  difficultyWeek: number | null;
   transactions: number[];
   gasSpending: number[];
   gasLimit: number[];

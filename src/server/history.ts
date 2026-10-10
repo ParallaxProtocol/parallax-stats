@@ -433,19 +433,20 @@ export class History {
   }
 
   /**
-   * difficultyDay is the latest block's difficulty against the block at or
-   * just before 24 hours earlier, by timestamp, as a fractional change.
+   * difficultyChange is the latest block's difficulty against the block at
+   * or just before `seconds` earlier, by timestamp, as a fractional change;
+   * null when the history does not reach back that far.
    */
-  private difficultyDay(): number | null {
+  private difficultyChange(seconds: number): number | null {
     const head = this.items[0];
 
     if (!head) return null;
 
-    const dayAgo = this.items.find((item) => item.block.timestamp <= head.block.timestamp - 86_400);
+    const then = this.items.find((item) => item.block.timestamp <= head.block.timestamp - seconds);
 
-    if (!dayAgo) return null;
+    if (!then) return null;
 
-    const before = Number(dayAgo.block.difficulty);
+    const before = Number(then.block.difficulty);
 
     return before > 0 ? Number(head.block.difficulty) / before - 1 : null;
   }
@@ -506,7 +507,8 @@ export class History {
       blocktime: recent.map((item) => item.block.time / 1000),
       avgBlocktime: this.avgBlocktime(),
       difficulty: recent.map((item) => item.block.difficulty),
-      difficultyDay: this.difficultyDay(),
+      difficultyDay: this.difficultyChange(86_400),
+      difficultyWeek: this.difficultyChange(7 * 86_400),
       transactions: recent.map((item) => item.block.txCount),
       gasSpending: recent.map((item) => item.block.gasUsed),
       gasLimit: recent.map((item) => item.block.gasLimit),

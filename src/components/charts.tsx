@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ANCHOR_HEIGHT, HALF_LIFE, miningDifficulty, scheduleDrift } from "@/lib/asert";
+import { miningDifficulty } from "@/lib/asert";
 import { blockReward, WEI_PER_LAX } from "@/lib/emission";
 import {
   formatBlockTime,
@@ -267,16 +267,6 @@ function BlockTime({ c, block }: { c: Charts; block: (i: number) => string }) {
   );
 }
 
-/** formatDrift renders a schedule offset: 25 min, 7 h 10 min, 14.7 days. */
-function formatDrift(seconds: number): string {
-  const s = Math.abs(seconds);
-
-  if (s < 3600) return `${Math.round(s / 60)} min`;
-  if (s < 48 * 3600) return `${Math.floor(s / 3600)} h ${Math.round((s % 3600) / 60)} min`;
-
-  return `${(s / 86_400).toFixed(1)} days`;
-}
-
 const footLabel = "font-mono text-[10px] tracking-wider text-muted-foreground uppercase";
 
 /** signed renders a fractional change: +14.6%, −0.4%, or "unchanged". */
@@ -286,63 +276,67 @@ function signed(change: number): string {
 
 /**
  * DifficultyFooter shows where difficulty is heading: the exact difficulty
- * of the block being mined (mainnet ASERT, fixed by the parent alone), the
- * change over the last 24 hours, and the offset from ASERT's 10 minute
- * schedule that today's difficulty reflects.
+ * of the block being mined (mainnet ASERT, fixed by the parent alone), and
+ * the change over the last day and week.
  */
-function DifficultyFooter({ best, day: reported }: { best: Block | null; day: number | null | undefined }) {
+function DifficultyFooter({
+  best,
+  day: reportedDay,
+  week: reportedWeek,
+}: {
+  best: Block | null;
+  day: number | null | undefined;
+  week: number | null | undefined;
+}) {
   const next = best ? miningDifficulty(best) : null;
-  // A server from before the 24 hour figure sends none
-  const day = typeof reported === "number" ? reported : null;
+  // A server from before these figures sends none
+  const day = typeof reportedDay === "number" ? reportedDay : null;
+  const week = typeof reportedWeek === "number" ? reportedWeek : null;
 
-  if (next === null && day === null) return null;
-
-  const drift = next !== null && best ? scheduleDrift(best.number, best.timestamp) : null;
+  if (next === null && day === null && week === null) return null;
 
   return (
-    <div className="flex flex-col gap-2.5 border-t border-border pt-3 text-xs">
-      <dl className="grid grid-cols-2 gap-3">
-        {next !== null && best && (
-          <div className="flex flex-col gap-1">
-            <dt
-              className={footLabel}
-              title="The difficulty of the block miners are working on now. ASERT sets it from the latest block's timestamp, so it is exact; the change is against the latest block."
+    <dl className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-xs">
+      {next !== null && best && (
+        <div className="flex flex-col gap-1">
+          <dt
+            className={footLabel}
+            title="The difficulty of the block miners are working on now. ASERT sets it from the latest block's timestamp, so it is exact; the change is against the latest block."
+          >
+            Now mining at
+          </dt>
+          <dd className="font-mono text-sm tabular-nums">
+            {formatDifficulty(next)}{" "}
+            <span className="text-xs text-muted-foreground">
+              {signed((Number(next) - Number(best.difficulty)) / Number(best.difficulty))}
+            </span>
+            <span
+              className="block text-xs whitespace-nowrap text-muted-foreground"
+              title="The same difficulty in the units pools and miners use: one unit is 2^32 hashes."
             >
-              Now mining at
-            </dt>
-            <dd className="font-mono text-sm tabular-nums">
-              {formatDifficulty(next)}{" "}
-              <span className="text-xs text-muted-foreground">{signed((Number(next) - Number(best.difficulty)) / Number(best.difficulty))}</span>
-              <span
-                className="block text-xs whitespace-nowrap text-muted-foreground"
-                title="The same difficulty in the units pools and miners use: one unit is 2^32 hashes."
-              >
-                pool: {formatPoolDifficulty(next)}
-              </span>
-            </dd>
-          </div>
-        )}
-        {day !== null && (
-          <div className="flex flex-col gap-1">
-            <dt className={footLabel} title="The latest block's difficulty against the block mined 24 hours earlier.">
-              Last 24 h
-            </dt>
-            <dd className="font-mono text-sm tabular-nums">{signed(day)}</dd>
-          </div>
-        )}
-      </dl>
-      {drift !== null && (
-        <p
-          className="flex justify-between gap-3"
-          title={`How far the chain is from the 10 minute schedule ASERT started with at block ${formatInt(ANCHOR_HEIGHT)}. It is a lasting offset, not a backlog: difficulty halves for every ${HALF_LIFE / 86_400} days behind and doubles for every ${HALF_LIFE / 86_400} days ahead, so it reflects how far hashrate has moved since ASERT began.`}
-        >
-          <span className={footLabel}>Schedule offset</span>
-          <span className="font-mono tabular-nums">
-            {Math.abs(drift) < TARGET_BLOCK_TIME ? "none" : `${formatDrift(drift)} ${drift > 0 ? "behind" : "ahead"}`}
-          </span>
-        </p>
+              pool: {formatPoolDifficulty(next)}
+            </span>
+          </dd>
+        </div>
       )}
-    </div>
+      {(day !== null || week !== null) && (
+        <div className="flex flex-col gap-2">
+          {[
+            ["Last 24 h", day, "The latest block's difficulty against the block mined 24 hours earlier."],
+            ["Last 7 days", week, "The latest block's difficulty against the block mined 7 days earlier."],
+          ].map(([label, change, hint]) =>
+            change === null ? null : (
+              <div key={label as string} className="flex flex-col gap-0.5">
+                <dt className={footLabel} title={hint as string}>
+                  {label as string}
+                </dt>
+                <dd className="font-mono text-sm tabular-nums">{signed(change as number)}</dd>
+              </div>
+            ),
+          )}
+        </div>
+      )}
+    </dl>
   );
 }
 
@@ -378,7 +372,7 @@ function Difficulty({ c, block, best }: { c: Charts; block: (i: number) => strin
           label={`Difficulty of the last ${values.length} blocks, from ${formatDifficulty(Math.min(...values))} to ${formatDifficulty(Math.max(...values))}`}
         />
       )}
-      <DifficultyFooter best={best} day={c.difficultyDay} />
+      <DifficultyFooter best={best} day={c.difficultyDay} week={c.difficultyWeek} />
     </Tile>
   );
 }
@@ -727,6 +721,7 @@ const EMPTY: Charts = {
   avgBlocktime: 0,
   difficulty: [],
   difficultyDay: null,
+  difficultyWeek: null,
   transactions: [],
   gasSpending: [],
   gasLimit: [],

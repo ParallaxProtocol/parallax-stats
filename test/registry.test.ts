@@ -516,3 +516,27 @@ test("the 24 hour difficulty change compares with the block a day earlier", () =
   young.addBlock("a", { ...block(2), timestamp: 2000 });
   assert.equal(young.charts().difficultyDay, null);
 });
+
+test("the 7 day difficulty change compares with the block a week earlier", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+
+  // One block every 6 hours for 30 blocks, difficulty rising 1% a block
+  for (let n = 1; n <= 30; n++) {
+    nodes.addBlock("a", { ...block(n), timestamp: n * 6 * 3600, difficulty: String(Math.round(1_000_000 * 1.01 ** n)) });
+  }
+
+  // Block 30 against block 2, exactly 7 days earlier
+  const expected = Math.round(1_000_000 * 1.01 ** 30) / Math.round(1_000_000 * 1.01 ** 2) - 1;
+
+  assert.ok(Math.abs(nodes.charts().difficultyWeek! - expected) < 1e-9);
+
+  // Less than a week of history gives no figure, while a day is there
+  const young = new Registry(settings);
+
+  login(young, "a", "1.1.1.1", true);
+  for (let n = 1; n <= 30; n++) young.addBlock("a", { ...block(n), timestamp: n * 3600 });
+  assert.equal(young.charts().difficultyWeek, null);
+  assert.notEqual(young.charts().difficultyDay, null);
+});
