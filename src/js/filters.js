@@ -403,6 +403,9 @@ angular.module('netStatsApp.filters', [])
 		var tooltip = [];
 		var string = '';
 
+		if( ! node.trusted )
+			tooltip.push("<i>Unverified node: names are shown only for nodes run by the dashboard operator</i>");
+
 		if(node.info.node) {
 			var eth_version = node.info.node.split('/');
 

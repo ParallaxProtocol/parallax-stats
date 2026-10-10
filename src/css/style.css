@@ -745,3 +745,8 @@ svg .y.axis .tick:first-child text {
 	border: 1px solid #0080ff;
 	border-radius: 2px;
 }
+
+.unverified-name {
+	font-family: "Lucida Console", "Courier New", Courier, monospace;
+	color: #888;
+}

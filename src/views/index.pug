@@ -200,7 +200,7 @@ block content
               td.td-nodecheck
                 i(ng-click="pinNode(node.id)", class="{{ node.pinned | nodePinClass }}", data-toggle="tooltip", data-placement="right", data-original-title="Click to {{ node.pinned ? 'un' : '' }}pin")
               td.nodeInfo(rel="{{node.id}}")
-                span.small(data-toggle="tooltip", data-placement="top", data-html="true", data-original-title="{{node | geoTooltip}}") {{node.info.name}}
+                span.small(ng-class="{ 'unverified-name': !node.trusted }", data-toggle="tooltip", data-placement="top", data-html="true", data-original-title="{{node | geoTooltip}}") {{node.info.name}}
                 span.verified(ng-if="node.trusted", data-toggle="tooltip", data-placement="top", title="Run by the dashboard operator. The best block follows verified nodes.") verified
                 a.small(href="https://docs.parallaxprotocol.org", target="_blank", data-toggle="tooltip", data-placement="top", data-html="true", data-original-title="Netstats client needs update.<br>Click this icon for instructions.", class="{{ node.info | nodeClientClass : currentApiVersion }}")
                   i.icon-warning-o
@@ -246,7 +246,13 @@ block content
         div.row
           div.col-xs-12.col-md-6
             h4.join-step 1. Pick a name
-            p.join-note Shown publicly in the table. Colons, @ and quotes are removed.
+            p.join-note
+              | The name identifies your node to the dashboard and keeps its row across restarts.
+              |  Only
+              span.verified verified
+              |  nodes are listed under their name; other nodes appear under an anonymous id like
+              code  node-3f9a2c1b
+              | . Colons, @ and quotes are removed.
             input.form-control.join-input(type="text", ng-model="join.name", maxlength="64", spellcheck="false")
 
             h4.join-step 2. Get the reporting secret
@@ -271,7 +277,7 @@ block content
           div.col-xs-12.col-md-6
             h4.join-step What gets published
             ul.join-list
-              li The node name you choose and the client version string
+              li An anonymous id derived from your node name, and the client version string
               li Head block, total difficulty, transactions per block and block propagation time
               li Whether the node is synced, its peer count and its median peer latency
               li Pending transaction count, and hashrate if the node is mining

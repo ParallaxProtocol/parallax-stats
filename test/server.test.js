@@ -156,8 +156,8 @@ test('public and private secrets log in with different trust', async function ()
 
 	var view = await viewNodes();
 
-	assert.strictEqual(findNode(view, 'public-node').trusted, false);
 	assert.strictEqual(findNode(view, 'own-node').trusted, true);
+	assert.ok(view.nodes.some(function (n) { return !n.trusted && /^node-[0-9a-f]{8}$/.test(n.id); }));
 	assert.strictEqual(view.config.joinSecret, 'open');
 
 	pub.close();
@@ -165,7 +165,7 @@ test('public and private secrets log in with different trust', async function ()
 });
 
 test('reports are attributed to the logged in node, not the claimed id', async function () {
-	var victim = await report('victim', 'open');
+	var victim = await report('victim', 'private');
 	var attacker = await report('attacker', 'open');
 
 	await waitFor(function () { return isReady(victim) && isReady(attacker); });
@@ -177,10 +177,33 @@ test('reports are attributed to the logged in node, not the claimed id', async f
 	var view = await viewNodes();
 
 	assert.strictEqual(findNode(view, 'victim').stats.peers, 8);
-	assert.strictEqual(findNode(view, 'attacker').stats.peerLatency, 9999);
+	assert.ok(view.nodes.some(function (n) { return !n.trusted && n.stats.peerLatency === 9999; }));
 
 	victim.close();
 	attacker.close();
+});
+
+test('viewers never see the names of unverified nodes', async function () {
+	var viewer = await connect('/primus');
+
+	emit(viewer, 'ready');
+
+	var pub = await report('hidden-name-xyz', 'open');
+
+	await waitFor(function () { return isReady(pub); });
+
+	emit(pub, 'stats', { stats: { active: true, peers: 3, peerLatency: 40 } });
+	emit(pub, 'pending', { stats: { pending: 2 } });
+	emit(pub, 'block', { block: { number: 3, hash: HASH, difficulty: '1', totalDifficulty: '3' } });
+	await sleep(300);
+
+	var seen = JSON.stringify(viewer.messages) + JSON.stringify(await viewNodes());
+
+	assert.ok(viewer.messages.length > 0);
+	assert.ok(seen.indexOf('hidden-name-xyz') < 0);
+
+	viewer.close();
+	pub.close();
 });
 
 test('messages before login are ignored', async function () {

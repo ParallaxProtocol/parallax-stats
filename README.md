@@ -88,6 +88,11 @@ treated as untrusted:
   size and a per-connection message rate (sustained 5/s) are capped.
   Incoming data is reduced to known fields with bounded lengths and
   ranges, and transaction lists are reduced to counts.
+- **Pseudonyms.** Only verified nodes are listed under the name they chose.
+  Everyone else appears under a pseudonym such as `node-3f9a2c1b`, derived
+  from the name with a per-process key, so public rows cannot carry
+  arbitrary text or impersonate known operators. The real name only
+  identifies the node to the server.
 - **Privacy.** Node IP addresses stay on the server. Viewers see only a
   country, city and approximate coordinates.
 - **Addresses.** The client address is the socket peer. `X-Forwarded-For`

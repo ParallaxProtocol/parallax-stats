@@ -170,6 +170,26 @@ test('history is only accepted from the node it was requested from', function ()
 	assert.strictEqual(nodes.getHistory().bestBlockNumber(), 5);
 });
 
+test('unverified nodes are shown under a stable pseudonym', function () {
+	var nodes = newCollection();
+
+	login(nodes, 'chosen-name', '1.1.1.1');
+	login(nodes, 'seed', '2.2.2.2', true);
+
+	var view = JSON.stringify(nodes.all());
+	var pseudonym = nodes.getNode({ id: 'chosen-name' }).publicId();
+
+	assert.ok(view.indexOf('chosen-name') < 0);
+	assert.match(pseudonym, /^node-[0-9a-f]{8}$/);
+	assert.strictEqual(nodes.getNode({ id: 'chosen-name' }).getInfo().info.name, pseudonym);
+	assert.ok(view.indexOf('"seed"') >= 0);
+
+	// Same name, same pseudonym across reconnects
+	nodes.inactive('chosen-name@1.1.1.1', function () {});
+	login(nodes, 'chosen-name', '1.1.1.1');
+	assert.strictEqual(nodes.getNode({ id: 'chosen-name' }).publicId(), pseudonym);
+});
+
 test('viewers never see node addresses', function () {
 	var nodes = newCollection();
 
