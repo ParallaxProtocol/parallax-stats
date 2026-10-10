@@ -53,8 +53,8 @@ All settings come from the environment.
 | `PUBLIC_SECRET` | | Secret published on the page. Nodes using it are unverified. |
 | `PORT` | `3000` | Listen port |
 | `TRUSTED_PROXIES` | | Reverse proxy addresses allowed to set `X-Forwarded-For` |
-| `MAX_NODES` | `1000` | Nodes tracked in total, connected or recently seen |
-| `MAX_NODES_PER_IP` | `3` | Names one address may hold (unverified nodes only) |
+| `MAX_NODES` | `1000` | Nodes tracked in total, connected or disconnected in the last 4 hours. Verified nodes are always admitted. |
+| `MAX_NODES_PER_IP` | `3` | Names one address may hold, connected or recently disconnected (unverified nodes only) |
 | `CONN_PER_MINUTE` | `10` | New reporter connections per address per minute |
 | `NAME_HOLD_MINUTES` | `60` | How long a disconnected name stays bound to its address |
 | `MAX_MESSAGE_BYTES` | `4194304` | Largest reporter message accepted |

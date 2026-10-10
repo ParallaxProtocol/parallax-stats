@@ -98,6 +98,34 @@ test('the total number of nodes is capped', function () {
 	assert.match(login(nodes, 'n5', '10.0.0.5').err, /limit/);
 });
 
+test('trusted nodes are admitted to a full list', function () {
+	var nodes = newCollection();
+
+	for(var i = 0; i < 5; i++)
+		login(nodes, 'n' + i, '10.0.0.' + i);
+
+	// The longest disconnected untrusted node makes room
+	nodes.inactive('n1@10.0.0.1', function () {});
+	nodes.inactive('n3@10.0.0.3', function () {});
+	nodes.getNode({ id: 'n3' }).uptime.lastUpdate -= 1000;
+
+	assert.strictEqual(login(nodes, 'seed', '1.1.1.1', true).err, null);
+	assert.strictEqual(nodes.getNode({ id: 'n3' }), false);
+	assert.ok(nodes.getNode({ id: 'n1' }));
+	assert.strictEqual(nodes.all().length, 5);
+
+	// With every untrusted node connected, the list goes over the cap
+	login(nodes, 'n3', '10.0.0.3');
+	assert.strictEqual(nodes.all().length, 5);
+	nodes.getNode({ id: 'n1' }).setState(true);
+
+	assert.strictEqual(login(nodes, 'seed2', '1.1.1.2', true).err, null);
+	assert.strictEqual(nodes.all().length, 6);
+
+	// Untrusted logins are still refused
+	assert.match(login(nodes, 'n9', '10.0.0.9').err, /limit/);
+});
+
 test('untrusted nodes cannot introduce heights while a trusted node is online', function () {
 	var nodes = newCollection();
 
