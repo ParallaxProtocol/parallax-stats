@@ -47,10 +47,12 @@ function ordinal(n: number): string {
   return `${n}${suffix}`;
 }
 
-function Stat({ label, value }: { label: string; value: string }) {
+function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <dt className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">{label}</dt>
+      <dt className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase" title={hint}>
+        {label}
+      </dt>
       <dd className="font-mono text-sm tabular-nums">{value}</dd>
     </div>
   );
@@ -279,7 +281,8 @@ function Emission({ height }: { height: number }) {
       <dl className="grid grid-cols-3 gap-3 border-t border-border pt-3">
         <Stat label="Issued per day" value={`${formatInt(Math.round(toLax(state.dailyIssuance)))} LAX`} />
         <Stat
-          label="Yearly inflation"
+          label="Supply growth, next 12 months"
+          hint="A year of issuance at the current reward, against the coins issued so far, assuming 10 minute blocks."
           value={state.inflation === null ? "n/a" : `${(state.inflation * 100).toFixed(state.inflation < 0.1 ? 2 : 1)}%`}
         />
         <Stat label="Left to mine" value={`${formatInt(Math.ceil(toLax(SUPPLY_CAP - state.issued)))} LAX`} />

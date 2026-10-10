@@ -63,7 +63,7 @@ export interface EmissionState {
   issuedShare: number;
   /** New coins per day at the target block time and current reward, in wei. */
   dailyIssuance: bigint;
-  /** Yearly issuance at the current reward over the coins issued so far, 0..; null before any issuance. */
+  /** Supply growth over the next 12 months: a year of issuance at the current reward over the coins issued so far, 0..; null before any issuance. */
   inflation: number | null;
 }
 
