@@ -7,7 +7,6 @@ block content
       div.col-xs-12
         img.brand-logo(src="/logo.svg", alt="Parallax")
         span.brand-title network status
-        a.brand-join(href="#join") add your node
     div.row(ng-cloak)
       div.col-xs-12.col-sm-6.col-md-4.col-xl-2.stat-holder
         div.big-info.bestblock.text-info
@@ -231,59 +230,3 @@ block content
                 nodepropagchart(data="{{node.history.join(',')}}")
               td.hide-narrow(class="{{ node.stats | propagationNodeAvgTimeClass : bestBlock }}") {{ node.stats | blockPropagationAvgFilter : bestBlock }}
               td(class="{{ node.stats.uptime | upTimeClass : node.stats.active }}") {{ node.stats.uptime | upTimeFilter }}
-
-    div.row.join-panel#join(ng-cloak)
-      div.col-xs-12
-        h2.join-title Add your node
-        p.join-lead
-          | Nodes appear here by reporting their own stats. Start
-          code parallaxd
-          |  with the
-          code --prlstats
-          |  flag and your node will show up within a few seconds.
-          |  It connects out to this dashboard, so no extra ports need to be opened.
-
-        div.row
-          div.col-xs-12.col-md-6
-            h4.join-step 1. Pick a name
-            p.join-note
-              | The name identifies your node to the dashboard and keeps its row across restarts.
-              |  Only
-              span.verified verified
-              |  nodes are listed under their name; other nodes appear under an anonymous id like
-              code  node-3f9a2c1b
-              | . Colons, @ and quotes are removed.
-            input.form-control.join-input(type="text", ng-model="join.name", maxlength="64", spellcheck="false")
-
-            h4.join-step 2. Get the reporting secret
-            p.join-note(ng-if="join.secret")
-              | This dashboard is open: the secret is public and already in the command below.
-              |  Nodes marked
-              span.verified verified
-              |  are run by the operator; while any is online, the best block follows them.
-            p.join-note(ng-if="!join.secret", ng-bind-html="join.contact")
-
-            h4.join-step 3. Start your node with
-            div.join-code
-              pre {{ joinFlag() }}
-              button.join-copy(type="button", ng-click="copyText(joinFlag())") copy
-            p.join-note Or add this to the config file passed with
-              code  --config
-              | :
-            div.join-code
-              pre {{ joinToml() }}
-              button.join-copy(type="button", ng-click="copyText(joinToml())") copy
-
-          div.col-xs-12.col-md-6
-            h4.join-step What gets published
-            ul.join-list
-              li An anonymous id derived from your node name, and the client version string
-              li Head block, total difficulty, transactions per block and block propagation time
-              li Whether the node is synced, its peer count and its median peer latency
-              li Pending transaction count, and hashrate if the node is mining
-              li Approximate location (country and city) looked up from the node's IP address. The address itself is never shown.
-            h4.join-step Removing your node
-            p.join-note
-              | Restart without
-              code  --prlstats
-              | . Disconnected nodes are greyed out and drop off the list after four hours.

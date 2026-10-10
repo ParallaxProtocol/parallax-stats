@@ -158,7 +158,6 @@ test('public and private secrets log in with different trust', async function ()
 
 	assert.strictEqual(findNode(view, 'own-node').trusted, true);
 	assert.ok(view.nodes.some(function (n) { return !n.trusted && /^node-[0-9a-f]{8}$/.test(n.id); }));
-	assert.strictEqual(view.config.joinSecret, 'open');
 
 	pub.close();
 	priv.close();

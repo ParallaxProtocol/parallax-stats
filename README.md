@@ -40,8 +40,7 @@ URL = "my-node:open-secret@stats.example.org"
 ```
 
 The node dials `wss://<host>/api` and falls back to `ws://`, so it needs
-no open ports. The page has an "add your node" section that generates
-this command.
+no open ports.
 
 ## Settings
 
@@ -60,9 +59,9 @@ All settings come from the environment.
 | `MAX_MESSAGE_BYTES` | `4194304` | Largest reporter message accepted |
 | `NODE_ENV` | | `production` skips serving the frontend, for running behind a web server |
 
-At least one of `WS_SECRET` and `PUBLIC_SECRET` must be set. Without a
-`PUBLIC_SECRET` the page tells operators to ask for one; the text comes
-from `joinContact` in `src/js/defaultConfig.js`.
+At least one of `WS_SECRET` and `PUBLIC_SECRET` must be set. The public
+secret is not shown on the page; share it wherever you want operators to
+find it.
 
 `lib/utils/config.js` holds static lists of `banned` addresses, `trusted`
 addresses (treated like the private secret) and `reserved` node names.

@@ -369,10 +369,7 @@ client.on('connection', function (clientSpark)
 	clientSpark.on('ready', function (data)
 	{
 		clientSpark.emit('init', {
-			nodes: Nodes.all(),
-			config: {
-				joinSecret: settings.publicSecret
-			}
+			nodes: Nodes.all()
 		});
 
 		Nodes.getCharts();

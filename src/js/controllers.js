@@ -1,7 +1,7 @@
 
 /* Controllers */
 
-netStatsApp.controller('StatsCtrl', function($scope, $filter, $sce, $localStorage, socket, _, toastr) {
+netStatsApp.controller('StatsCtrl', function($scope, $filter, $localStorage, socket, _, toastr) {
 
 	var MAX_BINS = 40;
 
@@ -35,49 +35,6 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $sce, $localStorag
 	$scope.coinbases = [];
 
 	$scope.latency = 0;
-
-	// Instructions for adding a node to the dashboard
-	$scope.join = {
-		name: 'my-node',
-		host: window.location.host,
-		secret: joinSecret || '',
-		// Operator-supplied config, not node data, so it may hold HTML
-		contact: $sce.trustAsHtml(joinContact || '')
-	};
-
-	$scope.joinName = function()
-	{
-		// The reporter splits the URL on its last ':' and '@', and the
-		// value is quoted for the shell, so keep those out of the name.
-		var name = ($scope.join.name || '').replace(/[:@"'\\`$]/g, '').trim();
-
-		return name || 'my-node';
-	}
-
-	$scope.joinURL = function()
-	{
-		return $scope.joinName() + ':' + ($scope.join.secret || '<secret>') + '@' + $scope.join.host;
-	}
-
-	$scope.joinFlag = function()
-	{
-		return 'parallaxd --prlstats "' + $scope.joinURL() + '"';
-	}
-
-	$scope.joinToml = function()
-	{
-		return '[ParallaxStats]\nURL = "' + $scope.joinURL() + '"';
-	}
-
-	$scope.copyText = function(text)
-	{
-		if( !navigator.clipboard )
-			return;
-
-		navigator.clipboard.writeText(text).then(function () {
-			toastr['success']("Copied to clipboard");
-		});
-	}
 
 	$scope.currentApiVersion = "0.1.1";
 
@@ -165,11 +122,6 @@ netStatsApp.controller('StatsCtrl', function($scope, $filter, $sce, $localStorag
 
 	socket.on('init', function(data)
 	{
-		// The server publishes its public reporting secret, if any, so
-		// the instructions stay right without rebuilding the page.
-		if( data.config && !_.isUndefined(data.config.joinSecret) )
-			$scope.join.secret = data.config.joinSecret;
-
 		$scope.$apply(socketAction("init", data.nodes));
 	});
 
