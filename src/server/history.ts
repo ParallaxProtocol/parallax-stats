@@ -432,6 +432,24 @@ export class History {
     };
   }
 
+  /**
+   * difficultyDay is the latest block's difficulty against the block at or
+   * just before 24 hours earlier, by timestamp, as a fractional change.
+   */
+  private difficultyDay(): number | null {
+    const head = this.items[0];
+
+    if (!head) return null;
+
+    const dayAgo = this.items.find((item) => item.block.timestamp <= head.block.timestamp - 86_400);
+
+    if (!dayAgo) return null;
+
+    const before = Number(dayAgo.block.difficulty);
+
+    return before > 0 ? Number(head.block.difficulty) / before - 1 : null;
+  }
+
   /** avgBlocktime is the mean time between blocks, in seconds, over blocks whose parent is known. */
   private avgBlocktime(): number {
     const times = this.items.filter((item) => item.block.time > 0).map((item) => item.block.time);
@@ -488,6 +506,7 @@ export class History {
       blocktime: recent.map((item) => item.block.time / 1000),
       avgBlocktime: this.avgBlocktime(),
       difficulty: recent.map((item) => item.block.difficulty),
+      difficultyDay: this.difficultyDay(),
       transactions: recent.map((item) => item.block.txCount),
       gasSpending: recent.map((item) => item.block.gasUsed),
       gasLimit: recent.map((item) => item.block.gasLimit),

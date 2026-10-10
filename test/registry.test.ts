@@ -492,3 +492,27 @@ test("hashrate is the work of the newest unbroken run over its time span", () =>
 
   assert.equal(nodes.charts().avgHashrate, 100);
 });
+
+test("the 24 hour difficulty change compares with the block a day earlier", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+
+  // One block an hour for 30 hours, difficulty rising 1% a block
+  for (let n = 1; n <= 30; n++) {
+    nodes.addBlock("a", { ...block(n), timestamp: n * 3600, difficulty: String(Math.round(1_000_000 * 1.01 ** n)) });
+  }
+
+  // Block 30 against block 6, exactly 24 h earlier
+  const expected = Math.round(1_000_000 * 1.01 ** 30) / Math.round(1_000_000 * 1.01 ** 6) - 1;
+
+  assert.ok(Math.abs(nodes.charts().difficultyDay! - expected) < 1e-9);
+
+  // Less than a day of history gives no figure
+  const young = new Registry(settings);
+
+  login(young, "a", "1.1.1.1", true);
+  young.addBlock("a", { ...block(1), timestamp: 1000 });
+  young.addBlock("a", { ...block(2), timestamp: 2000 });
+  assert.equal(young.charts().difficultyDay, null);
+});

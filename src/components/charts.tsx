@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { ASERT_ACTIVATION, HALF_LIFE, miningDifficulty, scheduleDrift } from "@/lib/asert";
+import { ANCHOR_HEIGHT, HALF_LIFE, miningDifficulty, scheduleDrift } from "@/lib/asert";
 import { blockReward, WEI_PER_LAX } from "@/lib/emission";
 import {
   formatBlockTime,
@@ -277,54 +277,72 @@ function formatDrift(seconds: number): string {
   return `${(s / 86_400).toFixed(1)} days`;
 }
 
+const footLabel = "font-mono text-[10px] tracking-wider text-muted-foreground uppercase";
+
+/** signed renders a fractional change: +14.6%, −0.4%, or "unchanged". */
+function signed(change: number): string {
+  return Math.abs(change) < 0.0005 ? "unchanged" : `${change > 0 ? "+" : "−"}${Math.abs(change * 100).toFixed(1)}%`;
+}
+
 /**
- * Asert shows what mainnet's difficulty adjustment will do next: the exact
- * difficulty of the block after the best block, which ASERT fixes from the
- * parent alone, and the drift from the 10 minute schedule it acts on.
+ * DifficultyFooter shows where difficulty is heading: the exact difficulty
+ * of the block being mined (mainnet ASERT, fixed by the parent alone), the
+ * change over the last 24 hours, and the offset from ASERT's 10 minute
+ * schedule that today's difficulty reflects.
  */
-function Asert({ best }: { best: Block }) {
-  const next = miningDifficulty(best);
+function DifficultyFooter({ best, day: reported }: { best: Block | null; day: number | null | undefined }) {
+  const next = best ? miningDifficulty(best) : null;
+  // A server from before the 24 hour figure sends none
+  const day = typeof reported === "number" ? reported : null;
 
-  if (next === null) return null;
+  if (next === null && day === null) return null;
 
-  const current = Number(best.difficulty);
-  const change = (Number(next) - current) / current;
-  const drift = scheduleDrift(best.number, best.timestamp);
+  const drift = next !== null && best ? scheduleDrift(best.number, best.timestamp) : null;
 
   return (
-    <dl className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-xs">
-      <div className="flex flex-col gap-1">
-        <dt
-          className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
-          title="The difficulty of the block miners are working on now. ASERT sets it from the latest block's timestamp, so it is exact; the change is against the latest block."
+    <div className="flex flex-col gap-2.5 border-t border-border pt-3 text-xs">
+      <dl className="grid grid-cols-2 gap-3">
+        {next !== null && best && (
+          <div className="flex flex-col gap-1">
+            <dt
+              className={footLabel}
+              title="The difficulty of the block miners are working on now. ASERT sets it from the latest block's timestamp, so it is exact; the change is against the latest block."
+            >
+              Now mining at
+            </dt>
+            <dd className="font-mono text-sm tabular-nums">
+              {formatDifficulty(next)}{" "}
+              <span className="text-xs text-muted-foreground">{signed((Number(next) - Number(best.difficulty)) / Number(best.difficulty))}</span>
+              <span
+                className="block text-xs whitespace-nowrap text-muted-foreground"
+                title="The same difficulty in the units pools and miners use: one unit is 2^32 hashes."
+              >
+                pool: {formatPoolDifficulty(next)}
+              </span>
+            </dd>
+          </div>
+        )}
+        {day !== null && (
+          <div className="flex flex-col gap-1">
+            <dt className={footLabel} title="The latest block's difficulty against the block mined 24 hours earlier.">
+              Last 24 h
+            </dt>
+            <dd className="font-mono text-sm tabular-nums">{signed(day)}</dd>
+          </div>
+        )}
+      </dl>
+      {drift !== null && (
+        <p
+          className="flex justify-between gap-3"
+          title={`How far the chain is from the 10 minute schedule ASERT started with at block ${formatInt(ANCHOR_HEIGHT)}. It is a lasting offset, not a backlog: difficulty halves for every ${HALF_LIFE / 86_400} days behind and doubles for every ${HALF_LIFE / 86_400} days ahead, so it reflects how far hashrate has moved since ASERT began.`}
         >
-          Now mining at
-        </dt>
-        <dd className="font-mono text-sm tabular-nums">
-          {formatDifficulty(next)}{" "}
-          <span className="text-xs text-muted-foreground">
-            {Math.abs(change) < 0.0005 ? "unchanged" : `${change > 0 ? "+" : "−"}${Math.abs(change * 100).toFixed(1)}%`}
+          <span className={footLabel}>Schedule offset</span>
+          <span className="font-mono tabular-nums">
+            {Math.abs(drift) < TARGET_BLOCK_TIME ? "none" : `${formatDrift(drift)} ${drift > 0 ? "behind" : "ahead"}`}
           </span>
-          <span
-            className="block text-xs whitespace-nowrap text-muted-foreground"
-            title="The same difficulty in the units pools and miners use: one unit is 2^32 hashes."
-          >
-            pool: {formatPoolDifficulty(next)}
-          </span>
-        </dd>
-      </div>
-      <div className="flex flex-col gap-1">
-        <dt
-          className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase"
-          title={`ASERT lowers difficulty while blocks run behind the 10 minute schedule and raises it while they run ahead: every ${HALF_LIFE / 86_400} days of drift halves or doubles it.`}
-        >
-          Schedule
-        </dt>
-        <dd className="font-mono text-sm tabular-nums">
-          {Math.abs(drift) < TARGET_BLOCK_TIME ? "on schedule" : `${formatDrift(drift)} ${drift > 0 ? "behind" : "ahead"}`}
-        </dd>
-      </div>
-    </dl>
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -360,7 +378,7 @@ function Difficulty({ c, block, best }: { c: Charts; block: (i: number) => strin
           label={`Difficulty of the last ${values.length} blocks, from ${formatDifficulty(Math.min(...values))} to ${formatDifficulty(Math.max(...values))}`}
         />
       )}
-      {best && best.number >= ASERT_ACTIVATION && <Asert best={best} />}
+      <DifficultyFooter best={best} day={c.difficultyDay} />
     </Tile>
   );
 }
@@ -708,6 +726,7 @@ const EMPTY: Charts = {
   blocktime: [],
   avgBlocktime: 0,
   difficulty: [],
+  difficultyDay: null,
   transactions: [],
   gasSpending: [],
   gasLimit: [],

@@ -143,6 +143,8 @@ export interface Charts {
   blocktime: number[];
   avgBlocktime: number;
   difficulty: string[];
+  /** Change in difficulty over the last 24 hours, as a fraction; null when the history is shorter. */
+  difficultyDay: number | null;
   transactions: number[];
   gasSpending: number[];
   gasLimit: number[];
