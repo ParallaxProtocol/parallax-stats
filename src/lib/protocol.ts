@@ -1,0 +1,179 @@
+// Data shapes shared by the server and the browser, and the messages on
+// the viewer websocket. Nodes report over a different, Primus-framed
+// protocol that the server translates into these.
+
+export const VIEWER_PATH = "/live";
+export const REPORTER_PATH = "/api";
+/** GET ?name=… tells an operator whether they can log in with a node name. */
+export const NAME_CHECK_PATH = "/api/v1/names";
+
+/**
+ * Whether the asker can use a node name: free, already theirs (held for
+ * their own address), held from another address, or reserved for a
+ * verified node or by the operator.
+ */
+export type NameStatus = "available" | "yours" | "taken" | "reserved" | "invalid";
+
+/** Blocks shown in the per-node propagation strip and the charts. */
+export const HISTORY_BINS = 40;
+
+/** Target block interval of the network, in seconds. */
+export const TARGET_BLOCK_TIME = 600;
+
+export interface Block {
+  number: number;
+  hash: string;
+  parentHash: string;
+  timestamp: number;
+  miner: string;
+  gasUsed: number;
+  gasLimit: number;
+  /** Decimal strings: difficulties overflow JavaScript numbers. */
+  difficulty: string;
+  totalDifficulty: string;
+  transactionsRoot: string;
+  stateRoot: string;
+  sha3Uncles: string;
+  txCount: number;
+  uncleCount: number;
+  /** Transaction fees paid to the miner, wei as a decimal string; null when unknown (older reporters). */
+  fees: string | null;
+  /** Server time the first node reported this block, ms. */
+  arrived: number;
+  /** Server time this node reported it, ms. */
+  received: number;
+  /** received - arrived, ms. */
+  propagation: number;
+  /** Time since the parent block, ms. */
+  time: number;
+}
+
+export interface NodeInfo {
+  name: string;
+  node: string;
+  port: number;
+  net: string;
+  protocol: string;
+  api: string;
+  os: string;
+  os_v: string;
+  client: string;
+  canUpdateHistory: boolean;
+}
+
+export interface Geo {
+  country: string;
+  city: string;
+  /** [latitude, longitude], approximate */
+  ll: [number, number];
+}
+
+export interface BasicStats {
+  active: boolean;
+  mining: boolean;
+  syncing: boolean;
+  hashrate: number;
+  peers: number;
+  gasPrice: number;
+  uptime: number;
+  /** Round trip to this dashboard, ms. */
+  latency: number;
+  /** Median minimum ping to the node's peers, ms; 0 when unmeasured. */
+  peerLatency: number;
+}
+
+export interface NodeStats extends BasicStats {
+  pending: number;
+  block: Block;
+  propagationAvg: number;
+}
+
+/** A node as viewers see it. Addresses and unverified names stay on the server. */
+export interface PublicNode {
+  id: string;
+  trusted: boolean;
+  info: NodeInfo;
+  stats: NodeStats;
+  /** Propagation delay of the last HISTORY_BINS heights, ms; -1 for none. */
+  history: number[];
+  geo: Geo | null;
+}
+
+/**
+ * Upper bounds of the propagation speed bands, ms: under 1 s, 1–3 s,
+ * 3–7 s, and 7 s or more. The node table grades delays the same way.
+ */
+export const PROPAGATION_BANDS = [1000, 3000, 7000] as const;
+
+/** How long blocks took to reach nodes after the first report. */
+export interface PropagationStats {
+  /** Reports counted; the first report of each block is left out, as its delay is 0 by definition. */
+  samples: number;
+  avg: number;
+  p50: number;
+  p90: number;
+  p99: number;
+  /** Reports per speed band, one more entry than PROPAGATION_BANDS. */
+  bands: number[];
+}
+
+/** Competing blocks and reorganizations, as seen by trustworthy reporters. */
+export interface ChainHealth {
+  /** Heights examined for competing blocks. */
+  window: number;
+  /** Blocks that lost to another block at the same height. */
+  staleBlocks: number;
+  /** The latest heights with a stale block, newest first. */
+  recentStale: { height: number; at: number }[];
+  /** Reorganizations seen since `since`. */
+  reorgs: number;
+  /** Server time the reorg count starts: 24 hours ago, or when the dashboard started. */
+  since: number;
+  lastReorg: { height: number; at: number; nodes: number } | null;
+}
+
+export interface MinerCount {
+  miner: string;
+  blocks: number;
+}
+
+export interface Charts {
+  height: number[];
+  /** Seconds per block. */
+  blocktime: number[];
+  avgBlocktime: number;
+  difficulty: string[];
+  transactions: number[];
+  gasSpending: number[];
+  gasLimit: number[];
+  /** Fees paid to the miner per block, wei as decimal strings; null where unknown. */
+  fees: (string | null)[];
+  /** The miners of the most recent blocks, most blocks first, up to ten. */
+  miners: MinerCount[];
+  /** Distinct miners among the same blocks. */
+  minerCount: number;
+  propagation: PropagationStats;
+  health: ChainHealth;
+  avgHashrate: number;
+}
+
+export interface Snapshot {
+  serverTime: number;
+  nodes: PublicNode[];
+  charts: Charts | null;
+  /** Recommended gas price from the RPC endpoint, wei as a decimal string; null while unknown. */
+  gasPrice: string | null;
+}
+
+export type ServerMessage =
+  | ({ type: "snapshot" } & Snapshot)
+  | { type: "node"; node: PublicNode }
+  | { type: "block"; id: string; block: Block; propagationAvg: number; history: number[] }
+  | { type: "stats"; id: string; stats: BasicStats }
+  | { type: "pending"; id: string; pending: number }
+  | { type: "latency"; id: string; latency: number }
+  | { type: "charts"; charts: Charts }
+  | { type: "fee"; gasPrice: string | null }
+  | { type: "pong"; t: number; serverTime: number };
+
+export type ClientMessage = { type: "ping"; t: number };

@@ -1,0 +1,130 @@
+// Guards for a dashboard whose reporting secret is public: login
+// authentication, client address resolution and rate limiting. Nodes
+// are untrusted input unless they log in with a private secret.
+
+import { createHash, timingSafeEqual } from "node:crypto";
+import { isIP, isIPv4 } from "node:net";
+import type { IncomingMessage } from "node:http";
+import { inList, splitList, type Settings } from "./settings.ts";
+
+export type TrustLevel = "trusted" | "public";
+
+function digest(value: string): Buffer {
+  return createHash("sha256").update(value).digest();
+}
+
+/**
+ * authenticate maps a login secret to a trust level, or null. Secrets are
+ * compared in constant time, as digests so lengths do not leak either,
+ * and every private secret is checked so the match position does not.
+ */
+export function authenticate(settings: Settings, secret: unknown): TrustLevel | null {
+  if (typeof secret !== "string" || secret.length === 0 || secret.length > 1024) return null;
+
+  const given = digest(secret);
+  let trusted = false;
+
+  for (const candidate of settings.privateSecrets) trusted = timingSafeEqual(given, digest(candidate)) || trusted;
+
+  if (trusted) return "trusted";
+
+  if (settings.publicSecret.length > 0 && timingSafeEqual(given, digest(settings.publicSecret))) return "public";
+
+  return null;
+}
+
+export function normalizeIP(ip: string | undefined): string {
+  const value = String(ip ?? "");
+
+  if (value.startsWith("::ffff:") && isIPv4(value.slice(7))) return value.slice(7);
+
+  return value;
+}
+
+/**
+ * clientIP returns the address a request came from. Forwarding headers
+ * are honored only when the socket peer is a configured proxy, and then
+ * the right-most address not belonging to a proxy wins, since anything
+ * left of it was supplied by the client.
+ */
+export function clientIP(
+  settings: Settings,
+  req: Pick<IncomingMessage, "headers"> & { socket: { remoteAddress?: string } },
+): string {
+  const peer = normalizeIP(req.socket.remoteAddress);
+
+  if (!inList(settings.trustedProxies, peer)) return peer;
+
+  const header = req.headers["x-forwarded-for"];
+  const hops = splitList(Array.isArray(header) ? header.join(",") : header).map(normalizeIP);
+
+  for (let i = hops.length - 1; i >= 0; i--) {
+    if (!isIP(hops[i])) break;
+
+    if (!inList(settings.trustedProxies, hops[i])) return hops[i];
+  }
+
+  return peer;
+}
+
+/** RateLimiter counts events per key in a sliding one minute window. */
+export class RateLimiter {
+  private readonly perMinute: number;
+  private hits = new Map<string, number[]>();
+
+  constructor(perMinute: number) {
+    this.perMinute = perMinute;
+  }
+
+  allow(key: string, now = Date.now()): boolean {
+    const cutoff = now - 60_000;
+    const hits = (this.hits.get(key) ?? []).filter((t) => t > cutoff);
+
+    if (hits.length >= this.perMinute) {
+      this.hits.set(key, hits);
+      return false;
+    }
+
+    hits.push(now);
+    this.hits.set(key, hits);
+
+    return true;
+  }
+
+  prune(now = Date.now()): void {
+    const cutoff = now - 60_000;
+
+    for (const [key, hits] of this.hits) {
+      const recent = hits.filter((t) => t > cutoff);
+
+      if (recent.length === 0) this.hits.delete(key);
+      else this.hits.set(key, recent);
+    }
+  }
+}
+
+/** TokenBucket limits messages on a single connection. */
+export class TokenBucket {
+  private readonly rate: number;
+  private readonly burst: number;
+  private tokens: number;
+  updated: number;
+
+  constructor(rate: number, burst: number, now = Date.now()) {
+    this.rate = rate;
+    this.burst = burst;
+    this.tokens = burst;
+    this.updated = now;
+  }
+
+  take(now = Date.now()): boolean {
+    this.tokens = Math.min(this.burst, this.tokens + ((now - this.updated) / 1000) * this.rate);
+    this.updated = now;
+
+    if (this.tokens < 1) return false;
+
+    this.tokens -= 1;
+
+    return true;
+  }
+}

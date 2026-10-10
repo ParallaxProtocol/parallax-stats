@@ -1,0 +1,210 @@
+@import "tailwindcss";
+
+/* Design tokens follow parallaxprotocol.org (parallax-website/app/globals.css):
+   dark first, a warm off-white light theme, the logo gradient as the brand
+   accent, square plates on hairline borders. The light theme applies when
+   <html data-theme="light">. */
+@custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
+
+:root {
+  color-scheme: dark;
+  --radius: 0.25rem;
+  --background: oklch(0.06 0.015 265);
+  --foreground: oklch(0.93 0.005 80);
+  --card: oklch(0.12 0.012 265);
+  --surface-elevated: oklch(0.14 0.015 265);
+  --muted: oklch(0.15 0.015 265);
+  --muted-foreground: oklch(0.6 0.01 265);
+  --accent: oklch(0.25 0.02 265);
+  --border: oklch(1 0 0 / 8%);
+  --land: rgb(148 163 184 / 0.55);
+  --brand: #23c9c9;
+  /* Teal for data marks (bars, lines, dots); --brand stays the text colour */
+  --brand-mark: var(--brand);
+  --brand-muted: rgb(35 201 201 / 15%);
+  /* The logo gradient: filled buttons carry --brand-foreground text on it;
+     the mark variant is for bars, which carry no text */
+  --brand-gradient: linear-gradient(135deg, #00ff80 0%, #0080ff 100%);
+  --brand-gradient-mark: var(--brand-gradient);
+  --brand-foreground: oklch(0.15 0.03 200);
+  --ring: var(--brand);
+
+  /* Status grades, as mark colours (dots, bars, icons). "good" is the brand
+     teal so a healthy network reads in the site's own colour; every grade
+     ships with a text label beside it. Coloured text takes the -ink shades,
+     which only differ in light mode, where text needs more contrast. */
+  --good: var(--brand);
+  --warn: #fab219;
+  --serious: #ec835a;
+  --critical: oklch(0.704 0.191 22.216);
+  --info: #3b8cff;
+  --good-ink: var(--good);
+  --warn-ink: var(--warn);
+  --serious-ink: var(--serious);
+  --critical-ink: var(--critical);
+  --info-ink: var(--info);
+  --off: oklch(0.45 0.01 265);
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: oklch(0.98 0.005 80);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(0.96 0.005 80);
+  --surface-elevated: oklch(0.94 0.005 80);
+  --muted: oklch(0.94 0.005 80);
+  --muted-foreground: oklch(0.556 0 0);
+  --accent: oklch(0.95 0.005 80);
+  --border: oklch(0 0 0 / 10%);
+  --land: rgb(71 85 105 / 0.55);
+  --brand: #007c7d;
+  /* The main site's light chart teal: brighter than the text teal, still 3:1 on the surface */
+  --brand-mark: #0e8f8f;
+  --brand-muted: rgb(0 124 125 / 15%);
+  /* Deep enough for white button text, as on the main site */
+  --brand-gradient: linear-gradient(135deg, #00861d 0%, #0065cd 100%);
+  --brand-gradient-mark: linear-gradient(135deg, #00c46a 0%, #0a7cff 100%);
+  --brand-foreground: #ffffff;
+  --good: var(--brand-mark);
+  --warn: #e8a317;
+  --serious: #e8743d;
+  --critical: #dc3b3b;
+  --info: #2a78d6;
+  --good-ink: #007c7d;
+  --warn-ink: #9a6200;
+  --serious-ink: #b8501f;
+  --critical-ink: oklch(0.577 0.245 27.325);
+  --info-ink: #0065cd;
+  --off: oklch(0.7 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-surface-elevated: var(--surface-elevated);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-border: var(--border);
+  --color-brand: var(--brand);
+  --color-brand-mark: var(--brand-mark);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-muted: var(--brand-muted);
+  --color-ring: var(--ring);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-serious: var(--serious);
+  --color-critical: var(--critical);
+  --color-info: var(--info);
+  --color-good-ink: var(--good-ink);
+  --color-warn-ink: var(--warn-ink);
+  --color-serious-ink: var(--serious-ink);
+  --color-critical-ink: var(--critical-ink);
+  --color-info-ink: var(--info-ink);
+  --color-off: var(--off);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-serif: var(--font-serif), ui-serif, Georgia, serif;
+  --radius-sm: calc(var(--radius) - 2px);
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius);
+}
+
+@layer base {
+  * {
+    border-color: var(--border);
+  }
+
+  body {
+    background: var(--background);
+    color: var(--foreground);
+    font-family: var(--font-sans);
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2 {
+    font-family: var(--font-serif);
+    font-weight: 400;
+  }
+}
+
+/* The logo's gradient, for the few filled brand surfaces. */
+.brand-gradient {
+  background-image: var(--brand-gradient);
+}
+
+.brand-gradient-mark {
+  background-image: var(--brand-gradient-mark);
+}
+
+/* Instrument corner brackets that surface over a plate's corners on
+   hover, as on the main site's cards. */
+.plate-brackets {
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 300ms ease;
+  background-image:
+    linear-gradient(var(--brand), var(--brand)), linear-gradient(var(--brand), var(--brand)),
+    linear-gradient(var(--brand), var(--brand)), linear-gradient(var(--brand), var(--brand)),
+    linear-gradient(var(--brand), var(--brand)), linear-gradient(var(--brand), var(--brand)),
+    linear-gradient(var(--brand), var(--brand)), linear-gradient(var(--brand), var(--brand));
+  background-repeat: no-repeat;
+  background-size:
+    10px 1px, 1px 10px,
+    10px 1px, 1px 10px,
+    10px 1px, 1px 10px,
+    10px 1px, 1px 10px;
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+}
+
+.group\/plate:hover > .plate-brackets {
+  opacity: 1;
+}
+
+/* The "Add your node" dialog fades and rises in; the page behind stops scrolling */
+@keyframes dialog-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.add-node-dialog[open] {
+  animation: dialog-in 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.add-node-dialog[open]::backdrop {
+  animation: backdrop-in 0.25s ease;
+}
+
+html:has(dialog[open]) {
+  overflow: hidden;
+}
+
+:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition-duration: 0.01ms !important;
+  }
+}

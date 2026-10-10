@@ -1,0 +1,212 @@
+// Number and time formatting, and the status grades that drive the
+// indicator colors. Pure functions shared by server and client renders.
+
+import { TARGET_BLOCK_TIME } from "./protocol.ts";
+
+/** A status grade. Each renders as a colored mark with a text label beside it. */
+export type Grade = "good" | "warn" | "serious" | "critical" | "info" | "off";
+
+const integer = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+const oneDecimal = new Intl.NumberFormat("en-US", { maximumFractionDigits: 1, minimumFractionDigits: 1 });
+const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+
+export function formatInt(n: number): string {
+  return integer.format(n);
+}
+
+export function formatCompact(n: number): string {
+  return compact.format(n);
+}
+
+const SI = ["", "K", "M", "G", "T", "P", "E", "Z"];
+
+/** formatSI scales a value to an SI prefix: 12.3 G. */
+export function formatSI(value: number, digits = 1): { value: string; prefix: string } {
+  let v = Math.max(0, value);
+  let i = 0;
+
+  while (v >= 1000 && i < SI.length - 1) {
+    v /= 1000;
+    i++;
+  }
+
+  return { value: v.toFixed(i === 0 ? 0 : digits), prefix: SI[i] };
+}
+
+export function formatHashrate(hashes: number): string {
+  const { value, prefix } = formatSI(hashes);
+
+  return `${value} ${prefix}H/s`;
+}
+
+/** Pools and miners count difficulty in units of 2^32 hashes, Bitcoin style. */
+const POOL_UNIT = 2 ** 32;
+
+/** formatPoolDifficulty converts raw chain difficulty to the units pools show: 774.94. */
+export function formatPoolDifficulty(difficulty: string | number | bigint): string {
+  const pool = Number(difficulty) / POOL_UNIT;
+
+  return pool < 10_000 ? pool.toFixed(2) : formatInt(pool);
+}
+
+export function formatDifficulty(difficulty: string | number | bigint): string {
+  const { value, prefix } = formatSI(Number(difficulty), 2);
+
+  return `${value} ${prefix}H`;
+}
+
+/** formatGasPrice shows wei, gwei or LAX, whichever reads best. */
+export function formatGasPrice(wei: number): string {
+  if (wei < 1e6) return `${formatInt(wei)} wei`;
+  if (wei < 1e18) return `${oneDecimal.format(wei / 1e9).replace(/\.0$/, "")} gwei`;
+
+  return `${oneDecimal.format(wei / 1e18)} LAX`;
+}
+
+/** formatMs renders a short duration: 840 ms, 4.2 s, 12 min, 3 h, 2 days. */
+export function formatMs(ms: number): string {
+  if (ms < 1000) return `${Math.round(ms)} ms`;
+  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
+  if (ms < 3_600_000) return `${Math.round(ms / 60_000)} min`;
+  if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)} h`;
+
+  return `${Math.round(ms / 86_400_000)} days`;
+}
+
+/** formatClock renders elapsed time precisely: 42 s, 4 min 07 s, 1 h 12 min. */
+export function formatClock(ms: number): string {
+  const s = Math.max(0, Math.floor(ms / 1000));
+
+  if (s < 60) return `${s} s`;
+  if (s < 3600) return `${Math.floor(s / 60)} min ${String(s % 60).padStart(2, "0")} s`;
+  if (s < 86_400) return `${Math.floor(s / 3600)} h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")} min`;
+
+  return `${Math.floor(s / 86_400)} d ${Math.floor((s % 86_400) / 3600)} h`;
+}
+
+/** formatAgo renders how long ago a server timestamp was. */
+export function formatAgo(timestamp: number, now: number): string {
+  if (!timestamp) return "never";
+
+  const ms = Math.max(0, now - timestamp);
+
+  return ms < 60_000 ? `${Math.floor(ms / 1000)} s ago` : `${formatMs(ms)} ago`;
+}
+
+/** formatBlockTime renders an average block time in seconds: 9 min 48 s. */
+export function formatBlockTime(seconds: number): string {
+  if (!seconds) return "n/a";
+  if (seconds < 60) return `${seconds.toFixed(1)} s`;
+
+  return formatClock(seconds * 1000);
+}
+
+export function shortHash(hash: string): string {
+  const h = hash.startsWith("0x") ? hash.slice(2) : hash;
+
+  return `${h.slice(0, 8)}…${h.slice(-8)}`;
+}
+
+/** clientVersion trims a client string like Parallax/v2.1.0-stable-abc/linux-amd64/go1.27 to its version. */
+export function clientVersion(node: string): string {
+  const parts = node.split("/");
+  const version = parts.find((part) => /^v\d/.test(part));
+
+  return version ?? parts[0] ?? "";
+}
+
+// Grades
+
+/**
+ * After this long without a block the network may have stalled. Block
+ * intervals are exponential, so waits of an hour happen; two hours at the
+ * 10 minute target is a one-in-160,000 wait at steady hashrate.
+ */
+export const STALL_MS = 2 * 60 * 60 * 1000;
+
+/** gradeElapsed grades the time since the last block: on schedule, long, unusually long, or a possible stall. */
+export function gradeElapsed(ms: number): Grade {
+  const t = TARGET_BLOCK_TIME * 1000;
+
+  if (ms <= t) return "good";
+  if (ms <= 3 * t) return "warn";
+  if (ms <= STALL_MS) return "serious";
+
+  return "critical";
+}
+
+/** gradeAvgBlockTime grades how far an average block time strays from the target. */
+export function gradeAvgBlockTime(seconds: number): Grade {
+  if (!seconds) return "off";
+
+  const deviation = Math.abs(seconds - TARGET_BLOCK_TIME) / TARGET_BLOCK_TIME;
+
+  if (deviation <= 0.1) return "good";
+  if (deviation <= 0.25) return "warn";
+  if (deviation <= 0.5) return "serious";
+
+  return "critical";
+}
+
+export function gradeRatio(ratio: number): Grade {
+  if (!Number.isFinite(ratio)) return "off";
+  if (ratio >= 0.9) return "good";
+  if (ratio >= 0.75) return "info";
+  if (ratio >= 0.5) return "warn";
+
+  return "critical";
+}
+
+export function gradePeerLatency(ms: number): Grade {
+  if (!ms) return "off";
+  if (ms <= 100) return "good";
+  if (ms <= 300) return "warn";
+  if (ms <= 1000) return "serious";
+
+  return "critical";
+}
+
+export function gradeLatency(ms: number): Grade {
+  if (ms <= 100) return "good";
+  if (ms <= 1000) return "warn";
+
+  return "critical";
+}
+
+export function gradePeers(peers: number): Grade {
+  if (peers <= 1) return "critical";
+  if (peers < 4) return "warn";
+
+  return "good";
+}
+
+export function gradePropagation(ms: number): Grade {
+  if (ms === 0) return "info";
+  if (ms < 1000) return "good";
+  if (ms < 3000) return "warn";
+  if (ms < 7000) return "serious";
+
+  return "critical";
+}
+
+/** gradeBehind grades how many blocks a node trails the best block; ahead of it is suspect. */
+export function gradeBehind(behind: number): Grade {
+  if (behind < 0) return "critical";
+  if (behind === 0) return "good";
+  if (behind === 1) return "warn";
+  if (behind < 4) return "serious";
+
+  return "critical";
+}
+
+export function gradeUptime(uptime: number): Grade {
+  if (uptime >= 90) return "good";
+  if (uptime >= 75) return "warn";
+
+  return "critical";
+}
+
+/** survival is the share of blocks that take longer than `ms`, for exponentially distributed intervals. */
+export function survival(ms: number): number {
+  return Math.exp(-ms / (TARGET_BLOCK_TIME * 1000));
+}
