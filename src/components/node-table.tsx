@@ -67,20 +67,31 @@ function compare(a: number | string, b: number | string): number {
   return typeof a === "string" ? a.localeCompare(String(b)) : a - (b as number);
 }
 
-/** sortNodes puts pinned nodes first, then verified, then connected ones, then applies the chosen column. */
+const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+
+/**
+ * sortNodes puts pinned nodes first, then verified ones, each group in
+ * name order so they keep their places. The rest follow: connected before
+ * offline, then by the chosen column.
+ */
 function sortNodes(nodes: PublicNode[], sort: Sort, pins: string[]): PublicNode[] {
   // A sort saved by an older version may name a column that no longer exists
   const value = SORT_VALUE[sort.key] ?? SORT_VALUE[DEFAULT_SORT.key];
+  const rank = (node: PublicNode) => (pins.includes(node.id) ? 0 : node.trusted ? 1 : 2);
 
-  return [...nodes].sort(
-    (a, b) =>
-      Number(pins.includes(b.id)) - Number(pins.includes(a.id)) ||
-      Number(b.trusted) - Number(a.trusted) ||
+  return [...nodes].sort((a, b) => {
+    const group = rank(a) - rank(b);
+
+    if (group !== 0) return group;
+    if (rank(a) < 2) return byName.compare(a.info.name, b.info.name) || a.id.localeCompare(b.id);
+
+    return (
       Number(b.stats.active) - Number(a.stats.active) ||
       compare(value(a), value(b)) * (sort.desc ? -1 : 1) ||
       a.stats.block.propagation - b.stats.block.propagation ||
-      a.id.localeCompare(b.id),
-  );
+      a.id.localeCompare(b.id)
+    );
+  });
 }
 
 interface Column {
