@@ -94,6 +94,7 @@ All settings come from the environment.
 | `RPC_URL` | `https://rpc.parallaxprotocol.org` | Parallax RPC endpoint the recommended fee is read from |
 | `SITE_URL` | | Public address, such as `https://stats.example.org`, for absolute links in link previews. Without it, the forwarded host is used. |
 | `TRUSTED_PROXIES` | | Reverse proxies allowed to set `X-Forwarded-For`: addresses or ranges such as `10.0.0.0/8` |
+| `BEHIND_CLOUDFLARE` | | Set to `true` when the domain is proxied through Cloudflare, to take visitors' addresses from `CF-Connecting-IP` |
 | `TRUSTED_IPS` | | Addresses whose nodes are treated as verified |
 | `BANNED_IPS` | | Addresses or ranges refused outright |
 | `RESERVED_NAMES` | | Node names no one may log in with |
@@ -190,7 +191,10 @@ treated as untrusted:
   country, city and approximate coordinates.
 - **Addresses.** The client address is the socket peer. `X-Forwarded-For`
   is used only when the peer is in `TRUSTED_PROXIES`, and then the
-  right-most address not belonging to a proxy wins.
+  right-most address not belonging to a proxy wins. With
+  `BEHIND_CLOUDFLARE`, `CF-Connecting-IP` is used only when that address
+  is one of [Cloudflare's](https://www.cloudflare.com/ips/), so a client
+  connecting to the server directly cannot set its address with it.
 
 What a public dashboard cannot prevent: an unverified node can report
 false stats about itself (peers, latency, sync state), and someone with
@@ -241,10 +245,11 @@ The server keeps its state in memory, so run a single instance.
 4. The image has a health check on `/api/v1/stats`, which Coolify picks up.
    Keep the application at one replica.
 
-If the domain is proxied through Cloudflare, either add
-[Cloudflare's address ranges](https://www.cloudflare.com/ips/) to
-`TRUSTED_PROXIES` or leave the record DNS-only. Otherwise visitors appear as
-Cloudflare's addresses.
+If the domain is proxied through Cloudflare (the orange cloud), also set
+`BEHIND_CLOUDFLARE=true`. Otherwise every node and viewer appears as the
+Cloudflare edge it came through: the map places nodes at the edge's
+location, and the per-address limits apply to whole edges. Alternatively,
+make the record DNS-only.
 
 Nodes then report to `wss://stats.example.org/api`.
 

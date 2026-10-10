@@ -2,6 +2,7 @@
 // does.
 
 import { BlockList, isIPv4, isIPv6 } from "node:net";
+import { cloudflareEdges } from "./cloudflare.ts";
 
 export interface Settings {
   /** Private secrets; nodes logging in with one are verified. */
@@ -10,6 +11,8 @@ export interface Settings {
   publicSecret: string;
   /** Reverse proxies allowed to set X-Forwarded-For: addresses or ranges such as 10.0.0.0/8. */
   trustedProxies: BlockList;
+  /** Cloudflare's edge ranges when the site is proxied through Cloudflare, else null. */
+  cloudflare: BlockList | null;
   /** Addresses or ranges refused outright. */
   bannedIPs: BlockList;
   /** Addresses whose nodes are treated as verified. */
@@ -90,6 +93,7 @@ export function loadSettings(env: Env = process.env): Settings {
     privateSecrets: splitList(env.WS_SECRET).filter((s) => s !== publicSecret),
     publicSecret,
     trustedProxies: addressList(splitList(env.TRUSTED_PROXIES)),
+    cloudflare: /^(1|true|yes)$/i.test((env.BEHIND_CLOUDFLARE ?? "").trim()) ? cloudflareEdges() : null,
     bannedIPs: addressList(splitList(env.BANNED_IPS)),
     trustedIPs: splitList(env.TRUSTED_IPS),
     reservedNames: splitList(env.RESERVED_NAMES),

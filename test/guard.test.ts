@@ -6,8 +6,8 @@ import { addressList, inList, loadSettings } from "../src/server/settings.ts";
 
 const settings = loadSettings({ WS_SECRET: "private-a|private-b|open", PUBLIC_SECRET: "open", TRUSTED_PROXIES: "10.0.0.1" });
 
-function req(remote: string, xff?: string) {
-  return { socket: { remoteAddress: remote }, headers: xff ? { "x-forwarded-for": xff } : {} };
+function req(remote: string, xff?: string, extra: Record<string, string> = {}) {
+  return { socket: { remoteAddress: remote }, headers: { ...(xff ? { "x-forwarded-for": xff } : {}), ...extra } };
 }
 
 test("authenticate maps secrets to trust levels", () => {
@@ -39,6 +39,23 @@ test("clientIP takes the right-most non-proxy hop behind a trusted proxy", () =>
   assert.equal(clientIP(settings, req("10.0.0.1", "5.5.5.5, 10.0.0.1")), "5.5.5.5");
   // Garbage stops the walk and falls back to the proxy
   assert.equal(clientIP(settings, req("10.0.0.1", "not-an-ip")), "10.0.0.1");
+});
+
+test("clientIP takes CF-Connecting-IP only from a Cloudflare edge", () => {
+  const behind = loadSettings({ PUBLIC_SECRET: "open", TRUSTED_PROXIES: "10.0.0.0/8", BEHIND_CLOUDFLARE: "true" });
+  const visitor = { "cf-connecting-ip": "5.5.5.5" };
+
+  // Traefik replacing X-Forwarded-For with the edge, or appending to Cloudflare's
+  assert.equal(clientIP(behind, req("10.0.1.2", "172.68.10.1", visitor)), "5.5.5.5");
+  assert.equal(clientIP(behind, req("10.0.1.2", "6.6.6.6, 172.68.10.1", visitor)), "5.5.5.5");
+  assert.equal(clientIP(behind, req("10.0.1.2", "2606:4700:3030::1", { "cf-connecting-ip": "2a02:4780::1" })), "2a02:4780::1");
+  // A client reaching the server directly cannot claim an address
+  assert.equal(clientIP(behind, req("10.0.1.2", "9.9.9.9", visitor)), "9.9.9.9");
+  assert.equal(clientIP(behind, req("9.9.9.9", undefined, visitor)), "9.9.9.9");
+  // A broken header leaves the edge address
+  assert.equal(clientIP(behind, req("10.0.1.2", "172.68.10.1", { "cf-connecting-ip": "nope" })), "172.68.10.1");
+  // Off by default
+  assert.equal(clientIP(settings, req("172.68.10.1", undefined, visitor)), "172.68.10.1");
 });
 
 test("RateLimiter allows a fixed number per minute per key", () => {

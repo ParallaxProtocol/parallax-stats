@@ -41,16 +41,33 @@ export function normalizeIP(ip: string | undefined): string {
   return value;
 }
 
+type Request = Pick<IncomingMessage, "headers"> & { socket: { remoteAddress?: string } };
+
 /**
  * clientIP returns the address a request came from. Forwarding headers
  * are honored only when the socket peer is a configured proxy, and then
  * the right-most address not belonging to a proxy wins, since anything
  * left of it was supplied by the client.
+ *
+ * Behind Cloudflare that address is a Cloudflare edge, and the visitor is
+ * in CF-Connecting-IP, which Cloudflare sets itself. The header is read
+ * only when the request really arrived from an edge, so a client reaching
+ * the server directly cannot choose its address with it.
  */
-export function clientIP(
-  settings: Settings,
-  req: Pick<IncomingMessage, "headers"> & { socket: { remoteAddress?: string } },
-): string {
+export function clientIP(settings: Settings, req: Request): string {
+  const ip = forwardedIP(settings, req);
+
+  if (settings.cloudflare && inList(settings.cloudflare, ip)) {
+    const header = req.headers["cf-connecting-ip"];
+    const visitor = normalizeIP(Array.isArray(header) ? header[0] : header);
+
+    if (isIP(visitor)) return visitor;
+  }
+
+  return ip;
+}
+
+function forwardedIP(settings: Settings, req: Request): string {
   const peer = normalizeIP(req.socket.remoteAddress);
 
   if (!inList(settings.trustedProxies, peer)) return peer;
