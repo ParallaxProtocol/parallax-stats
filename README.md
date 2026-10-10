@@ -154,6 +154,9 @@ unavailable and the rest of the dashboard carries on.
 - **Stale blocks and reorgs** count only what a verified node saw (or, with
   none online, two nodes), so a node reporting made-up blocks cannot
   inflate them.
+- **Uptime** is the average of verified nodes' uptimes, the share of time
+  each has been connected since the server first saw it. Unverified nodes
+  come and go as people try things, so they would only add noise.
 - **Recommended fee** is the RPC endpoint's `eth_gasPrice`. Parallax has
   no base fee, so the gas price is the whole fee; a plain transfer uses
   21,000 gas.

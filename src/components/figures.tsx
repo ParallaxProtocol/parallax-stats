@@ -78,9 +78,10 @@ export function Figures({
     },
     {
       label: "Uptime",
-      value: summary.total ? `${Math.round(summary.uptime)}%` : "n/a",
-      grade: summary.total ? gradeUptime(summary.uptime) : "off",
-      note: "average",
+      // Verified nodes only: anyone can run an unverified node for an hour
+      value: summary.uptime !== null ? `${Math.round(summary.uptime)}%` : "n/a",
+      grade: summary.uptime !== null ? gradeUptime(summary.uptime) : "off",
+      note: "verified nodes",
     },
   ];
 

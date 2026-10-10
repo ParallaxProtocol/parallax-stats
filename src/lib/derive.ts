@@ -10,7 +10,12 @@ export interface Summary {
   synced: number;
   /** Median of active nodes' own median peer latencies, ms; 0 when none measured. */
   peerLatency: number;
-  uptime: number;
+  /** Average uptime of verified nodes, connected or not, 0..100; null when there are none. */
+  uptime: number | null;
+}
+
+function average(values: number[]): number | null {
+  return values.length > 0 ? values.reduce((sum, value) => sum + value, 0) / values.length : null;
 }
 
 export function median(values: number[]): number {
@@ -41,6 +46,6 @@ export function summarize(nodes: PublicNode[]): Summary {
     active: active.length,
     synced: active.filter((node) => !node.stats.syncing).length,
     peerLatency: median(active.map((node) => node.stats.peerLatency).filter((latency) => latency > 0)),
-    uptime: nodes.length > 0 ? nodes.reduce((sum, node) => sum + node.stats.uptime, 0) / nodes.length : 0,
+    uptime: average(nodes.filter((node) => node.trusted).map((node) => node.stats.uptime)),
   };
 }
