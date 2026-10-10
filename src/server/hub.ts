@@ -34,7 +34,8 @@ const NAME_CHECKS_PER_MINUTE = 20;
 const VIEWER_MAX_BUFFERED = 4 * 1024 * 1024;
 
 export interface HubOptions {
-  lookupGeo?: (ip: string) => Geo | null;
+  /** Locates a node's address, from a cache right away or later through a promise. */
+  lookupGeo?: (ip: string) => Geo | null | Promise<Geo | null>;
   /** Reads the recommended gas price, in wei; polled every GAS_PRICE_POLL_MS. */
   fetchGasPrice?: () => Promise<bigint | null>;
 }
@@ -218,6 +219,9 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
       }
 
       try {
+        const located = lookupGeo(ip);
+        // While a lookup is out, a node reconnecting from the same address keeps its place
+        const previous = registry.get(id);
         const node = registry.add({
           id,
           info,
@@ -225,8 +229,19 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
           connection,
           latency: 0,
           trusted: level === "trusted",
-          geo: lookupGeo(ip),
+          geo: located instanceof Promise ? (previous?.ip === ip ? previous.geo : null) : located,
         });
+
+        // Listed now, placed on the map once the lookup answers
+        if (located instanceof Promise) {
+          void located.then((geo) => {
+            const current = registry.get(id);
+
+            if (geo && current && current.connection === connection && current.setGeo(geo)) {
+              broadcast({ type: "node", node: current.toPublic() });
+            }
+          });
+        }
 
         nodeId = id;
         emit("ready");

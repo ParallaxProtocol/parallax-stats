@@ -119,10 +119,12 @@ code reads them, they are never logged, sent to viewers or included in the
 build, and `.env*` files are kept out of git and the Docker image. Never
 give a secret a `NEXT_PUBLIC_` name, which would ship it to browsers.
 
-The server makes two kinds of outbound request: the recommended gas price
-from `RPC_URL` once a minute, and the latest parallaxd release from the
-GitHub API at most once an hour. If either is unreachable, its figure shows
-as unavailable and the rest of the dashboard carries on.
+The server makes three kinds of outbound request: the recommended gas
+price from `RPC_URL` once a minute, the latest parallaxd release from the
+GitHub API at most once an hour, and node locations from
+[ip-api.com](https://ip-api.com), the same source as the network atlas on
+parallaxprotocol.org. If any is unreachable, its figure shows as
+unavailable and the rest of the dashboard carries on.
 
 ## JSON API
 
@@ -187,8 +189,11 @@ treated as untrusted:
   from the name with a per-process key, so public rows cannot carry
   arbitrary text or impersonate known operators. The real name only
   identifies the node to the server.
-- **Privacy.** Node IP addresses stay on the server. Viewers see only a
-  country, city and approximate coordinates.
+- **Privacy.** Node IP addresses are never sent to viewers, who see only a
+  country, city and approximate coordinates. To place nodes, the server
+  sends their addresses to ip-api.com's free batch endpoint, which is plain
+  HTTP; viewers' addresses are never looked up. Answers are cached for a
+  day, so reconnects cost no lookups.
 - **Addresses.** The client address is the socket peer. `X-Forwarded-For`
   is used only when the peer is in `TRUSTED_PROXIES`, and then the
   right-most address not belonging to a proxy wins. With

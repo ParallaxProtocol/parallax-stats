@@ -84,6 +84,14 @@ export class NodeRecord {
     return this.trusted ? this.id : this.publicId;
   }
 
+  /** setGeo places the node and returns whether that changed anything. */
+  setGeo(geo: Geo): boolean {
+    if (JSON.stringify(geo) === JSON.stringify(this.geo)) return false;
+
+    this.geo = geo;
+    return true;
+  }
+
   login(login: Login): void {
     this.info = login.info;
     this.ip = login.ip;

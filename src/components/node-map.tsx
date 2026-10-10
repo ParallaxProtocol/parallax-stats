@@ -157,14 +157,22 @@ export function NodeMap({ world, nodes, bestBlock }: { world: WorldMap; nodes: P
 
       <Countries nodes={nodes} />
 
-      <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-        {LEGEND.map((item) => (
-          <li key={item.grade} className="flex items-center gap-1.5">
-            <Indicator grade={item.grade} label="" />
-            {item.label}
-          </li>
-        ))}
-      </ul>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 text-xs text-muted-foreground">
+        <ul className="flex flex-wrap gap-x-4 gap-y-1">
+          {LEGEND.map((item) => (
+            <li key={item.grade} className="flex items-center gap-1.5">
+              <Indicator grade={item.grade} label="" />
+              {item.label}
+            </li>
+          ))}
+        </ul>
+        <span>
+          Geolocation by{" "}
+          <a href="https://ip-api.com" className="underline decoration-border underline-offset-2 hover:text-foreground">
+            ip-api.com
+          </a>
+        </span>
+      </div>
     </Plate>
   );
 }
