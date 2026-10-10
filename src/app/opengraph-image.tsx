@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { ImageResponse } from "next/og";
 
-export const alt = "Parallax Network Stats";
+export const alt = "Parallax Network Status";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -70,7 +70,7 @@ export default async function Image() {
               backgroundImage: "linear-gradient(90deg, rgba(242,240,236,0), rgba(242,240,236,0.35) 20%, rgba(242,240,236,0.35) 80%, rgba(242,240,236,0))",
             }}
           />
-          <span style={{ fontSize: 100, fontWeight: 600, lineHeight: 1, letterSpacing: -2, color: SUBTITLE }}>Network Stats</span>
+          <span style={{ fontSize: 100, fontWeight: 600, lineHeight: 1, letterSpacing: -2, color: SUBTITLE }}>Network Status</span>
         </div>
       </div>
     ),
