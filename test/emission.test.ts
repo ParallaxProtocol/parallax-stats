@@ -62,9 +62,10 @@ test("emission state at a height", () => {
   assert.ok(Math.abs(state.eraProgress - 120_000 / HALVING_INTERVAL) < 1e-12);
   // Blocks 1..120,000 are 120,000 rewarded blocks; genesis is block 0
   assert.equal(state.issued, 120_000n * 50n * LAX);
-  assert.ok(Math.abs(state.inflation! - (7200 * 365) / (120_000 * 50)) < 1e-9);
+  // Blocks 120,001..209,999 are left before the halving at 210,000
+  assert.equal(state.leftThisEra, 89_999n * 50n * LAX);
 
-  assert.equal(emissionAt(0).inflation, null);
+  assert.equal(emissionAt(0).leftThisEra, 209_999n * 50n * LAX);
   assert.equal(emissionAt(HALVING_INTERVAL).era, 1);
   assert.equal(emissionAt(HALVING_INTERVAL).blocksToHalving, HALVING_INTERVAL);
 });

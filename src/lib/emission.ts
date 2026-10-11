@@ -63,8 +63,8 @@ export interface EmissionState {
   issuedShare: number;
   /** New coins per day at the target block time and current reward, in wei. */
   dailyIssuance: bigint;
-  /** Supply growth over the next 12 months: a year of issuance at the current reward over the coins issued so far, 0..; null before any issuance. */
-  inflation: number | null;
+  /** Coins still to be mined in the current era, before the next halving, in wei. */
+  leftThisEra: bigint;
 }
 
 export function emissionAt(height: number): EmissionState {
@@ -85,7 +85,7 @@ export function emissionAt(height: number): EmissionState {
     issued,
     issuedShare: toLax(issued) / toLax(SUPPLY_CAP),
     dailyIssuance,
-    inflation: issued > 0n ? (toLax(dailyIssuance) * 365) / toLax(issued) : null,
+    leftThisEra: issuedThrough(nextHalving - 1) - issued,
   };
 }
 

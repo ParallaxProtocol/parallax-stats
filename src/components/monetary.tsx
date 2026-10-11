@@ -155,8 +155,12 @@ function SupplyCurve({ height }: { height: number }) {
   const { width, height: h } = size;
   const x = (blocks: number) => (Math.min(blocks, span) / span) * width;
   const y = (share: number) => 4 + (1 - share) * (h - 8);
-  const points = curve.map((p) => `${x(p.height)},${y(p.share)}`).join(" ");
   const nowShare = emissionAt(height).issuedShare;
+  // Supply grows in a straight line within an era, so the curve splits exactly
+  // at the current block: issued so far in the brand color, the rest ahead in gray
+  const now = `${x(height)},${y(nowShare)}`;
+  const issued = [...curve.filter((p) => p.height < height).map((p) => `${x(p.height)},${y(p.share)}`), now].join(" ");
+  const ahead = [now, ...curve.filter((p) => p.height > height).map((p) => `${x(p.height)},${y(p.share)}`)].join(" ");
   const hovered = active !== null ? curve[active] : null;
 
   return (
@@ -192,9 +196,17 @@ function SupplyCurve({ height }: { height: number }) {
               vectorEffect="non-scaling-stroke"
             />
           ))}
-          <polygon points={`0,${y(0)} ${points} ${width},${y(0)}`} className="fill-brand-mark opacity-10" />
+          <polygon points={`0,${y(0)} ${issued} ${x(height)},${y(0)}`} className="fill-brand-mark opacity-10" />
           <polyline
-            points={points}
+            points={ahead}
+            fill="none"
+            className="stroke-muted-foreground/40"
+            strokeWidth={2}
+            strokeLinejoin="round"
+            vectorEffect="non-scaling-stroke"
+          />
+          <polyline
+            points={issued}
             fill="none"
             className="stroke-brand-mark"
             strokeWidth={2}
@@ -207,7 +219,7 @@ function SupplyCurve({ height }: { height: number }) {
               cx={x(p.height)}
               cy={y(p.share)}
               r={active === i ? 4 : 2}
-              className="fill-brand-mark stroke-surface-elevated"
+              className={`stroke-surface-elevated ${p.height <= height ? "fill-brand-mark" : "fill-muted-foreground"}`}
               strokeWidth={active === i ? 2 : 0}
             />
           ))}
@@ -281,9 +293,9 @@ function Emission({ height }: { height: number }) {
       <dl className="grid grid-cols-3 gap-3 border-t border-border pt-3">
         <Stat label="Issued per day" value={`${formatInt(Math.round(toLax(state.dailyIssuance)))} LAX`} />
         <Stat
-          label="Supply growth, next 12 months"
-          hint="A year of issuance at the current reward, against the coins issued so far, assuming 10 minute blocks."
-          value={state.inflation === null ? "n/a" : `${(state.inflation * 100).toFixed(state.inflation < 0.1 ? 2 : 1)}%`}
+          label="Left this era"
+          hint={`Coins still to be mined at the current reward of ${formatInt(Math.round(toLax(state.reward)))} LAX a block, before the halving at block #${formatInt(state.nextHalving)}.`}
+          value={`${formatInt(Math.round(toLax(state.leftThisEra)))} LAX`}
         />
         <Stat label="Left to mine" value={`${formatInt(Math.ceil(toLax(SUPPLY_CAP - state.issued)))} LAX`} />
       </dl>
