@@ -99,7 +99,7 @@ export function AddNode({ publicSecret }: { publicSecret: string }) {
         ref={dialog}
         aria-labelledby={`${id}-title`}
         onClose={() => setIsOpen(false)}
-        className="add-node-dialog m-auto max-h-[90dvh] w-[min(36rem,calc(100vw-2rem))] overflow-y-auto border border-border bg-surface-elevated p-0 text-foreground shadow-[0_4px_10px_oklch(0_0_0/0.45),0_20px_48px_oklch(0_0_0/0.45)] backdrop:bg-black/60 backdrop:backdrop-blur-sm"
+        className="modal-dialog m-auto max-h-[90dvh] w-[min(36rem,calc(100vw-2rem))] overflow-y-auto border border-border bg-surface-elevated p-0 text-foreground shadow-[0_4px_10px_oklch(0_0_0/0.45),0_20px_48px_oklch(0_0_0/0.45)] backdrop:bg-black/60 backdrop:backdrop-blur-sm"
         onClick={(e) => {
           // A click on the backdrop lands on the dialog element itself
           if (e.target === e.currentTarget) dialog.current?.close();

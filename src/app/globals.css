@@ -169,7 +169,7 @@
   opacity: 1;
 }
 
-/* The "Add your node" dialog fades and rises in; the page behind stops scrolling */
+/* Dialogs fade and rise in; the page behind stops scrolling */
 @keyframes dialog-in {
   from {
     opacity: 0;
@@ -183,11 +183,11 @@
   }
 }
 
-.add-node-dialog[open] {
+.modal-dialog[open] {
   animation: dialog-in 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-.add-node-dialog[open]::backdrop {
+.modal-dialog[open]::backdrop {
   animation: backdrop-in 0.25s ease;
 }
 

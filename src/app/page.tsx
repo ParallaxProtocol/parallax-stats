@@ -4,6 +4,7 @@ import Image from "next/image";
 import { Suspense } from "react";
 import { connection } from "next/server";
 import { Dashboard } from "@/components/dashboard";
+import { About } from "@/components/about";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getLatestRelease } from "@/lib/releases";
 import { getWorld } from "@/lib/world";
@@ -56,7 +57,10 @@ export default function Page() {
           <span aria-hidden className="h-5 w-px bg-border" />
           <span className="font-sans text-lg font-normal text-muted-foreground">Network Status</span>
         </h1>
-        <ThemeToggle />
+        <div className="flex items-center gap-2">
+          <About />
+          <ThemeToggle />
+        </div>
       </header>
 
       <Suspense fallback={<Placeholder />}>
