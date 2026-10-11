@@ -7,7 +7,8 @@
 // WS_SECRET and PUBLIC_SECRET, so a third of the nodes are verified. Set
 // TRUSTED_PROXIES=127.0.0.1,::1 for the server so the simulated addresses
 // count (locations on the map, and the per-address limits). SIM_BLOCK_MS
-// sets the average block interval (default 20 s; the real target is 10 min).
+// sets the average block interval (default 20 s; the real target is 10 min),
+// and SIM_MAJORITY the share of blocks the largest miner finds (default 0.6).
 
 import nextEnv from "@next/env";
 import { WebSocket } from "ws";
@@ -42,8 +43,15 @@ const ADDRESSES = [
   "62.210.16.6",
 ];
 
-// Fourteen miners; a few pools find most blocks
+// Fourteen miners. The first finds SIM_MAJORITY of blocks (default 0.6, so
+// the dashboard shows a critical mining majority; 0 spreads them out), and
+// a few of the rest find most of the others.
 const MINERS = Array.from({ length: 14 }, (_, i) => "0x" + (i + 1).toString(16).padStart(2, "0").repeat(20));
+const majority = Math.min(1, Math.max(0, Number(process.env.SIM_MAJORITY ?? 0.6) || 0));
+
+function pickMiner(): string {
+  return Math.random() < majority ? MINERS[0] : MINERS[1 + Math.floor(Math.random() ** 2.5 * (MINERS.length - 1))];
+}
 
 interface SimBlock {
   number: number;
@@ -79,7 +87,7 @@ function makeBlock(number: number, timestamp: number, parent: SimBlock | undefin
     hash: hash(number * 7919),
     parentHash: hash((number - 1) * 7919),
     timestamp,
-    miner: MINERS[Math.floor(Math.random() ** 2.5 * MINERS.length)],
+    miner: pickMiner(),
     gasUsed,
     gasLimit: 30_000_000,
     difficulty: difficulty.toString(),
