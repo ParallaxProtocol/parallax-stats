@@ -168,7 +168,7 @@ export function BlockToasts({ best, pools, live }: { best: Block | null; pools: 
  * browser still blocks audio it shows that, and a click allows it and plays
  * the chime so the viewer hears it works.
  */
-export function SoundToggle() {
+export function SoundToggle({ compact = false }: { compact?: boolean }) {
   const [sound, setSound] = usePersistent(SOUND_KEY, true);
   const unlocked = useSyncExternalStore(subscribeAudio, audioUnlocked, () => false);
   const blocked = sound && !unlocked;
@@ -187,7 +187,7 @@ export function SoundToggle() {
     <button
       type="button"
       onClick={() => void onClick()}
-      className="relative inline-flex size-8 items-center justify-center rounded-md border border-border hover:bg-accent/50 sm:size-9"
+      className={`relative inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/50 ${compact ? "size-7" : "size-8 sm:size-9"}`}
       aria-label={blocked ? "Allow the new block sound" : sound ? "Mute new block sound" : "Play a sound for new blocks"}
       title={blocked ? "Your browser blocks sound until you interact with the page: click to allow it" : undefined}
       aria-pressed={sound && unlocked}

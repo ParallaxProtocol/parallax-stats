@@ -5,12 +5,14 @@
 import {
   HISTORY_BINS,
   PROPAGATION_BANDS,
+  TREND_SLICE_S,
   type Block,
   type ChainHealth,
   type Charts,
   type MinerCount,
   type MiningPool,
   type PropagationStats,
+  type Trends,
 } from "../lib/protocol.ts";
 import { DEEP_REORG } from "../lib/alert-levels.ts";
 import { median } from "../lib/derive.ts";
@@ -785,6 +787,44 @@ export class History {
     return span > 0 ? work / span : 0;
   }
 
+  /**
+   * blockTrends works out each trend slice from the blocks found in it, by
+   * their timestamps: the mean time to their parents, the hashrate as
+   * avgHashrate estimates it (their work over that time), and their mean
+   * difficulty. Only blocks whose parent is known count towards the time.
+   */
+  blockTrends(starts: number[]): Pick<Trends, "blocktime" | "hashrate" | "difficulty"> {
+    const slices = starts.map(() => ({ work: 0, time: 0, timed: 0, difficulty: 0, blocks: 0 }));
+    const first = starts[0] ?? 0;
+
+    for (let i = 0; i < this.items.length; i++) {
+      const item = this.items[i];
+      // A timestamp ahead of the clock counts in the slice in progress
+      const index = Math.min(starts.length - 1, Math.floor((item.block.timestamp - first) / TREND_SLICE_S));
+
+      if (index < 0) continue;
+
+      const slice = slices[index];
+      const parent = this.items[i + 1];
+      const difficulty = Number(item.block.difficulty);
+
+      slice.difficulty += difficulty;
+      slice.blocks++;
+
+      if (parent?.height !== item.height - 1) continue;
+
+      slice.work += difficulty;
+      slice.time += item.block.timestamp - parent.block.timestamp;
+      slice.timed++;
+    }
+
+    return {
+      blocktime: slices.map((s) => (s.timed > 0 ? s.time / s.timed : null)),
+      hashrate: slices.map((s) => (s.time > 0 ? s.work / s.time : null)),
+      difficulty: slices.map((s) => (s.blocks > 0 ? s.difficulty / s.blocks : null)),
+    };
+  }
+
   /** minerWindow is the blocks of the last MINER_WINDOW_S by timestamp, newest first: the week the miner figures and the average block time cover. */
   private minerWindow(): Height[] {
     const head = this.items[0];
@@ -823,7 +863,7 @@ export class History {
   }
 
   /** charts gathers the chart data; `heads` are the verified nodes' heads, for spotting splits. */
-  charts(heads: Head[] = []): Charts {
+  charts(heads: Head[] = []): Omit<Charts, "trends"> {
     const recent = this.latest(HISTORY_BINS).reverse();
     const minerWindow = this.minerWindow();
     const minerCounts = this.minerCounts(minerWindow);

@@ -20,7 +20,7 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 
 const link = "text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground";
 
-export function About() {
+export function About({ compact = false }: { compact?: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const id = useId();
 
@@ -29,7 +29,7 @@ export function About() {
       <button
         type="button"
         onClick={() => dialog.current?.showModal()}
-        className="inline-flex size-8 items-center justify-center rounded-md border border-border hover:bg-accent/50 sm:size-9"
+        className={`inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/50 ${compact ? "size-7" : "size-8 sm:size-9"}`}
         aria-label="About this dashboard"
         aria-haspopup="dialog"
       >

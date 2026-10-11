@@ -98,7 +98,18 @@ function place(node: PublicNode): string {
   return [node.geo.city, node.geo.country].filter(Boolean).join(", ");
 }
 
-export function NodeMap({ world, nodes, bestBlock }: { world: WorldMap; nodes: PublicNode[]; bestBlock: number }) {
+export function NodeMap({
+  world,
+  nodes,
+  bestBlock,
+  className = "",
+}: {
+  world: WorldMap;
+  nodes: PublicNode[];
+  bestBlock: number;
+  /** Placement classes, for the map in a grid. */
+  className?: string;
+}) {
   const [hovered, setHovered] = useState<string | null>(null);
   const projection = useMemo(
     () => geoEqualEarth().scale(world.scale).translate(world.translate),
@@ -115,7 +126,7 @@ export function NodeMap({ world, nodes, bestBlock }: { world: WorldMap; nodes: P
   const focus = dots.find((d) => d.node.id === hovered);
 
   return (
-    <Plate as="figure" className="flex min-w-0 flex-col gap-4 p-5">
+    <Plate as="figure" className={`flex min-w-0 flex-col gap-4 p-5 ${className}`}>
       <figcaption className="flex items-baseline justify-between gap-3">
         <Label>Where nodes run</Label>
         <span className="truncate text-xs text-muted-foreground" aria-live="polite">

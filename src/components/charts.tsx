@@ -1,18 +1,9 @@
 "use client";
 
 import { useState, type ReactNode } from "react";
-import { miningDifficulty } from "@/lib/asert";
 import { blockReward, WEI_PER_LAX } from "@/lib/emission";
-import {
-  formatBlockTime,
-  formatCompact,
-  formatDifficulty,
-  formatInt,
-  formatMs,
-  formatPoolDifficulty,
-  shortHash,
-} from "@/lib/format";
-import { TARGET_BLOCK_TIME, type Block, type Charts, type MinerCount, type PropagationStats } from "@/lib/protocol";
+import { formatBlockTime, formatCompact, formatInt, formatMs, gradeAvgBlockTime, shortHash } from "@/lib/format";
+import { HISTORY_BINS, TARGET_BLOCK_TIME, TREND_SLICE_S, type Charts, type MinerCount, type PropagationStats } from "@/lib/protocol";
 import { majorityLevel, spreadLevel, type Level } from "@/lib/alert-levels";
 import { DECENTRALIZATION_MIN_BLOCKS, gradeDecentralization, majorityHolders } from "@/lib/decentralization";
 import { Indicator } from "./indicator";
@@ -30,24 +21,27 @@ const RADIUS = 3;
  * the right, a headline figure, and a body that fills the rest of the
  * tile, so tiles in a row line up whatever they contain.
  */
-function Tile({
+export function Tile({
   title,
   readout,
   value,
   qualifier,
   tone,
+  className = "",
   children,
 }: {
-  title: string;
+  title: ReactNode;
   readout?: ReactNode;
   value?: ReactNode;
   qualifier?: ReactNode;
   /** Tints the tile while a warning about it applies. */
   tone?: Level | null;
+  /** Placement classes, for a tile in a grid. */
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <Plate as="figure" tone={tone} className="flex min-w-0 flex-col gap-3 p-5">
+    <Plate as="figure" tone={tone} className={`flex min-w-0 flex-col gap-3 p-5 ${className}`}>
       <figcaption className="flex items-baseline justify-between gap-3">
         <Label className="whitespace-nowrap">{title}</Label>
         <span className="min-w-0 truncate text-xs text-muted-foreground tabular-nums" aria-live="polite">
@@ -55,9 +49,11 @@ function Tile({
         </span>
       </figcaption>
       {value !== undefined && (
-        <p className="flex flex-wrap items-baseline gap-x-2">
-          <span className="text-3xl tabular-nums">{value}</span>
-          {qualifier && <span className="text-sm text-muted-foreground">{qualifier}</span>}
+        // A fixed height, whatever they say, so hovering a chart never resizes it: one line
+        // for the figure and two for its note, enough for the longest readouts
+        <p className="flex min-w-0 flex-col gap-1">
+          <span className="truncate text-3xl tabular-nums">{value}</span>
+          <span className="line-clamp-2 min-h-10 text-sm leading-5 text-muted-foreground">{qualifier}</span>
         </p>
       )}
       <div className="flex min-h-0 flex-1 flex-col">{children}</div>
@@ -65,7 +61,7 @@ function Tile({
   );
 }
 
-function Waiting({ children = "Waiting for blocks" }: { children?: ReactNode }) {
+export function Waiting({ children = "Waiting for blocks" }: { children?: ReactNode }) {
   return <p className="flex flex-1 items-center text-sm text-muted-foreground">{children}</p>;
 }
 
@@ -90,7 +86,11 @@ function Plot({
   onActive,
   label,
   children,
-}: Omit<PlotProps, "active"> & { children: (size: { width: number; height: number }, slot: number) => ReactNode }) {
+}: Omit<PlotProps, "active" | "values"> & {
+  /** One per slot; only how many matters here. */
+  values: readonly unknown[];
+  children: (size: { width: number; height: number }, slot: number) => ReactNode;
+}) {
   const [ref, size] = useSize<HTMLDivElement>({ width: 320, height: MIN_PLOT });
   const slot = values.length > 0 ? size.width / values.length : size.width;
 
@@ -187,38 +187,59 @@ function Bars({
 }
 
 /**
- * Line plots a level that moves within a narrow band, like difficulty,
- * on a scale fitted to its range so small changes stay visible.
+ * TrendLine plots a level that moves within a narrow band, like difficulty,
+ * on a scale fitted to its range so small changes stay visible. A null
+ * value leaves its slot empty and breaks the line, so missing data never
+ * reads as a change.
  */
-function Line({ values, active, onActive, label }: PlotProps) {
-  const min = Math.min(...values);
-  const max = Math.max(...values);
+export function TrendLine({
+  values,
+  active,
+  onActive,
+  label,
+}: Omit<PlotProps, "values"> & { values: (number | null)[] }) {
+  const known = values.filter((v): v is number => v !== null);
+  const min = Math.min(...known);
+  const max = Math.max(...known);
   const pad = (max - min) * 0.15 || Math.abs(max) * 0.01 || 1;
+  // Runs of consecutive known values, each drawn as its own line
+  const runs: number[][] = [];
+
+  values.forEach((v, i) => {
+    if (v === null) return;
+    if (i > 0 && values[i - 1] !== null) runs.at(-1)!.push(i);
+    else runs.push([i]);
+  });
+
+  const latest = runs.at(-1)?.at(-1) ?? null;
 
   return (
     <Plot values={values} onActive={onActive} label={label}>
       {({ height }, slot) => {
         const x = (i: number) => i * slot + slot / 2;
         const y = (v: number) => 6 + (1 - (v - (min - pad)) / (max + pad - (min - pad))) * (height - 12);
-        const points = values.map((v, i) => `${x(i)},${y(v)}`).join(" ");
-        const last = values.length - 1;
-        const focus = active ?? last;
+        const focus = active !== null && values[active] !== null ? active : active === null ? latest : null;
 
         return (
           <>
-            <polygon
-              points={`${x(0)},${height} ${points} ${x(last)},${height}`}
-              className="fill-brand-mark opacity-10"
-            />
-            <polyline
-              points={points}
-              fill="none"
-              className="stroke-brand-mark"
-              strokeWidth={2}
-              strokeLinejoin="round"
-              strokeLinecap="round"
-              vectorEffect="non-scaling-stroke"
-            />
+            {runs.map((run) => {
+              const points = run.map((i) => `${x(i)},${y(values[i]!)}`).join(" ");
+
+              return (
+                <g key={run[0]}>
+                  <polygon points={`${x(run[0])},${height} ${points} ${x(run.at(-1)!)},${height}`} className="fill-brand-mark opacity-10" />
+                  <polyline
+                    points={points}
+                    fill="none"
+                    className="stroke-brand-mark"
+                    strokeWidth={2}
+                    strokeLinejoin="round"
+                    strokeLinecap="round"
+                    vectorEffect="non-scaling-stroke"
+                  />
+                </g>
+              );
+            })}
             {active !== null && (
               <line
                 x1={x(active)}
@@ -230,7 +251,9 @@ function Line({ values, active, onActive, label }: PlotProps) {
                 vectorEffect="non-scaling-stroke"
               />
             )}
-            <circle cx={x(focus)} cy={y(values[focus])} r={4} className="fill-brand-mark stroke-surface-elevated" strokeWidth={2} />
+            {focus !== null && (
+              <circle cx={x(focus)} cy={y(values[focus]!)} r={4} className="fill-brand-mark stroke-surface-elevated" strokeWidth={2} />
+            )}
           </>
         );
       }}
@@ -242,23 +265,110 @@ function Line({ values, active, onActive, label }: PlotProps) {
 
 const average = (values: number[]) => (values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : 0);
 
-function BlockTime({ c, block }: { c: Charts; block: (i: number) => string }) {
+/** sliceTime names a trend slice in the viewer's time zone, like Sat 16:00–20:00. Readouts only, so never server rendered. */
+export function sliceTime(start: number): string {
+  const day = new Intl.DateTimeFormat(undefined, { weekday: "short" });
+  const time = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" });
+
+  return `${day.format(start * 1000)} ${time.format(start * 1000)}–${time.format((start + TREND_SLICE_S) * 1000)}`;
+}
+
+/** Switch picks one of a few views of a tile, in the tile's header. */
+function Switch<T extends string>({ options, value, onChange, label }: { options: [T, string][]; value: T; onChange: (value: T) => void; label: string }) {
+  return (
+    <span role="group" aria-label={label} className="-my-1 inline-flex shrink-0 border border-border">
+      {options.map(([key, text]) => (
+        <button
+          key={key}
+          type="button"
+          aria-pressed={value === key}
+          onClick={() => onChange(key)}
+          className={`px-1.5 py-0.5 font-mono text-[10px] tracking-wider uppercase transition-colors ${value === key ? "bg-foreground/10 text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+        >
+          {text}
+        </button>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * BlockTime leads with the mean time between blocks over the last 7 days,
+ * and shows either its 7 day trend or each of the last 40 blocks against
+ * the target.
+ */
+export function BlockTime({ c, block }: { c: Charts; block: (i: number) => string }) {
+  const [view, setView] = useState<"week" | "blocks">("week");
   const [active, setActive] = useState<number | null>(null);
+  // A server from before the trends sends none
+  const trend = c.trends?.blocktime ?? [];
+  const start = c.trends?.start ?? [];
+  const knownTrend = trend.filter((v): v is number => v !== null);
   // A zero time means the block's parent was not recorded
-  const avg = average(c.blocktime.filter((t) => t > 0));
+  const recent = average(c.blocktime.filter((t) => t > 0));
+  const choose = (next: "week" | "blocks") => {
+    setActive(null);
+    setView(next);
+  };
+
+  let value: string | undefined;
+  let qualifier: string;
+
+  if (view === "week") {
+    const hovered = active !== null ? trend[active] : null;
+
+    value = active !== null ? (hovered === null ? "n/a" : formatBlockTime(hovered)) : formatBlockTime(c.avgBlocktime);
+    qualifier =
+      active !== null && start[active] !== undefined
+        ? `${sliceTime(start[active])}, ${hovered === null ? "no data" : "mean"}`
+        : !c.minerBlocks
+          ? "target 10 min"
+          : c.minerSpan >= 7 * 86_400 - 3_600
+            ? "mean of the last 7 days, target 10 min"
+            : `mean of the last ${formatInt(c.minerBlocks)} blocks, target 10 min`;
+  } else {
+    value =
+      active !== null ? (c.blocktime[active] ? formatBlockTime(c.blocktime[active]) : "unknown") : c.height.length ? formatBlockTime(recent) : undefined;
+    qualifier =
+      active !== null
+        ? `block ${block(active)}${c.blocktime[active] ? "" : ", parent not recorded"}`
+        : `mean of these ${c.height.length}, target 10 min`;
+  }
 
   return (
     <Tile
-      title="Block time"
-      readout={
-        active !== null
-          ? `${block(active)}: ${c.blocktime[active] ? formatBlockTime(c.blocktime[active]) : "unknown, parent not recorded"}`
-          : `last ${c.height.length} blocks`
+      title={
+        <span className="flex items-center gap-1.5">
+          {c.height.length > 0 && <Indicator grade={gradeAvgBlockTime(c.avgBlocktime)} />}
+          Block time
+        </span>
       }
-      value={c.height.length ? formatBlockTime(avg) : undefined}
-      qualifier={`average of these ${c.height.length}, target 10 min`}
+      readout={
+        <Switch
+          label="Period"
+          options={[
+            ["week", "7 days"],
+            ["blocks", `${HISTORY_BINS} blocks`],
+          ]}
+          value={view}
+          onChange={choose}
+        />
+      }
+      value={value}
+      qualifier={qualifier}
     >
-      {c.height.length === 0 ? (
+      {view === "week" ? (
+        knownTrend.length === 0 ? (
+          <Waiting />
+        ) : (
+          <TrendLine
+            values={trend}
+            active={active}
+            onActive={setActive}
+            label={`Mean block time over the last 7 days, in ${TREND_SLICE_S / 3600} hour slices, from ${formatBlockTime(Math.min(...knownTrend))} to ${formatBlockTime(Math.max(...knownTrend))}`}
+          />
+        )
+      ) : c.height.length === 0 ? (
         <Waiting />
       ) : (
         <Bars
@@ -273,112 +383,16 @@ function BlockTime({ c, block }: { c: Charts; block: (i: number) => string }) {
   );
 }
 
-const footLabel = "font-mono text-[10px] tracking-wider text-muted-foreground uppercase";
-
-/** signed renders a fractional change: +14.6%, −0.4%, or "unchanged". */
-function signed(change: number): string {
-  return Math.abs(change) < 0.0005 ? "unchanged" : `${change > 0 ? "+" : "−"}${Math.abs(change * 100).toFixed(1)}%`;
-}
-
-/**
- * DifficultyFooter shows where difficulty is heading: the exact difficulty
- * of the block being mined (mainnet ASERT, fixed by the parent alone), and
- * the change over the last week.
- */
-function DifficultyFooter({ best, week: reportedWeek }: { best: Block | null; week: number | null | undefined }) {
-  const next = best ? miningDifficulty(best) : null;
-  // A server from before this figure sends none
-  const week = typeof reportedWeek === "number" ? reportedWeek : null;
-
-  if (next === null && week === null) return null;
-
-  return (
-    <dl className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-xs">
-      {next !== null && best && (
-        <div className="flex flex-col gap-1">
-          <dt
-            className={footLabel}
-            title="The difficulty of the block miners are working on now. ASERT sets it from the latest block's timestamp, so it is exact; the change is against the latest block."
-          >
-            Now mining at
-          </dt>
-          <dd className="font-mono text-sm tabular-nums">
-            {formatDifficulty(next)}{" "}
-            <span className="text-xs text-muted-foreground">
-              {signed((Number(next) - Number(best.difficulty)) / Number(best.difficulty))}
-            </span>
-            <span
-              className="block text-xs whitespace-nowrap text-muted-foreground"
-              title="The same difficulty in the units pools and miners use: one unit is 2^32 hashes."
-            >
-              pool: {formatPoolDifficulty(next)}
-            </span>
-          </dd>
-        </div>
-      )}
-      {week !== null && (
-        <div className="flex flex-col gap-1">
-          <dt className={footLabel} title="The latest block's difficulty against the block mined 7 days earlier.">
-            Last 7 days
-          </dt>
-          <dd className="font-mono text-sm tabular-nums">{signed(week)}</dd>
-        </div>
-      )}
-    </dl>
-  );
-}
-
-function Difficulty({ c, block, best }: { c: Charts; block: (i: number) => string; best: Block | null }) {
-  const [active, setActive] = useState<number | null>(null);
-  const values = c.difficulty.map(Number);
-  const first = values[0];
-  const last = values.at(-1);
-  const change = first && last !== undefined ? (last - first) / first : 0;
-
-  return (
-    <Tile
-      title="Difficulty"
-      readout={
-        active !== null
-          ? `${block(active)}: ${formatDifficulty(c.difficulty[active])}, ${formatPoolDifficulty(c.difficulty[active])} in pool units`
-          : `last ${values.length} blocks`
-      }
-      value={last !== undefined ? formatDifficulty(last) : undefined}
-      qualifier={
-        values.length > 1
-          ? `${Math.abs(change) < 0.0005 ? "" : change > 0 ? "+" : "−"}${Math.abs(change * 100).toFixed(1)}% over ${values.length} blocks`
-          : undefined
-      }
-    >
-      {values.length === 0 ? (
-        <Waiting />
-      ) : (
-        <Line
-          values={values}
-          active={active}
-          onActive={setActive}
-          label={`Difficulty of the last ${values.length} blocks, from ${formatDifficulty(Math.min(...values))} to ${formatDifficulty(Math.max(...values))}`}
-        />
-      )}
-      <DifficultyFooter best={best} week={c.difficultyWeek} />
-    </Tile>
-  );
-}
-
-function Transactions({ c, block }: { c: Charts; block: (i: number) => string }) {
+export function Transactions({ c, block }: { c: Charts; block: (i: number) => string }) {
   const [active, setActive] = useState<number | null>(null);
   const total = c.transactions.reduce((a, b) => a + b, 0);
 
   return (
     <Tile
       title="Transactions"
-      readout={
-        active !== null
-          ? `${block(active)}: ${formatInt(c.transactions[active])} transactions`
-          : `${formatInt(total)} in last ${c.height.length} blocks`
-      }
-      value={c.height.length ? average(c.transactions).toFixed(1) : undefined}
-      qualifier="per block"
+      readout={`${formatInt(total)} in last ${c.height.length} blocks`}
+      value={active !== null ? formatInt(c.transactions[active]) : c.height.length ? average(c.transactions).toFixed(1) : undefined}
+      qualifier={active !== null ? `in block ${block(active)}` : "per block"}
     >
       {c.height.length === 0 ? (
         <Waiting />
@@ -394,7 +408,7 @@ function Transactions({ c, block }: { c: Charts; block: (i: number) => string })
   );
 }
 
-function Fullness({ c, block }: { c: Charts; block: (i: number) => string }) {
+export function Fullness({ c, block }: { c: Charts; block: (i: number) => string }) {
   const [active, setActive] = useState<number | null>(null);
   const fullness = c.gasSpending.map((used, i) => (c.gasLimit[i] > 0 ? used / c.gasLimit[i] : 0));
   const pct = (f: number) => `${(f * 100).toFixed(f < 0.1 ? 1 : 0)}%`;
@@ -402,13 +416,13 @@ function Fullness({ c, block }: { c: Charts; block: (i: number) => string }) {
   return (
     <Tile
       title="Block fullness"
-      readout={
+      readout="gas used of the limit"
+      value={active !== null ? pct(fullness[active]) : c.height.length ? pct(average(fullness)) : undefined}
+      qualifier={
         active !== null
-          ? `${block(active)}: ${pct(fullness[active])}, ${formatCompact(c.gasSpending[active])} of ${formatCompact(c.gasLimit[active])} gas`
-          : "gas used of the limit"
+          ? `block ${block(active)}, ${formatCompact(c.gasSpending[active])} of ${formatCompact(c.gasLimit[active])} gas`
+          : "full on average"
       }
-      value={c.height.length ? pct(average(fullness)) : undefined}
-      qualifier="full on average"
     >
       {c.height.length === 0 ? (
         <Waiting />
@@ -453,7 +467,7 @@ function share(part: number, total: number): string {
  * on a linear axis it leads with the share that arrived within a second,
  * splits all reports into speed bands, and gives the tail as percentiles.
  */
-function Propagation({ stats }: { stats: PropagationStats }) {
+export function Propagation({ stats }: { stats: PropagationStats }) {
   const { samples, bands } = stats;
   // Keeps a small nonzero band visible in the bar
   const minWidth = 3;
@@ -562,7 +576,7 @@ function formatSmallShare(fraction: number): string {
  * reported by parallaxd versions that do not send fees show as unknown,
  * never as zero.
  */
-function Fees({ c, block }: { c: Charts; block: (i: number) => string }) {
+export function Fees({ c, block }: { c: Charts; block: (i: number) => string }) {
   const [active, setActive] = useState<number | null>(null);
   const lax = c.fees.map((fees) => (fees === null ? null : Number(BigInt(fees)) / Number(WEI_PER_LAX)));
   const known = lax.flatMap((fees, i) => (fees === null ? [] : [i]));
@@ -573,19 +587,19 @@ function Fees({ c, block }: { c: Charts; block: (i: number) => string }) {
     <Tile
       title="Fees"
       readout={
+        known.length < c.height.length && known.length > 0 ? `${known.length} of ${c.height.length} blocks reported` : "paid to miners per block"
+      }
+      value={
+        active !== null ? (lax[active] === null ? "not reported" : formatSmallLax(lax[active]!)) : known.length ? formatSmallLax(avg) : undefined
+      }
+      qualifier={
         active !== null
           ? lax[active] === null
-            ? `${block(active)}: not reported`
-            : `${block(active)}: ${formatSmallLax(lax[active]!)} LAX, ${formatInt(c.transactions[active])} transactions`
-          : known.length < c.height.length && known.length > 0
-            ? `${known.length} of ${c.height.length} blocks reported`
-            : "paid to miners per block"
-      }
-      value={known.length ? formatSmallLax(avg) : undefined}
-      qualifier={
-        known.length
-          ? `LAX per block, ${formatSmallShare(avgReward > 0 ? avg / avgReward : 0)} of the block reward`
-          : undefined
+            ? `block ${block(active)}`
+            : `LAX in block ${block(active)}, ${formatInt(c.transactions[active])} transactions`
+          : known.length
+            ? `LAX per block, ${formatSmallShare(avgReward > 0 ? avg / avgReward : 0)} of the block reward`
+            : undefined
       }
     >
       {known.length === 0 ? (
@@ -678,7 +692,7 @@ function Donut({ slices, total, active, onActive }: { slices: Slice[]; total: nu
  * miners by name. A known pool's addresses count as one miner.
  */
 export function Decentralization({ charts }: { charts: Charts | null }) {
-  const c = charts ?? EMPTY;
+  const c = charts ?? EMPTY_CHARTS;
   // A server from before the weekly window sends no count: its miners cover the charted blocks
   const total = typeof c.minerBlocks === "number" ? c.minerBlocks : c.height.length;
   // Allow for the week's first block landing a little after the cutoff
@@ -829,7 +843,7 @@ export function Decentralization({ charts }: { charts: Charts | null }) {
   );
 }
 
-const EMPTY: Charts = {
+export const EMPTY_CHARTS: Charts = {
   height: [],
   blocktime: [],
   avgBlocktime: 0,
@@ -846,25 +860,5 @@ const EMPTY: Charts = {
   propagation: { samples: 0, avg: 0, p50: 0, p90: 0, p99: 0, bands: [0, 0, 0, 0] },
   health: { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null, lastDeepReorg: null, split: null },
   avgHashrate: 0,
+  trends: { start: [], blocktime: [], hashrate: [], difficulty: [], active: [], synced: [], gasPrice: [], peerLatency: [], uptime: [] },
 };
-
-/**
- * ChartGrid lays out the chart tiles; tiles in a row share its height.
- * `mainnetBest` is the best block when nodes report mainnet, which enables
- * the ASERT figures.
- */
-export function ChartGrid({ charts, mainnetBest }: { charts: Charts | null; mainnetBest: Block | null }) {
-  const c = charts ?? EMPTY;
-  const block = (i: number) => `#${formatInt(c.height[i])}`;
-
-  return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
-      <BlockTime c={c} block={block} />
-      <Difficulty c={c} block={block} best={mainnetBest} />
-      <Propagation stats={c.propagation} />
-      <Transactions c={c} block={block} />
-      <Fullness c={c} block={block} />
-      <Fees c={c} block={block} />
-    </div>
-  );
-}

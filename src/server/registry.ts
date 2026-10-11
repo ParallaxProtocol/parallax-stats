@@ -2,9 +2,11 @@
 // rules that keep a public reporting secret from being abused.
 
 import { randomBytes } from "node:crypto";
-import type { Block, Charts, NameStatus, PublicNode } from "../lib/protocol.ts";
+import { summarize } from "../lib/derive.ts";
+import { trendStarts, type Block, type Charts, type NameStatus, type PublicNode } from "../lib/protocol.ts";
 import { History, type Head, type HistoryRequest, type HistoryState } from "./history.ts";
 import { NodeRecord, type Login, type NodeState } from "./node.ts";
+import { Readings, type ReadingsState } from "./readings.ts";
 import { cleanId, type ReportedBlock } from "./sanitize.ts";
 import type { Settings } from "./settings.ts";
 
@@ -21,12 +23,15 @@ export interface RegistryState {
   pseudonymKey: string;
   nodes: NodeState[];
   history: HistoryState;
+  /** Missing from state saved before readings were kept. */
+  readings?: ReadingsState;
 }
 
 export class Registry {
   private readonly settings: Settings;
   private readonly nodes = new Map<string, NodeRecord>();
   readonly history: History;
+  readonly readings = new Readings();
   // Pseudonyms are stable while the server runs, and across restarts
   // when state is saved, but cannot be reversed by trying candidate names.
   private pseudonymKey = randomBytes(32);
@@ -42,6 +47,7 @@ export class Registry {
       pseudonymKey: this.pseudonymKey.toString("hex"),
       nodes: [...this.nodes.values()].map((node) => node.toState()),
       history: this.history.toState(),
+      readings: this.readings.toState(),
     };
   }
 
@@ -59,6 +65,7 @@ export class Registry {
     for (const saved of state.nodes) this.nodes.set(saved.id, NodeRecord.fromState(saved, this.pseudonymKey, downtime, now));
 
     this.history.restore(state.history);
+    this.readings.restore(state.readings);
     this.removeOldNodes(now);
   }
 
@@ -277,8 +284,18 @@ export class Registry {
     return [...this.nodes.values()].map((node) => node.toPublic());
   }
 
-  charts(): Charts {
-    return this.history.charts(this.verifiedHeads());
+  /** recordReading adds a reading of the node list's figures, and the recommended fee, to the trends. */
+  recordReading(gasPrice: string | null, now = Date.now()): void {
+    this.readings.record(summarize(this.all()), gasPrice, now);
+  }
+
+  charts(now = Date.now()): Charts {
+    const start = trendStarts(now);
+
+    return {
+      ...this.history.charts(this.verifiedHeads()),
+      trends: { start, ...this.history.blockTrends(start), ...this.readings.series(start) },
+    };
   }
 
   /**

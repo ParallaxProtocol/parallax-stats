@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import {
   DEEP_REORG,
   deepReorg,
@@ -28,7 +28,7 @@ const REORG_SOUND_DELAY_MS = 700;
 
 const MINING_POOL_STATS = "https://miningpoolstats.stream/parallax";
 
-type Tone = "critical" | "warn" | "info";
+export type Tone = "critical" | "warn" | "info";
 
 const TONE: Record<Tone, { box: string; icon: string }> = {
   critical: {
@@ -88,7 +88,7 @@ const ICON = {
   release: <path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 19.5h14" strokeLinecap="round" strokeLinejoin="round" />,
 };
 
-interface Alert {
+export interface Alert {
   key: string;
   tone: Tone;
   icon: keyof typeof ICON;
@@ -191,13 +191,12 @@ const NO_DISMISSALS: Record<string, { until?: number; share?: number }> = {};
 const plural = (count: number, word: string) => `${formatInt(count)} ${count === 1 ? word : `${word}s`}`;
 
 /**
- * Alerts calls out what needs attention at the top of the page, most severe
- * first: verified nodes on different chains, no block for longer than the
+ * useAlerts works out what needs attention, most severe first: verified nodes on different chains, no block for longer than the
  * stall threshold, a recent chain reorganization, one miner holding a
  * majority, blocks slow to reach the network, no verified node online, and
  * a client release most nodes have not caught up with.
  */
-export function Alerts({
+export function useAlerts({
   bestBlock,
   foundAt,
   charts,
@@ -209,7 +208,7 @@ export function Alerts({
   charts: Charts | null;
   nodes: PublicNode[];
   latestRelease: Release | null;
-}) {
+}): Alert[] {
   const now = useServerNow();
   const [dismissed, setDismissed] = usePersistent("dismissed-alerts", NO_DISMISSALS);
   // Dismissals live in the browser, unknown to the server render and hydration:
@@ -381,16 +380,108 @@ export function Alerts({
     });
   }
 
-  if (alerts.length === 0) return null;
-
   // Every alert that applies, most severe first; array sort is stable, so within a tone the order above holds
-  const shown = alerts.sort((a, b) => SEVERITY[a.tone] - SEVERITY[b.tone]);
+  return alerts.sort((a, b) => SEVERITY[a.tone] - SEVERITY[b.tone]);
+}
+
+/** Alerts calls out what needs attention at the top of the page, as banners. */
+export function Alerts({ alerts }: { alerts: Alert[] }) {
+  if (alerts.length === 0) return null;
 
   return (
     <div className="flex flex-col gap-2">
-      {shown.map((alert, i) => (
+      {alerts.map((alert, i) => (
         <Banner key={alert.key} alert={alert} index={i} />
       ))}
+    </div>
+  );
+}
+
+const WARNING_DOT: Record<Tone, string> = { critical: "bg-critical", warn: "bg-warn", info: "bg-info" };
+
+/**
+ * AlertCount is the section bar's button for the alerts: how many apply, in
+ * the most severe one's colour. It opens them in a panel below it, in place,
+ * closed again by a click elsewhere or Escape.
+ */
+export function AlertCount({ alerts }: { alerts: Alert[] }) {
+  const [open, setOpen] = useState(false);
+  const root = useRef<HTMLDivElement>(null);
+  const panel = useId();
+
+  useEffect(() => {
+    if (!open) return;
+
+    const outside = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const escape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", outside);
+    document.addEventListener("keydown", escape);
+
+    return () => {
+      document.removeEventListener("pointerdown", outside);
+      document.removeEventListener("keydown", escape);
+    };
+  }, [open]);
+
+  if (alerts.length === 0) return null;
+
+  return (
+    <div ref={root} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls={panel}
+        aria-label={plural(alerts.length, "alert")}
+        className={`inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 font-mono text-[11px] tabular-nums hover:bg-accent/50 ${open ? "bg-accent/50" : ""}`}
+      >
+        <span aria-hidden className={`size-2 rounded-full ${WARNING_DOT[alerts[0].tone]}`} />
+        {alerts.length}
+      </button>
+      {open && (
+        <div
+          id={panel}
+          className="absolute top-full right-0 z-40 mt-2 flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-1 rounded-lg border border-border bg-surface-elevated p-2 shadow-2xl"
+        >
+          {alerts.map((alert) => (
+            <section key={alert.key} className={`flex gap-3 rounded-md border p-3 ${TONE[alert.tone].box}`}>
+              <span className={`flex size-7 shrink-0 items-center justify-center rounded-full ${TONE[alert.tone].icon}`}>
+                <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+                  {ICON[alert.icon]}
+                </svg>
+              </span>
+              <div className="flex min-w-0 flex-col gap-2 text-xs">
+                <p>
+                  <span className="font-semibold">{alert.title}</span> <span className="text-muted-foreground">{alert.body}</span>
+                </p>
+                {(alert.facts.length > 0 || alert.action) && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {alert.facts.map((fact) => (
+                      <span key={fact} className="rounded-full border border-border bg-background/50 px-2 py-0.5 whitespace-nowrap tabular-nums">
+                        {fact}
+                      </span>
+                    ))}
+                    {alert.action && (
+                      <a
+                        href={alert.action.href}
+                        {...(alert.action.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                        className="whitespace-nowrap text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+                      >
+                        {alert.action.label}
+                      </a>
+                    )}
+                  </div>
+                )}
+              </div>
+            </section>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

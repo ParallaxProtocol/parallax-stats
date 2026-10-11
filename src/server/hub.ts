@@ -29,6 +29,8 @@ const CHARTS_MAX_WAIT_MS = 5000;
 const CLEANUP_MS = 5 * 60 * 1000;
 const VIEWER_MAX_PAYLOAD = 1024;
 const GAS_PRICE_POLL_MS = 60_000;
+/** How often the node list's figures are read for the trends. */
+const READING_MS = 5 * 60 * 1000;
 
 /** Name lookups per address per minute: enough to type a name, too few to enumerate them. */
 const NAME_CHECKS_PER_MINUTE = 20;
@@ -170,6 +172,8 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
 
   void pollGasPrice();
   const gasPricePoll = options.fetchGasPrice ? setInterval(() => void pollGasPrice(), GAS_PRICE_POLL_MS) : null;
+  // Not at startup: restored nodes are offline until they report again, which would read as an outage
+  const reading = setInterval(() => registry.recordReading(gasPrice), READING_MS);
 
   viewers.on("connection", (ws: Socket, req: IncomingMessage) => {
     const ip = clientIP(settings, req);
@@ -503,6 +507,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
       store?.close();
 
       if (gasPricePoll) clearInterval(gasPricePoll);
+      clearInterval(reading);
       clearInterval(heartbeat);
       clearInterval(prune);
       clearInterval(cleanup);

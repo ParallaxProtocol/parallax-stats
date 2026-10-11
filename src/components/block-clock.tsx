@@ -37,11 +37,11 @@ const TICKS = [
  * longer than the stall threshold. It ticks on its own, so the rest of the
  * page does not re-render every second.
  */
-export function ClockPlate({ foundAt, className, children }: { foundAt: number; className?: string; children: ReactNode }) {
+export function ClockPlate({ id, foundAt, className, children }: { id?: string; foundAt: number; className?: string; children: ReactNode }) {
   const now = useServerNow();
 
   return (
-    <Plate tone={stallLevel(foundAt, now)} className={className}>
+    <Plate id={id} tone={stallLevel(foundAt, now)} className={className}>
       {children}
     </Plate>
   );
@@ -120,5 +120,33 @@ export function BlockClock({ bestBlock, foundAt }: { bestBlock: number; foundAt:
         </div>
       </div>
     </section>
+  );
+}
+
+/**
+ * MiniClock is the best block in brief, for the section bar once the
+ * block clock has scrolled away: the block, how long ago it was found, and
+ * the same track against the target, without its labels.
+ */
+export function MiniClock({ bestBlock, foundAt }: { bestBlock: number; foundAt: number }) {
+  const now = useServerNow();
+  const elapsed = foundAt ? Math.max(0, now - foundAt) : 0;
+  const target = TARGET_BLOCK_TIME * 1000;
+  const fill = Math.min(1, elapsed / (target * SPAN));
+  const grade: Grade = foundAt ? gradeElapsed(elapsed) : "off";
+
+  return (
+    <span className="flex items-center gap-3 font-mono text-[11px] tabular-nums">
+      <Indicator grade={grade} label={VERDICT[grade]} />
+      <span className="text-foreground">#{bestBlock ? formatInt(bestBlock) : "—"}</span>
+      {foundAt > 0 && <span className="hidden text-muted-foreground sm:inline">{formatClock(elapsed)} ago</span>}
+      <span className="relative hidden h-1 w-24 bg-border sm:block" aria-hidden>
+        <span
+          className="brand-gradient-mark absolute inset-y-0 left-0 transition-[width] duration-1000 ease-linear"
+          style={{ width: `${fill * 100}%` }}
+        />
+        <span className="absolute -inset-y-0.5 w-px bg-muted-foreground/60" style={{ left: `${100 / SPAN}%` }} />
+      </span>
+    </span>
   );
 }

@@ -287,6 +287,48 @@ test("miners are counted over the last 7 days of blocks", () => {
   assert.equal(charts.minerCount, 1);
 });
 
+test("the trends work out each 4 hour slice from its blocks, and the readings", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+
+  // A block every 10 minutes for 10 days, at twice the difficulty for the last 2 days
+  const blocks = 10 * 144;
+
+  for (let n = 1; n <= blocks; n++) nodes.addBlock("a", { ...block(n), difficulty: n > blocks - 2 * 144 ? "2000" : "1000" });
+
+  const now = (blocks * 600 + 60) * 1000;
+
+  nodes.recordReading("2000000000", now);
+
+  const { trends } = nodes.charts(now);
+
+  assert.equal(trends.start.length, 42);
+  assert.ok(trends.blocktime.every((t) => t === 600));
+  assert.equal(trends.hashrate[0], 1000 / 600);
+  assert.equal(trends.hashrate.at(-1), 2000 / 600);
+  assert.equal(trends.difficulty.at(-1), 2000);
+  // One reading, in the slice in progress
+  assert.equal(trends.active.at(-1), 1);
+  assert.equal(trends.gasPrice.at(-1), 2e9);
+  assert.equal(trends.active[0], null);
+});
+
+test("trend readings are saved with the registry", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+  nodes.recordReading("5", 1_000_000_000);
+
+  const restored = new Registry(settings);
+
+  restored.restore(JSON.parse(JSON.stringify(nodes.toState())), 0, 1_000_000_000);
+  assert.equal(restored.charts(1_000_000_000).trends.gasPrice.at(-1), 5);
+  // State saved before readings were kept restores without them
+  restored.restore({ ...nodes.toState(), readings: undefined }, 0, 1_000_000_000);
+  assert.equal(restored.charts(1_000_000_000).trends.gasPrice.at(-1), null);
+});
+
 test("unverified nodes are shown under a stable pseudonym", () => {
   const nodes = new Registry(settings);
 

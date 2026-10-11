@@ -11,8 +11,7 @@ import {
   WEI_PER_LAX,
 } from "@/lib/emission";
 import { formatInt } from "@/lib/format";
-import { TARGET_BLOCK_TIME, type Charts } from "@/lib/protocol";
-import { Decentralization } from "./charts";
+import { TARGET_BLOCK_TIME } from "@/lib/protocol";
 import { useServerNow } from "./live/provider";
 import { Label, Plate } from "./plate";
 import { useSize } from "./use-size";
@@ -304,23 +303,18 @@ function Emission({ height }: { height: number }) {
 }
 
 /**
- * Monetary shows the issuance schedule at the best block (when the next
+ * Supply shows the issuance schedule at the best block: when the next
  * halving lands and how much of the fixed supply exists, both following
- * from the height alone; see lib/emission) beside who is mining it.
+ * from the height alone (see lib/emission).
  */
-export function Monetary({ bestBlock, charts }: { bestBlock: number; charts: Charts | null }) {
+export function Supply({ bestBlock }: { bestBlock: number }) {
   if (!bestBlock) return null;
 
   return (
-    // Large screens pair Halving and Top miners above a full-width Emission;
-    // extra-wide ones put all three in a row
-    <div className="grid grid-flow-dense gap-4 lg:grid-cols-2 2xl:grid-cols-[minmax(0,2fr)_minmax(0,3fr)_minmax(0,2fr)]">
+    <div className="grid gap-4 lg:grid-cols-2">
       <Halving height={bestBlock} />
-      <div className="flex min-w-0 lg:col-span-2 2xl:col-span-1">
+      <div className="flex min-w-0">
         <Emission height={bestBlock} />
-      </div>
-      <div className="flex min-w-0 [&>*]:flex-1">
-        <Decentralization charts={charts} />
       </div>
     </div>
   );

@@ -29,8 +29,11 @@ function Stat({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
+const NO_HEALTH: ChainHealth = { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null, lastDeepReorg: null, split: null };
+
 /** StaleBlocks shows how often blocks lose to a competing block, and recent reorganizations. */
-function StaleBlocks({ health }: { health: ChainHealth }) {
+export function StaleBlocks({ health: reported, className = "" }: { health: ChainHealth | null; className?: string }) {
+  const health = reported ?? NO_HEALTH;
   const now = useServerNow();
   const { window, staleBlocks, recentStale, reorgs, since, lastReorg } = health;
   const rate = window > 0 ? (staleBlocks / window) * 100 : 0;
@@ -42,7 +45,7 @@ function StaleBlocks({ health }: { health: ChainHealth }) {
       id="stale-blocks"
       aria-labelledby="stale-title"
       tone={chainLevel(health, now)}
-      className="flex min-w-0 scroll-mt-4 flex-col gap-4 p-5"
+      className={`flex min-w-0 scroll-mt-4 flex-col gap-4 p-5 ${className}`}
     >
       <Heading id="stale-title" title="Stale blocks" readout={window ? `last ${formatInt(window)} blocks` : undefined} />
 
@@ -106,7 +109,15 @@ interface Version {
  * ClientVersions shows which parallaxd releases online nodes run, against
  * the latest release on GitHub. Nodes ahead of it run development builds.
  */
-function ClientVersions({ nodes, latestRelease }: { nodes: PublicNode[]; latestRelease: Release | null }) {
+export function ClientVersions({
+  nodes,
+  latestRelease,
+  className = "",
+}: {
+  nodes: PublicNode[];
+  latestRelease: Release | null;
+  className?: string;
+}) {
   const online = nodes.filter((node) => node.stats.active);
   const counts = new Map<string, Version>();
 
@@ -128,7 +139,7 @@ function ClientVersions({ nodes, latestRelease }: { nodes: PublicNode[]; latestR
   const total = online.length;
 
   return (
-    <Plate as="section" aria-labelledby="versions-title" className="flex min-w-0 flex-col gap-4 p-5">
+    <Plate as="section" aria-labelledby="versions-title" className={`flex min-w-0 flex-col gap-4 p-5 ${className}`}>
       <Heading id="versions-title" title="Client versions" readout={total ? `${total} online nodes` : undefined} />
 
       {total === 0 ? (
@@ -196,25 +207,5 @@ function ClientVersions({ nodes, latestRelease }: { nodes: PublicNode[]; latestR
         </>
       )}
     </Plate>
-  );
-}
-
-/** NetworkHealth groups the chain's competing blocks with the client releases nodes run. */
-export function NetworkHealth({
-  health,
-  nodes,
-  latestRelease,
-}: {
-  health: ChainHealth | null;
-  nodes: PublicNode[];
-  latestRelease: Release | null;
-}) {
-  return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <StaleBlocks
-        health={health ?? { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null, lastDeepReorg: null, split: null }}
-      />
-      <ClientVersions nodes={nodes} latestRelease={latestRelease} />
-    </div>
   );
 }

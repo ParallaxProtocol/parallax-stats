@@ -19,6 +19,41 @@ export type NameStatus = "available" | "yours" | "taken" | "reserved" | "invalid
 /** Blocks shown in the per-node propagation strip and the charts. */
 export const HISTORY_BINS = 40;
 
+/** The figures' trend charts: 7 days in 4 hour slices, aligned to UTC, the last one in progress. */
+export const TREND_SLICE_S = 4 * 3600;
+export const TREND_SLICES = 42;
+
+/**
+ * Trends holds a value for each trend slice, oldest first, or null where
+ * there was nothing to measure: no blocks, or the dashboard was down.
+ */
+export interface Trends {
+  /** Start of each slice, unix seconds. */
+  start: number[];
+  /** Mean seconds between the slice's blocks and their parents. */
+  blocktime: (number | null)[];
+  /** Estimated hashes per second: the slice's work over the time it took. */
+  hashrate: (number | null)[];
+  /** Mean difficulty of the slice's blocks. */
+  difficulty: (number | null)[];
+  /** Means of the readings the server takes every few minutes. */
+  active: (number | null)[];
+  synced: (number | null)[];
+  /** Recommended gas price, wei. */
+  gasPrice: (number | null)[];
+  /** Median latency of nodes to their peers, ms. */
+  peerLatency: (number | null)[];
+  /** Mean uptime of verified nodes, 0..100. */
+  uptime: (number | null)[];
+}
+
+/** trendStarts gives the start of each trend slice at `now` (ms), oldest first. */
+export function trendStarts(now: number): number[] {
+  const current = Math.floor(now / 1000 / TREND_SLICE_S) * TREND_SLICE_S;
+
+  return Array.from({ length: TREND_SLICES }, (_, i) => current - (TREND_SLICES - 1 - i) * TREND_SLICE_S);
+}
+
 /** Target block interval of the network, in seconds. */
 export const TARGET_BLOCK_TIME = 600;
 
@@ -191,6 +226,7 @@ export interface Charts {
   propagation: PropagationStats;
   health: ChainHealth;
   avgHashrate: number;
+  trends: Trends;
 }
 
 export interface Snapshot {

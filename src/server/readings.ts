@@ -1,0 +1,90 @@
+// Readings of the network figures that come from the node list rather
+// than from blocks: active and synced nodes, the recommended fee, latency
+// and uptime. The hub takes one every few minutes; each trend slice keeps
+// the sums of its readings, so a slice shows their mean.
+
+import type { Summary } from "../lib/derive.ts";
+import { TREND_SLICE_S, TREND_SLICES, type Trends } from "../lib/protocol.ts";
+
+/** A running mean: the sum of the readings that had a value, and how many did. */
+type Mean = [sum: number, count: number];
+
+interface Slice {
+  /** Start of the slice, unix seconds. */
+  start: number;
+  active: Mean;
+  synced: Mean;
+  gasPrice: Mean;
+  peerLatency: Mean;
+  uptime: Mean;
+}
+
+const FIELDS = ["active", "synced", "gasPrice", "peerLatency", "uptime"] as const;
+
+export type ReadingFields = Pick<Trends, (typeof FIELDS)[number]>;
+
+/** What is saved of the readings across restarts. */
+export interface ReadingsState {
+  slices: Slice[];
+}
+
+function add(mean: Mean, value: number | null): void {
+  if (value === null || !Number.isFinite(value)) return;
+
+  mean[0] += value;
+  mean[1]++;
+}
+
+export class Readings {
+  /** Oldest first. */
+  private slices: Slice[] = [];
+
+  /**
+   * record adds a reading to the slice in progress. Latency counts only
+   * when some node measured it, and the fee and uptime only when known.
+   */
+  record(summary: Summary, gasPrice: string | null, now = Date.now()): void {
+    const start = Math.floor(now / 1000 / TREND_SLICE_S) * TREND_SLICE_S;
+    let slice = this.slices.at(-1);
+
+    if (!slice || slice.start !== start) {
+      slice = { start, active: [0, 0], synced: [0, 0], gasPrice: [0, 0], peerLatency: [0, 0], uptime: [0, 0] };
+      this.slices.push(slice);
+      this.slices = this.slices.filter((s) => s.start > start - TREND_SLICES * TREND_SLICE_S);
+    }
+
+    add(slice.active, summary.active);
+    add(slice.synced, summary.synced);
+    add(slice.gasPrice, gasPrice === null ? null : Number(gasPrice));
+    add(slice.peerLatency, summary.peerLatency > 0 ? summary.peerLatency : null);
+    add(slice.uptime, summary.uptime);
+  }
+
+  /** series gives each field's mean for the slices starting at `starts`, null where there was no reading. */
+  series(starts: number[]): ReadingFields {
+    const byStart = new Map(this.slices.map((slice) => [slice.start, slice]));
+    const mean = (field: (typeof FIELDS)[number]) =>
+      starts.map((start) => {
+        const [sum, count] = byStart.get(start)?.[field] ?? [0, 0];
+
+        return count > 0 ? sum / count : null;
+      });
+
+    return { active: mean("active"), synced: mean("synced"), gasPrice: mean("gasPrice"), peerLatency: mean("peerLatency"), uptime: mean("uptime") };
+  }
+
+  toState(): ReadingsState {
+    return { slices: this.slices };
+  }
+
+  /** restore takes saved readings, keeping only well-formed slices, oldest first. */
+  restore(state: ReadingsState | undefined): void {
+    const valid = (mean: unknown): mean is Mean =>
+      Array.isArray(mean) && mean.length === 2 && mean.every((n) => typeof n === "number" && Number.isFinite(n));
+
+    this.slices = (state?.slices ?? [])
+      .filter((slice) => typeof slice?.start === "number" && FIELDS.every((field) => valid(slice[field])))
+      .sort((a, b) => a.start - b.start)
+      .slice(-TREND_SLICES);
+  }
+}

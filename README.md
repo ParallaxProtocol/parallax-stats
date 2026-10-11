@@ -14,12 +14,13 @@ live:
 - **New blocks:** a toast with who mined each block, how long it took, its
   transactions and fees, and an optional chime (with its own sound for
   deep reorganizations)
-- **Network figures:** average block time, hashrate, difficulty (also in
-  the units pools use), active nodes in sync, the recommended fee,
-  latency, uptime
-- **Charts:** block times, propagation, difficulty with the next block's
-  exact difficulty and its change over a week, transactions,
-  block fullness and fees paid to miners
+- **Mining:** hashrate, difficulty (the next block's, also in the units
+  pools use) and block time over the last 7 days, block time for each of
+  the last 40 blocks, and decentralization
+- **Blocks and fees:** transactions, block fullness and fees paid to miners
+  per block, and the recommended fee over the last 7 days
+- **Nodes:** where they run, active nodes in sync, latency and uptime over
+  the last 7 days, propagation, client versions and stale blocks
 - **Supply:** the next halving and coins issued against the 21 million cap
 - **Decentralization:** who found recent blocks, graded by how few miners
   hold a majority, with each one's share and known pools by name
@@ -257,6 +258,13 @@ Tells the caller whether they can report under a node name: `available`,
 - **Hashrate** is the total difficulty of the newest unbroken run of up to
   64 blocks over the time they took: a block takes `difficulty` hashes on
   average.
+- **The figures' 7 day charts** split the week into 4 hour slices, aligned
+  to UTC. Block time, hashrate and difficulty come from the blocks found in
+  each slice: the mean time to their parents, their work over that time,
+  and their mean difficulty. The other figures come from readings the
+  server takes every 5 minutes, averaged over each slice; they are kept
+  with the rest of the state in `DATA_DIR`, and a slice with no readings,
+  while the dashboard was down, is left empty.
 - **Difficulty** is the chain's own value, as in block headers and over RPC.
   Pools show the same figure divided by 2^32, the Bitcoin convention; both
   are on the page. On mainnet, the next block's difficulty comes from a

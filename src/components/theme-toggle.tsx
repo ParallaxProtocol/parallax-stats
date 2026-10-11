@@ -30,14 +30,15 @@ function setLight(light: boolean): void {
   for (const l of listeners) l();
 }
 
-export function ThemeToggle() {
+/** ThemeToggle switches between the dark and light themes; `compact` sizes it for the section bar. */
+export function ThemeToggle({ compact = false }: { compact?: boolean }) {
   const light = useSyncExternalStore(subscribe, isLight, () => false);
 
   return (
     <button
       type="button"
       onClick={() => setLight(!light)}
-      className="inline-flex size-8 items-center justify-center rounded-md border border-border hover:bg-accent/50 sm:size-9"
+      className={`inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/50 ${compact ? "size-7" : "size-8 sm:size-9"}`}
       aria-label={light ? "Switch to dark theme" : "Switch to light theme"}
     >
       <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
