@@ -457,6 +457,8 @@ function Propagation({ stats }: { stats: PropagationStats }) {
   const { samples, bands } = stats;
   // Keeps a small nonzero band visible in the bar
   const minWidth = 3;
+  // A band hovered in the bar or the list lights up in both, as in the decentralization donut
+  const [active, setActive] = useState<number | null>(null);
 
   return (
     <Tile
@@ -473,26 +475,43 @@ function Propagation({ stats }: { stats: PropagationStats }) {
           <div
             role="img"
             aria-label={BANDS.map((band, i) => `${band.label}: ${bands[i]} reports`).join(", ")}
-            className="flex h-2.5 w-full gap-0.5 overflow-hidden rounded-[4px]"
+            className="flex h-3.5 w-full items-center gap-0.5"
           >
             {BANDS.map((band, i) =>
               bands[i] > 0 ? (
                 <div
                   key={band.label}
-                  className={band.swatch}
+                  className={`${band.swatch} rounded-[3px] transition-[height,opacity] duration-150 ${active === i ? "h-3.5" : "h-2.5"} ${
+                    active === null || active === i ? "" : "opacity-35"
+                  }`}
                   title={`${band.label}: ${formatInt(bands[i])} (${share(bands[i], samples)})`}
                   style={{ flexGrow: bands[i], flexBasis: 0, minWidth }}
+                  onPointerEnter={() => setActive(i)}
+                  onPointerLeave={() => setActive(null)}
                 />
               ) : null,
             )}
           </div>
 
-          <ul className="grid grid-cols-2 gap-x-5 gap-y-1">
+          <ul className="grid grid-cols-2 gap-x-5 gap-y-0.5">
             {BANDS.map((band, i) => (
-              <li key={band.label} className="flex items-baseline gap-2 text-xs">
-                <span aria-hidden className={`size-2 shrink-0 rounded-[2px] ${band.swatch}`} />
-                <span className="truncate text-muted-foreground">{band.label}</span>
-                <span className="ml-auto tabular-nums">{share(bands[i], samples)}</span>
+              <li
+                key={band.label}
+                className={`-mx-2 flex items-baseline gap-2 rounded-sm px-2 py-1 text-xs transition-[background-color,opacity] duration-150 ${
+                  active === i ? "bg-foreground/8" : active === null ? "" : "opacity-35"
+                }`}
+                onPointerEnter={() => setActive(i)}
+                onPointerLeave={() => setActive(null)}
+              >
+                <span
+                  aria-hidden
+                  className={`size-2 shrink-0 rounded-[2px] transition-transform duration-150 ${band.swatch} ${active === i ? "scale-125" : ""}`}
+                />
+                <span className={`truncate ${active === i ? "text-foreground" : "text-muted-foreground"}`}>{band.label}</span>
+                <span className="ml-auto tabular-nums whitespace-nowrap">
+                  {active === i && <span className="mr-2 text-muted-foreground">{formatInt(bands[i])}</span>}
+                  {share(bands[i], samples)}
+                </span>
               </li>
             ))}
           </ul>
