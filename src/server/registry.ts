@@ -16,7 +16,7 @@ export class LoginRefused extends Error {}
 export class Registry {
   private readonly settings: Settings;
   private readonly nodes = new Map<string, NodeRecord>();
-  readonly history = new History();
+  readonly history: History;
   // Pseudonyms are stable while the server runs but cannot be reversed
   // by trying candidate names.
   private readonly pseudonymKey = randomBytes(32);
@@ -24,6 +24,7 @@ export class Registry {
 
   constructor(settings: Settings) {
     this.settings = settings;
+    this.history = new History(settings.miningPools);
   }
 
   get(id: string): NodeRecord | undefined {

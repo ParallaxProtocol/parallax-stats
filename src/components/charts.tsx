@@ -11,8 +11,10 @@ import {
   formatMs,
   formatPoolDifficulty,
   shortHash,
+  type Grade,
 } from "@/lib/format";
-import { TARGET_BLOCK_TIME, type Block, type Charts, type PropagationStats } from "@/lib/protocol";
+import { TARGET_BLOCK_TIME, type Block, type Charts, type MinerCount, type PropagationStats } from "@/lib/protocol";
+import { Indicator } from "./indicator";
 import { Label, Plate } from "./plate";
 import { useSize } from "./use-size";
 
@@ -596,9 +598,10 @@ function Fees({ c, block }: { c: Charts; block: (i: number) => string }) {
 
 const MINING_POOL_STATS = "https://miningpoolstats.stream/parallax";
 
-/** Warn when this few miners hold a majority, once there are enough blocks to judge. */
-const CONCENTRATION_WARNING = 2;
-const CONCENTRATION_MIN_BLOCKS = 10;
+/** Fewer blocks than this say too little about who mines to grade. */
+const DECENTRALIZATION_MIN_BLOCKS = 10;
+/** Miners named in the chart; the rest are drawn together as other miners. */
+const SHOWN_MINERS = 7;
 
 /**
  * majorityHolders is the fewest miners that together found more than half
@@ -618,97 +621,222 @@ function majorityHolders(miners: { blocks: number }[], total: number): number | 
 }
 
 /**
- * Miners shows each top miner's share of recent blocks on a full 0–100%
- * scale, with how concentrated mining is: how many distinct miners found
- * the blocks, and how few of them hold a majority.
+ * gradeDecentralization grades how many miners it takes to hold a majority
+ * of recent blocks, which is how many would have to collude to rewrite
+ * the chain. null means more than the miners listed.
  */
-export function Miners({ charts }: { charts: Charts | null }) {
+function gradeDecentralization(majority: number | null): { grade: Grade; verdict: string } {
+  if (majority === null || majority >= 4) return { grade: "good", verdict: "Healthy" };
+  if (majority === 3) return { grade: "warn", verdict: "Fair" };
+  if (majority === 2) return { grade: "serious", verdict: "Concentrated" };
+
+  return { grade: "critical", verdict: "Critical" };
+}
+
+/**
+ * Slice colours: the brand teal, stepping toward the surface by rank, so
+ * the largest miner is the strongest and none borrow a status colour.
+ * Other miners are neutral.
+ */
+const SLICE_STRENGTH = [100, 68, 46, 33, 25, 19, 15];
+
+function sliceColor(rank: number | null): string {
+  return rank === null
+    ? "color-mix(in oklch, var(--muted-foreground) 45%, var(--card))"
+    : `color-mix(in oklch, var(--brand-mark) ${SLICE_STRENGTH[rank]}%, var(--card))`;
+}
+
+interface Slice {
+  key: string;
+  label: string;
+  pool: MinerCount["pool"];
+  miner: string | null;
+  blocks: number;
+  color: string;
+}
+
+/** Donut draws each slice as an arc of one ring, with a surface gap between slices. */
+function Donut({ slices, total, active, onActive }: { slices: Slice[]; total: number; active: string | null; onActive: (key: string | null) => void }) {
+  const radius = 46;
+  const circumference = 2 * Math.PI * radius;
+  const gap = slices.length > 1 ? 1.5 : 0;
+  // Where each slice starts along the ring
+  const starts = slices.map((_, i) => slices.slice(0, i).reduce((sum, s) => sum + (s.blocks / total) * circumference, 0));
+
+  return (
+    <svg viewBox="0 0 120 120" className="size-32 shrink-0 -rotate-90 sm:size-36" role="img" aria-label="Share of recent blocks by miner">
+      {slices.map((slice, i) => {
+        const length = (slice.blocks / total) * circumference;
+
+        return (
+          <circle
+            key={slice.key}
+            cx="60"
+            cy="60"
+            r={radius}
+            fill="none"
+            stroke={slice.color}
+            strokeWidth={active === slice.key ? 20 : 16}
+            strokeDasharray={`${Math.max(0, length - gap)} ${circumference}`}
+            strokeDashoffset={-starts[i]}
+            className="transition-[stroke-width,opacity] duration-150"
+            opacity={active === null || active === slice.key ? 1 : 0.35}
+            onPointerEnter={() => onActive(slice.key)}
+            onPointerLeave={() => onActive(null)}
+          >
+            <title>{`${slice.label}: ${slice.blocks} of ${total} blocks`}</title>
+          </circle>
+        );
+      })}
+    </svg>
+  );
+}
+
+/**
+ * Decentralization grades how spread out mining is: how few miners hold a
+ * majority of recent blocks, each one's share in a donut, and the largest
+ * miners by name. A known pool's addresses count as one miner.
+ */
+export function Decentralization({ charts }: { charts: Charts | null }) {
   const c = charts ?? EMPTY;
   const total = c.height.length;
-  const top = c.miners[0];
-  const others = total - c.miners.reduce((sum, m) => sum + m.blocks, 0);
   const majority = majorityHolders(c.miners, total);
-  const row = "grid grid-cols-[minmax(0,8.5rem)_1fr_2.5rem] items-center gap-3 text-xs";
+  const judged = total >= DECENTRALIZATION_MIN_BLOCKS;
+  const { grade, verdict } = gradeDecentralization(majority);
+  const [active, setActive] = useState<string | null>(null);
+
+  const shown = c.miners.slice(0, SHOWN_MINERS);
+  const others = total - shown.reduce((sum, m) => sum + m.blocks, 0);
+  const otherCount = c.minerCount - shown.length;
+  const slices: Slice[] = shown.map((m, i) => ({
+    key: m.pool ? `pool:${m.pool.name}` : m.miner,
+    label: m.pool?.name ?? shortHash(m.miner),
+    pool: m.pool,
+    miner: m.pool ? null : m.miner,
+    blocks: m.blocks,
+    color: sliceColor(i),
+  }));
+
+  if (others > 0) {
+    slices.push({
+      key: "others",
+      label: `${otherCount} other ${otherCount === 1 ? "miner" : "miners"}`,
+      pool: null,
+      miner: null,
+      blocks: others,
+      color: sliceColor(null),
+    });
+  }
 
   return (
     <Tile
-      title="Top miners"
-      readout={total ? `share of the last ${total} blocks` : undefined}
-      value={top ? share(top.blocks, total) : undefined}
-      qualifier={top ? `found by ${shortHash(top.miner)}` : undefined}
+      title="Decentralization"
+      readout={total ? `who found the last ${total} blocks` : undefined}
+      value={
+        total === 0 ? undefined : judged ? (
+          <span className="inline-flex items-center gap-2.5">
+            <Indicator grade={grade} label="" className="size-2.5" />
+            {verdict}
+          </span>
+        ) : (
+          "Too early"
+        )
+      }
+      qualifier={
+        total === 0
+          ? undefined
+          : majority === null
+            ? `no ${Math.min(c.miners.length, 10)} miners hold a majority`
+            : majority === 1
+              ? "one miner holds a majority"
+              : `${majority} miners together hold a majority`
+      }
     >
       {c.miners.length === 0 ? (
         <Waiting />
       ) : (
         <div className="flex flex-1 flex-col gap-4">
-          <ol className="flex flex-col gap-2.5">
-            {c.miners.map((m) => (
-              <li key={m.miner} className={row}>
-                <span className="truncate font-mono text-muted-foreground" title={m.miner}>
-                  {shortHash(m.miner)}
+          <div className="flex items-center gap-5">
+            <div className="relative">
+              <Donut slices={slices} total={total} active={active} onActive={setActive} />
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-2xl leading-none tabular-nums">{formatInt(c.minerCount)}</span>
+                <span className="mt-1 text-[10px] tracking-wider text-muted-foreground uppercase">
+                  {c.minerCount === 1 ? "miner" : "miners"}
                 </span>
-                <span className="relative h-1 bg-border/60" title={`${m.blocks} of ${total} blocks`}>
-                  <span className="absolute inset-y-0 left-0 bg-brand-mark" style={{ width: `${(m.blocks / total) * 100}%` }} />
-                </span>
-                <span className="text-right tabular-nums">{share(m.blocks, total)}</span>
-              </li>
-            ))}
-            {others > 0 && (
-              <li className={row}>
-                <span className="text-muted-foreground">
-                  {c.minerCount - c.miners.length} other {c.minerCount - c.miners.length === 1 ? "miner" : "miners"}
-                </span>
-                <span className="relative h-1 bg-border/60" title={`${others} of ${total} blocks`}>
-                  <span
-                    className="absolute inset-y-0 left-0 bg-muted-foreground"
-                    style={{ width: `${(others / total) * 100}%` }}
-                  />
-                </span>
-                <span className="text-right tabular-nums">{share(others, total)}</span>
-              </li>
-            )}
-          </ol>
+              </div>
+            </div>
 
-          {majority !== null && majority <= CONCENTRATION_WARNING && total >= CONCENTRATION_MIN_BLOCKS && (
+            <ol className="flex min-w-0 flex-1 flex-col gap-0.5">
+              {slices.map((slice) => (
+                <li
+                  key={slice.key}
+                  className={`-mx-2 grid grid-cols-[0.625rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-sm px-2 py-1 text-xs transition-[background-color,opacity] duration-150 ${
+                    active === slice.key ? "bg-foreground/8 text-foreground" : active === null ? "" : "opacity-35"
+                  }`}
+                  onPointerEnter={() => setActive(slice.key)}
+                  onPointerLeave={() => setActive(null)}
+                >
+                  <span
+                    className={`size-2.5 rounded-sm transition-transform duration-150 ${active === slice.key ? "scale-125" : ""}`}
+                    style={{ background: slice.color }}
+                    aria-hidden
+                  />
+                  {slice.pool?.url ? (
+                    <a
+                      href={slice.pool.url}
+                      target="_blank"
+                      rel="noopener noreferrer nofollow"
+                      className="truncate underline decoration-border underline-offset-2 hover:decoration-foreground"
+                      title={`${slice.pool.name}, mining pool`}
+                    >
+                      {slice.label}
+                    </a>
+                  ) : (
+                    <span
+                      className={`truncate ${slice.miner ? "font-mono" : ""} ${
+                        active !== slice.key && (slice.miner || !slice.pool) ? "text-muted-foreground" : ""
+                      }`}
+                      title={slice.pool ? `${slice.pool.name}, mining pool` : (slice.miner ?? undefined)}
+                    >
+                      {slice.label}
+                    </span>
+                  )}
+                  <span className="text-right tabular-nums" title={`${slice.blocks} of ${total} blocks`}>
+                    {active === slice.key && <span className="mr-2 text-muted-foreground">{slice.blocks} blocks</span>}
+                    {share(slice.blocks, total)}
+                  </span>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          {judged && majority !== null && majority <= 2 && (
             <p role="note" className="flex gap-2 border border-warn/40 bg-warn/10 px-3 py-2 text-xs">
               <svg viewBox="0 0 16 16" className="mt-px size-3.5 shrink-0 text-warn" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
                 <path d="M8 2 14.5 13.5h-13Z" strokeLinejoin="round" />
                 <path d="M8 6.5v3M8 11.6v.1" strokeLinecap="round" />
               </svg>
-              <span>
-                <span className="font-medium">
-                  {majority === 1 ? "One miner" : "Two miners"} found most of the last {total} blocks.
-                </span>{" "}
-                <span className="text-muted-foreground">
-                  Miners: spread your hashrate across more pools to keep the network decentralized.
-                </span>
+              <span className="text-muted-foreground">
+                Miners: spread your hashrate across more pools to keep the network decentralized.
               </span>
             </p>
           )}
 
-          <dl className="mt-auto grid grid-cols-2 gap-3 border-t border-border pt-3 text-xs">
-            <div className="flex flex-col gap-1">
-              <dt className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Distinct miners</dt>
-              <dd className="font-mono text-sm tabular-nums">{formatInt(c.minerCount)}</dd>
-            </div>
-            <div className="flex flex-col gap-1">
-              <dt className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Majority held by</dt>
-              <dd className="font-mono text-sm tabular-nums">
-                {majority === null ? `more than ${c.miners.length}` : `${majority} ${majority === 1 ? "miner" : "miners"}`}
-              </dd>
-            </div>
-          </dl>
-          <a
-            href={MINING_POOL_STATS}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="-mt-1 inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            Compare pools on MiningPoolStats
-            <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-              <path d="M6 3.5h6.5V10M12.5 3.5 4 12" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </a>
+          <div className="mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
+            <span>Healthy when at least 4 miners are needed for a majority.</span>
+            <a
+              href={MINING_POOL_STATS}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 hover:text-foreground"
+            >
+              Compare pools on MiningPoolStats
+              <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                <path d="M6 3.5h6.5V10M12.5 3.5 4 12" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </a>
+          </div>
         </div>
       )}
     </Tile>

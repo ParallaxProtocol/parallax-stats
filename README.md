@@ -13,8 +13,9 @@ live:
 - **Charts:** block times, propagation, difficulty with the next block's
   exact difficulty and its change over a day and a week, transactions,
   block fullness and fees paid to miners
-- **Supply:** the next halving, coins issued against the 21 million cap,
-  and the top miners with how concentrated mining is
+- **Supply:** the next halving and coins issued against the 21 million cap
+- **Decentralization:** who found recent blocks, graded by how few miners
+  hold a majority, with each one's share and known pools by name
 - **Chain health:** stale blocks and reorganizations, and which client
   releases nodes run against the latest on GitHub
 - **Nodes:** a sortable table with each node's sync state, peers, latency,
@@ -104,10 +105,22 @@ All settings come from the environment.
 | `NAME_HOLD_MINUTES` | `60` | How long a disconnected name stays bound to its address |
 | `MAX_MESSAGE_BYTES` | `4194304` | Largest reporter message accepted |
 | `MAX_VIEWERS_PER_IP` | `20` | Dashboard connections one address may hold open |
+| `MINING_POOLS` | | Known pools, shown by name under Decentralization: see below |
 
 Lists are separated by `|` or `,`. At least one of `WS_SECRET` and
 `PUBLIC_SECRET` must be set. The public secret is shown on the page, in
 the "Add your node" instructions, along with a command that uses it.
+
+`MINING_POOLS` names the pools behind coinbase addresses in the
+Decentralization tile, optionally with a website their name links to. Pools are separated by `|`; each is
+its name, `=`, then its addresses and website separated by `,`:
+
+```
+MINING_POOLS=Example Pool=https://pool.example,0x1111…,0x2222…|Solo Farm=0x3333…
+```
+
+A pool's addresses count as one miner throughout, including the
+decentralization grade.
 
 Settings can also go in `.env.local` (or `.env`, `.env.production`, …),
 loaded the same way Next.js loads them; variables set in the environment
@@ -121,7 +134,7 @@ give a secret a `NEXT_PUBLIC_` name, which would ship it to browsers.
 
 The server makes three kinds of outbound request: the recommended gas
 price from `RPC_URL` once a minute, the latest parallaxd release from the
-GitHub API at most once an hour, and node locations from
+GitHub API at most every 10 minutes, and node locations from
 [ip-api.com](https://ip-api.com), the same source as the network atlas on
 parallaxprotocol.org. If any is unreachable, its figure shows as
 unavailable and the rest of the dashboard carries on.
@@ -154,6 +167,10 @@ unavailable and the rest of the dashboard carries on.
 - **Stale blocks and reorgs** count only what a verified node saw (or, with
   none online, two nodes), so a node reporting made-up blocks cannot
   inflate them.
+- **Decentralization** is graded by the fewest miners that together found
+  most of the last 40 blocks, which is how many would have to collude to
+  rewrite the chain: 4 or more is healthy, 3 fair, 2 concentrated and 1
+  critical.
 - **Uptime** is the average of verified nodes' uptimes, the share of time
   each has been connected since the server first saw it. Unverified nodes
   come and go as people try things, so they would only add noise.

@@ -237,6 +237,33 @@ test("the miners list ranks by blocks found", () => {
   assert.equal(nodes.charts().minerCount, 2);
 });
 
+test("a known pool's addresses count as one miner", () => {
+  const [a, b, c] = ["a", "b", "c"].map((x) => "0x" + x.repeat(40));
+  const nodes = new Registry(
+    loadSettings({ WS_SECRET: "private-secret", MINING_POOLS: `Big Pool=https://pool.example,${a},${b.toUpperCase().replace("0X", "0x")}` }),
+  );
+
+  login(nodes, "a", "1.1.1.1", true);
+
+  // 3 blocks from the pool's first address, 2 from its second, 4 from a solo miner
+  const miners = [a, a, a, b, b, c, c, c, c];
+
+  miners.forEach((miner, i) => nodes.addBlock("a", { ...block(i + 1), miner }));
+
+  const charts = nodes.charts();
+
+  assert.deepEqual(
+    charts.miners.map((m) => [m.pool?.name ?? m.miner, m.blocks]),
+    [
+      ["Big Pool", 5],
+      [c, 4],
+    ],
+  );
+  assert.equal(charts.miners[0].miner, a);
+  assert.equal(charts.miners[0].pool?.url, "https://pool.example/");
+  assert.equal(charts.minerCount, 2);
+});
+
 test("unverified nodes are shown under a stable pseudonym", () => {
   const nodes = new Registry(settings);
 

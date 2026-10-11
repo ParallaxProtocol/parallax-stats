@@ -9,6 +9,7 @@ import {
   type ChainHealth,
   type Charts,
   type MinerCount,
+  type MiningPool,
   type PropagationStats,
 } from "../lib/protocol.ts";
 import type { ReportedBlock } from "./sanitize.ts";
@@ -96,6 +97,12 @@ export class History {
   private trustedOnly = false;
   private reorgs: ReorgEvent[] = [];
   private readonly startedAt = Date.now();
+  /** Known pools by coinbase address. */
+  private readonly pools: Map<string, MiningPool>;
+
+  constructor(pools: Map<string, MiningPool> = new Map()) {
+    this.pools = pools;
+  }
 
   /**
    * setTrustedOnly controls who may introduce new block heights. While a
@@ -483,18 +490,33 @@ export class History {
     return span > 0 ? work / span : 0;
   }
 
-  private minerCounts(): Map<string, number> {
-    const counts = new Map<string, number>();
+  /** minerCounts tallies recent blocks per miner, folding a known pool's addresses into one entry. */
+  private minerCounts(): Map<string, MinerCount> {
+    const byAddress = new Map<string, number>();
 
-    for (const item of this.latest(HISTORY_BINS)) counts.set(item.block.miner, (counts.get(item.block.miner) ?? 0) + 1);
+    for (const item of this.latest(HISTORY_BINS)) byAddress.set(item.block.miner, (byAddress.get(item.block.miner) ?? 0) + 1);
 
-    return counts;
+    const miners = new Map<string, MinerCount>();
+
+    for (const [address, blocks] of byAddress) {
+      const pool = this.pools.get(address) ?? null;
+      const key = pool === null ? address : `pool:${pool.name}`;
+      const entry = miners.get(key);
+
+      if (!entry) {
+        miners.set(key, { miner: address, pool, blocks });
+      } else {
+        if (blocks > (byAddress.get(entry.miner) ?? 0)) entry.miner = address;
+        entry.blocks += blocks;
+      }
+    }
+
+    return miners;
   }
 
-  private miners(counts: Map<string, number>): MinerCount[] {
-    return [...counts]
-      .map(([miner, blocks]) => ({ miner, blocks }))
-      .sort((a, b) => b.blocks - a.blocks || a.miner.localeCompare(b.miner))
+  private miners(counts: Map<string, MinerCount>): MinerCount[] {
+    return [...counts.values()]
+      .sort((a, b) => b.blocks - a.blocks || (a.pool?.name ?? a.miner).localeCompare(b.pool?.name ?? b.miner))
       .slice(0, TOP_MINERS);
   }
 

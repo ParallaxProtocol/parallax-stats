@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { authenticate, clientIP, RateLimiter, TokenBucket } from "../src/server/guard.ts";
 import { cleanBlock, cleanHistory, cleanId, cleanInfo, cleanStats } from "../src/server/sanitize.ts";
-import { addressList, inList, loadSettings } from "../src/server/settings.ts";
+import { addressList, inList, loadSettings, miningPools } from "../src/server/settings.ts";
 
 const settings = loadSettings({ WS_SECRET: "private-a|private-b|open", PUBLIC_SECRET: "open", TRUSTED_PROXIES: "10.0.0.1" });
 
@@ -159,4 +159,14 @@ test("trusted proxies and banned addresses accept CIDR ranges", () => {
   assert.equal(inList(banned, "198.51.101.1"), false);
   assert.equal(inList(banned, "2001:db8::1"), true);
   assert.equal(inList(banned, "garbage"), false);
+});
+
+test("mining pools are read with optional websites", () => {
+  const a = "0x" + "a".repeat(40);
+  const b = "0x" + "B".repeat(40);
+  const pools = miningPools(`Pool One=https://one.example/?ref=x,${a}| Pool Two = ${b} |Nameless|=${a}|Bad=javascript:alert(1),0x12`);
+
+  assert.deepEqual(pools.get(a), { name: "Pool One", url: "https://one.example/?ref=x" });
+  assert.deepEqual(pools.get(b.toLowerCase()), { name: "Pool Two", url: null });
+  assert.equal(pools.size, 2);
 });

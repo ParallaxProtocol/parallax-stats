@@ -12,7 +12,7 @@ import {
 } from "@/lib/emission";
 import { formatInt } from "@/lib/format";
 import { TARGET_BLOCK_TIME, type Charts } from "@/lib/protocol";
-import { Miners } from "./charts";
+import { Decentralization } from "./charts";
 import { useServerNow } from "./live/provider";
 import { Label, Plate } from "./plate";
 import { useSize } from "./use-size";
@@ -308,7 +308,7 @@ export function Monetary({ bestBlock, charts }: { bestBlock: number; charts: Cha
         <Emission height={bestBlock} />
       </div>
       <div className="flex min-w-0 [&>*]:flex-1">
-        <Miners charts={charts} />
+        <Decentralization charts={charts} />
       </div>
     </div>
   );

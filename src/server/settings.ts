@@ -2,6 +2,7 @@
 // does.
 
 import { BlockList, isIPv4, isIPv6 } from "node:net";
+import type { MiningPool } from "../lib/protocol.ts";
 import { cloudflareEdges } from "./cloudflare.ts";
 
 export interface Settings {
@@ -34,6 +35,8 @@ export interface Settings {
   msgBurst: number;
   /** Viewer connections one address may hold open. */
   maxViewersPerIP: number;
+  /** Known mining pools by coinbase address (lowercase). */
+  miningPools: Map<string, MiningPool>;
 }
 
 type Env = Record<string, string | undefined>;
@@ -76,6 +79,44 @@ export function addressList(entries: string[]): BlockList {
   return list;
 }
 
+function websiteURL(value: string): string | null {
+  try {
+    const url = new URL(value);
+
+    return (url.protocol === "https:" || url.protocol === "http:") && value.length <= 200 ? url.href : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * miningPools reads pools as
+ * `Name=https://pool.example,0xaddress,0xaddress|Other pool=0xaddress`:
+ * each pool's name, then its addresses and, optionally, its website.
+ * Names are trimmed to 32 characters; a pool without a name or a valid
+ * address is ignored.
+ */
+export function miningPools(value: string | undefined): Map<string, MiningPool> {
+  const pools = new Map<string, MiningPool>();
+
+  for (const entry of String(value ?? "").split("|")) {
+    const at = entry.indexOf("=");
+    const name = entry.slice(0, at).replace(/[\u0000-\u001f\u007f]/g, "").trim().slice(0, 32);
+
+    if (at < 0 || name.length === 0) continue;
+
+    const items = entry.slice(at + 1).split(",").map((item) => item.trim());
+    const pool: MiningPool = { name, url: null };
+
+    for (const item of items) {
+      if (/^https?:\/\//i.test(item)) pool.url = websiteURL(item);
+      else if (/^0x[0-9a-fA-F]{40}$/.test(item)) pools.set(item.toLowerCase(), pool);
+    }
+  }
+
+  return pools;
+}
+
 /** inList reports whether an address matches, accepting either IP family. */
 export function inList(list: BlockList, address: string): boolean {
   if (isIPv4(address)) return list.check(address, "ipv4");
@@ -109,5 +150,6 @@ export function loadSettings(env: Env = process.env): Settings {
     msgPerSecond: 5,
     msgBurst: 50,
     maxViewersPerIP: intSetting(env, "MAX_VIEWERS_PER_IP", 20),
+    miningPools: miningPools(env.MINING_POOLS),
   };
 }

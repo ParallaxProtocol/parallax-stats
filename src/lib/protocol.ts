@@ -132,8 +132,17 @@ export interface ChainHealth {
   lastReorg: { height: number; at: number; nodes: number } | null;
 }
 
+export interface MiningPool {
+  name: string;
+  /** The pool's website, http(s) only; null when not given. */
+  url: string | null;
+}
+
 export interface MinerCount {
+  /** The coinbase address; for a known pool, the one of its addresses with the most blocks. */
   miner: string;
+  /** The pool when the address belongs to a known one, whose addresses are counted together. */
+  pool: MiningPool | null;
   blocks: number;
 }
 
@@ -154,7 +163,7 @@ export interface Charts {
   fees: (string | null)[];
   /** The miners of the most recent blocks, most blocks first, up to ten. */
   miners: MinerCount[];
-  /** Distinct miners among the same blocks. */
+  /** Distinct miners among the same blocks, each known pool counted once. */
   minerCount: number;
   propagation: PropagationStats;
   health: ChainHealth;
