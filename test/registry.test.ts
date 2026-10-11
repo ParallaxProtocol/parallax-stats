@@ -683,3 +683,27 @@ test("verified nodes on different chains are a split, a block race is not", () =
   nodes.addBlock("b", linked(7, "b"));
   assert.deepEqual(nodes.charts().health.split, { height: 5, chains: 2, nodes: 2 });
 });
+
+test("a later routine reorganization does not hide a deep one", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+  for (let n = 1; n <= 10; n++) nodes.addBlock("a", linked(n, "a"));
+
+  // A switch to a chain that parted after block 7: 3 blocks deep once its blocks arrive
+  nodes.addBlock("a", linked(11, "b"));
+  nodes.nextHistoryRequest("a");
+  nodes.addHistory("a", [linked(10, "b"), linked(9, "b"), linked(8, "b", "a"), ...[7, 6, 5, 4, 3, 2, 1].map((n) => linked(n, "a"))]);
+  for (let n = 12; n <= 20; n++) nodes.addBlock("a", linked(n, "b"));
+
+  // Then a one-block race at 21, lost
+  nodes.addBlock("a", linked(21, "c", "b"));
+  nodes.addBlock("a", linked(21, "d", "b"));
+
+  const { health } = nodes.charts();
+
+  assert.equal(health.lastReorg?.height, 21);
+  assert.equal(health.lastReorg?.depth, 1);
+  assert.equal(health.lastDeepReorg?.height, 11);
+  assert.equal(health.lastDeepReorg?.depth, 3);
+});

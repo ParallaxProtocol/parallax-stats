@@ -8,14 +8,14 @@ live:
 - **Block clock:** the best block and how long since it was found, against
   the 10 minute target
 - **Alerts:** verified nodes on different chains, no block for 2 hours,
-  chain reorganizations and how many blocks deep, one miner holding most of
+  reorganizations 3 or more blocks deep, one miner holding most of
   the last week's blocks, blocks slow to reach the network, no verified node
   online, and a new client release that nodes have not caught up with
 - **New blocks:** a toast with who mined each block, how long it took, its
   transactions and fees, and an optional chime (with its own sound for
-  reorganizations)
+  deep reorganizations)
 - **Network figures:** average block time, hashrate, difficulty (also in
-  the units pools use), active nodes in sync, the recommended fee, peer
+  the units pools use), active nodes in sync, the recommended fee,
   latency, uptime
 - **Charts:** block times, propagation, difficulty with the next block's
   exact difficulty and its change over a week, transactions,
@@ -199,8 +199,11 @@ unavailable and the rest of the dashboard carries on.
   seconds.
 - **Reorg depth** is how many blocks a node had that its switch replaced,
   down to the last block both chains share. The server asks the switching
-  node for its new chain's recent blocks to find that point; 3 or more is
-  shown as a deep reorganization.
+  node for its new chain's recent blocks to find that point. Only
+  reorganizations 3 or more blocks deep raise an alert and tint the stale
+  blocks panel: amber for 3 to 5 blocks, for 30 minutes, and red from 6
+  blocks, for 24 hours. Shallower ones are routine on proof of work and are
+  only counted there.
 - **Chain splits** are verified nodes on different chains, each at least two
   blocks past where they part. Chains that part only at the newest block
   are an ordinary block race.

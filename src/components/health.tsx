@@ -212,7 +212,7 @@ export function NetworkHealth({
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <StaleBlocks
-        health={health ?? { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null, split: null }}
+        health={health ?? { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null, lastDeepReorg: null, split: null }}
       />
       <ClientVersions nodes={nodes} latestRelease={latestRelease} />
     </div>

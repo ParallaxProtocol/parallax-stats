@@ -193,6 +193,63 @@
   animation: backdrop-in 0.25s ease;
 }
 
+/* Alert banners open their space and slide down into it, and collapse when
+   dismissed; a critical one's icon pulses a few times as it arrives */
+@keyframes alert-in {
+  from {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+}
+
+@keyframes alert-out {
+  to {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes alert-pulse {
+  from {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.7);
+  }
+}
+
+.alert-banner {
+  display: grid;
+  grid-template-rows: 1fr;
+}
+
+.alert-banner-enter {
+  animation: alert-in 0.45s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.alert-banner > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.alert-banner-leave {
+  animation: alert-out 0.25s ease-in forwards;
+}
+
+.alert-pulse::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 9999px;
+  background: currentColor;
+  opacity: 0;
+  animation: alert-pulse 1.4s ease-out 0.4s 3;
+}
+
 /* New block toasts slide in, count down along their bottom edge, and fade out */
 @keyframes toast-in {
   from {

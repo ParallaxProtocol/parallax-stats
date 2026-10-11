@@ -140,6 +140,8 @@ export interface ChainHealth {
   since: number;
   /** The latest reorganization; `depth` is how many blocks it replaced. */
   lastReorg: { height: number; at: number; nodes: number; depth: number } | null;
+  /** The latest reorganization 3 or more blocks deep, which a later routine one does not hide. */
+  lastDeepReorg?: { height: number; at: number; nodes: number; depth: number } | null;
   /**
    * Set while verified nodes follow different chains, each at least two
    * blocks past where they part: `height` is the last block they share,

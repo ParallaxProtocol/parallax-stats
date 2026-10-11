@@ -1,7 +1,16 @@
 "use client";
 
-import { useEffect, useRef, type ReactNode } from "react";
-import { DEEP_REORG, majority, recentReorg, SLOW_SPREAD_MS, stallLevel, VERY_SLOW_SPREAD_MS } from "@/lib/alert-levels";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import {
+  DEEP_REORG,
+  deepReorg,
+  majority,
+  reorgLevel,
+  SLOW_SPREAD_MS,
+  stallLevel,
+  VERY_DEEP_REORG,
+  VERY_SLOW_SPREAD_MS,
+} from "@/lib/alert-levels";
 import { formatAgo, formatClock, formatInt, formatMs, shortHash } from "@/lib/format";
 import type { Charts, PublicNode } from "@/lib/protocol";
 import type { Release } from "@/lib/releases";
@@ -16,8 +25,6 @@ const MAJORITY_SNOOZE_MS = 24 * 60 * 60 * 1000;
 const MAJORITY_REGROWTH = 0.05;
 /** How long the reorganization sound waits, to follow a new block's chime. */
 const REORG_SOUND_DELAY_MS = 700;
-/** Banners shown at once, most severe first. */
-const MAX_BANNERS = 2;
 
 const MINING_POOL_STATS = "https://miningpoolstats.stream/parallax";
 
@@ -94,56 +101,89 @@ interface Alert {
 }
 
 /** Banner is one alert across the top of the page: what happened, why it matters and the facts behind it. */
-function Banner({ alert }: { alert: Alert }) {
+function Banner({ alert, index }: { alert: Alert; index: number }) {
   const { tone, icon, title, body, facts, action, dismiss } = alert;
+  const [leaving, setLeaving] = useState(false);
+  // Banners there when the page loads simply appear; ones that come up later slide in
+  const [enter] = useState(() => settled);
+
+  // Fade out, then dismiss; at once when animations are off and would never end
+  function close() {
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) dismiss?.();
+    else setLeaving(true);
+  }
 
   return (
-    <section
-      role="status"
-      className={`flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:gap-4 ${TONE[tone].box}`}
+    // The wrapper opens and closes the banner's space, so the page below moves smoothly
+    <div
+      className={`alert-banner ${leaving ? "alert-banner-leave" : enter ? "alert-banner-enter" : ""}`}
+      style={{ animationDelay: enter && !leaving ? `${index * 90}ms` : undefined }}
+      onAnimationEnd={(e) => {
+        if (e.animationName === "alert-out" && e.target === e.currentTarget) dismiss?.();
+      }}
     >
-      <div className="flex min-w-0 flex-1 items-center gap-3">
-        <span className={`flex size-8 shrink-0 items-center justify-center rounded-full ${TONE[tone].icon}`}>
-          <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-            {ICON[icon]}
-          </svg>
-        </span>
-        <p className="min-w-0 text-sm">
-          <span className="font-semibold">{title}</span> <span className="text-muted-foreground">{body}</span>
-        </p>
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2 pl-11 sm:shrink-0 sm:pl-0">
-        {facts.map((fact) => (
-          <span key={fact} className="rounded-full border border-border bg-background/50 px-2.5 py-0.5 text-xs whitespace-nowrap tabular-nums">
-            {fact}
-          </span>
-        ))}
-        {action && (
-          <a
-            href={action.href}
-            {...(action.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-            className="px-1 text-xs whitespace-nowrap text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+      <section
+        role="status"
+        className={`relative flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:gap-4 ${dismiss ? "pr-10 sm:pr-4" : ""} ${TONE[tone].box}`}
+      >
+        <div className="flex min-w-0 flex-1 items-center gap-3">
+          {/* A critical alert's icon pulses a few times as it arrives, then rests */}
+          <span
+            className={`relative flex size-8 shrink-0 items-center justify-center rounded-full ${TONE[tone].icon} ${tone === "critical" && enter ? "alert-pulse" : ""}`}
           >
-            {action.label}
-          </a>
-        )}
-        {dismiss && (
-          <button
-            type="button"
-            onClick={dismiss}
-            className="inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-background/50 hover:text-foreground"
-            aria-label="Dismiss"
-          >
-            <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-              <path d="m4 4 8 8M12 4l-8 8" strokeLinecap="round" />
+            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+              {ICON[icon]}
             </svg>
-          </button>
-        )}
-      </div>
-    </section>
+          </span>
+          <p className="min-w-0 text-sm">
+            <span className="font-semibold">{title}</span> <span className="text-muted-foreground">{body}</span>
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 pl-11 sm:shrink-0 sm:pl-0">
+          {facts.map((fact) => (
+            <span key={fact} className="rounded-full border border-border bg-background/50 px-2.5 py-0.5 text-xs whitespace-nowrap tabular-nums">
+              {fact}
+            </span>
+          ))}
+          {action && (
+            <a
+              href={action.href}
+              {...(action.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+              className="px-1 text-xs whitespace-nowrap text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
+            >
+              {action.label}
+            </a>
+          )}
+          {dismiss && (
+            <button
+              type="button"
+              onClick={close}
+              // In the top corner on phones, where the facts wrap below the text; at the end of the row otherwise
+              className="absolute top-2.5 right-2.5 inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-background/50 hover:text-foreground sm:static"
+              aria-label="Dismiss"
+            >
+              <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                <path d="m4 4 8 8M12 4l-8 8" strokeLinecap="round" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }
+
+const subscribeNothing = () => () => {};
+
+/**
+ * Whether the page has settled after loading. Until then, banners appear
+ * without animation: a reload should not replay arrivals. Set a moment
+ * after the alerts first mount, so the server render, hydration and the
+ * dismissible alerts that follow it all count as the page loading.
+ */
+let settled = false;
+const SETTLE_MS = 1500;
 
 const SEVERITY: Record<Tone, number> = { critical: 0, warn: 1, info: 2 };
 const NO_DISMISSALS: Record<string, { until?: number; share?: number }> = {};
@@ -172,26 +212,37 @@ export function Alerts({
 }) {
   const now = useServerNow();
   const [dismissed, setDismissed] = usePersistent("dismissed-alerts", NO_DISMISSALS);
+  // Dismissals live in the browser, unknown to the server render and hydration:
+  // dismissible alerts wait until they can be read, so a dismissed one never flashes
+  const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => (settled = true), SETTLE_MS);
+
+    return () => window.clearTimeout(timer);
+  }, []);
   const health = charts?.health ?? null;
   const alerts: Alert[] = [];
   const [sound] = usePersistent(SOUND_KEY, true);
-  const lastReorgAt = health?.lastReorg?.at ?? null;
+  // The deep reorganization to sound, by when it happened: one is often measured
+  // as 1 block deep at first and found deeper moments later, and sounds then
+  const lastDeep = health?.lastDeepReorg !== undefined ? health.lastDeepReorg : health?.lastReorg;
+  const deepAt = lastDeep && (lastDeep.depth ?? 1) >= DEEP_REORG ? lastDeep.at : null;
+  const veryDeep = (lastDeep?.depth ?? 1) >= VERY_DEEP_REORG;
   const heardReorg = useRef<number | null | undefined>(undefined);
 
-  // Sound a reorganization as it happens; one already on show at load stays quiet
+  // Sound a deep reorganization as it happens; one already on show at load stays quiet
   useEffect(() => {
     const before = heardReorg.current;
 
-    heardReorg.current = lastReorgAt;
+    heardReorg.current = deepAt;
 
-    if (before === undefined || lastReorgAt === null || lastReorgAt === before || !sound) return;
+    if (before === undefined || deepAt === null || deepAt === before || !sound) return;
 
-    // A reorganization usually comes with a new block: follow its chime rather than talk over it
-    // Not cancelled when the depth is refined meanwhile, which re-runs this effect
-    const deep = (health?.lastReorg?.depth ?? 1) >= DEEP_REORG;
-
-    window.setTimeout(() => reorgChime(deep), REORG_SOUND_DELAY_MS);
-  }, [lastReorgAt, sound, health?.lastReorg?.depth]);
+    // A reorganization usually comes with a new block: follow its chime rather than talk over it.
+    // The critical one adds a third, lower note.
+    window.setTimeout(() => reorgChime(veryDeep), REORG_SOUND_DELAY_MS);
+  }, [deepAt, sound, veryDeep]);
   const dismissKey = (key: string, value: { until?: number; share?: number }) => setDismissed({ ...dismissed, [key]: value });
 
   // Verified nodes following different chains
@@ -225,22 +276,22 @@ export function Alerts({
     });
   }
 
-  // A recent reorganization, serious when deep
-  const reorg = recentReorg(health, now);
+  // A recent deep reorganization; shallower ones are routine and only counted in the stale blocks panel
+  const reorg = deepReorg(health, now);
 
   if (reorg) {
-    const depth = reorg.depth ?? 1;
-    const deep = depth >= DEEP_REORG;
+    const tone = reorgLevel(reorg.depth ?? 1);
 
     alerts.push({
       key: "reorg",
-      tone: deep ? "critical" : "warn",
+      tone,
       icon: "reorg",
-      title: `${deep ? "Deep chain reorganization" : "Chain reorganization"} at block #${formatInt(reorg.height)}.`,
-      body: deep
-        ? "Blocks from that height were replaced by a longer chain. Wait for more confirmations before treating recent payments as final."
-        : "Blocks at that height were replaced by a longer chain.",
-      facts: [`${plural(depth, "block")} deep`, `Seen by ${plural(reorg.nodes, "node")}`, formatAgo(reorg.at, now)],
+      title: `${tone === "critical" ? "Deep chain reorganization" : "Chain reorganization"} at block #${formatInt(reorg.height)}.`,
+      body:
+        tone === "critical"
+          ? "Blocks from that height were replaced by a longer chain. Wait for more confirmations before treating recent payments as final."
+          : "Blocks from that height were replaced by a longer chain.",
+      facts: [`${plural(reorg.depth ?? 1, "block")} deep`, `Seen by ${plural(reorg.nodes, "node")}`, formatAgo(reorg.at, now)],
       action: { href: "#stale-blocks", label: "Chain health" },
     });
   }
@@ -248,7 +299,7 @@ export function Alerts({
   // One miner with most of the last week's blocks
   const held = majority(charts);
 
-  if (held) {
+  if (held && hydrated) {
     const { miner: top, share, blocks: minerBlocks } = held;
     const key = `majority:${top.pool?.name ?? top.miner}`;
     const snoozed = dismissed[key];
@@ -315,7 +366,7 @@ export function Alerts({
     return parts !== null && latest?.parts && compareParts(parts, latest.parts) < 0;
   });
 
-  if (latestRelease && latest && behind.length > 0 && !dismissed[`release:${latestRelease.tag}`]) {
+  if (hydrated && latestRelease && latest && behind.length > 0 && !dismissed[`release:${latestRelease.tag}`]) {
     const key = `release:${latestRelease.tag}`;
 
     alerts.push({
@@ -332,13 +383,13 @@ export function Alerts({
 
   if (alerts.length === 0) return null;
 
-  // Array sort is stable: within a tone, the order above holds
-  const shown = alerts.sort((a, b) => SEVERITY[a.tone] - SEVERITY[b.tone]).slice(0, MAX_BANNERS);
+  // Every alert that applies, most severe first; array sort is stable, so within a tone the order above holds
+  const shown = alerts.sort((a, b) => SEVERITY[a.tone] - SEVERITY[b.tone]);
 
   return (
     <div className="flex flex-col gap-2">
-      {shown.map((alert) => (
-        <Banner key={alert.key} alert={alert} />
+      {shown.map((alert, i) => (
+        <Banner key={alert.key} alert={alert} index={i} />
       ))}
     </div>
   );

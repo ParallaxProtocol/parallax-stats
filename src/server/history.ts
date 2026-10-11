@@ -12,6 +12,7 @@ import {
   type MiningPool,
   type PropagationStats,
 } from "../lib/protocol.ts";
+import { DEEP_REORG } from "../lib/alert-levels.ts";
 import { median } from "../lib/derive.ts";
 import type { ReportedBlock } from "./sanitize.ts";
 
@@ -498,14 +499,16 @@ export class History {
       }
     }
 
-    // The new chain's blocks may have arrived since: measure the latest switch again
-    const latest = this.reorgs.at(-1);
-
-    if (latest?.measure) latest.depth = Math.max(latest.depth, this.measureDepth(latest.measure));
+    // The new chains' blocks may have arrived since: measure the day's switches again,
+    // so a deep one is known as deep even after a later one has come along
+    for (const event of this.reorgs) {
+      if (event.measure && now - event.at < REORG_PERIOD_MS) event.depth = Math.max(event.depth, this.measureDepth(event.measure));
+    }
 
     const since = Math.max(now - REORG_PERIOD_MS, this.startedAt);
     const counted = this.reorgs.filter((e) => this.credible(e.nodes, e.trusted));
     const last = counted.at(-1);
+    const lastDeep = counted.findLast((e) => e.depth >= DEEP_REORG);
 
     return {
       window: this.items.length,
@@ -514,6 +517,7 @@ export class History {
       reorgs: counted.filter((e) => e.at >= since).length,
       since,
       lastReorg: last ? { height: last.height, at: last.at, nodes: last.nodes.size, depth: last.depth } : null,
+      lastDeepReorg: lastDeep ? { height: lastDeep.height, at: lastDeep.at, nodes: lastDeep.nodes.size, depth: lastDeep.depth } : null,
       split: this.split(heads),
     };
   }

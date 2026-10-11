@@ -6,10 +6,13 @@ import { PROPAGATION_BANDS, type Charts, type ChainHealth, type PropagationStats
 
 export type Level = "warn" | "critical";
 
-/** Reorganizations stay on the banner, and tint their section, this long. */
+/** Reorganizations stay on the banner, and tint their section, this long; critical ones longer. */
 export const REORG_ALERT_MS = 30 * 60 * 1000;
-/** A reorganization replacing this many blocks or more is a serious one. */
+export const CRITICAL_REORG_ALERT_MS = 24 * 60 * 60 * 1000;
+/** A reorganization replacing this many blocks or more raises an alert (amber)... */
 export const DEEP_REORG = 3;
+/** ...and one replacing this many or more, a critical one (red): amber covers 3 to 5. */
+export const VERY_DEEP_REORG = 6;
 /** Fewer blocks than this say too little about who mines. */
 export const MAJORITY_MIN_BLOCKS = 10;
 /** Blocks taking longer than these to reach most verified nodes are slow, and far too slow. */
@@ -21,20 +24,34 @@ export function stallLevel(foundAt: number, now: number): Level | null {
   return foundAt > 0 && now - foundAt > STALL_MS ? "critical" : null;
 }
 
-/** recentReorg is the latest reorganization while it is recent enough to call out. */
-export function recentReorg(health: ChainHealth | null, now: number): ChainHealth["lastReorg"] {
-  return health?.lastReorg && now - health.lastReorg.at < REORG_ALERT_MS ? health.lastReorg : null;
+/**
+ * deepReorg is the latest reorganization while recent and DEEP_REORG blocks
+ * deep or more. Shallower ones are routine on proof of work: they show in
+ * the stale blocks figures, without an alert.
+ */
+export function deepReorg(health: ChainHealth | null, now: number): ChainHealth["lastReorg"] {
+  // A server from before lastDeepReorg only reports the latest one
+  const reorg = health?.lastDeepReorg !== undefined ? health.lastDeepReorg : health?.lastReorg;
+
+  if (!reorg || (reorg.depth ?? 1) < DEEP_REORG) return null;
+
+  const lasts = reorgLevel(reorg.depth ?? 1) === "critical" ? CRITICAL_REORG_ALERT_MS : REORG_ALERT_MS;
+
+  return now - reorg.at < lasts ? reorg : null;
 }
 
-/** chainLevel: verified nodes on different chains, or a recent reorganization, deep or not. */
+/** reorgLevel: amber from DEEP_REORG blocks deep, red from VERY_DEEP_REORG. */
+export function reorgLevel(depth: number): Level {
+  return depth >= VERY_DEEP_REORG ? "critical" : "warn";
+}
+
+/** chainLevel: verified nodes on different chains, or a recent deep reorganization. */
 export function chainLevel(health: ChainHealth | null, now: number): Level | null {
   if (health?.split) return "critical";
 
-  const reorg = recentReorg(health, now);
+  const reorg = deepReorg(health, now);
 
-  if (!reorg) return null;
-
-  return (reorg.depth ?? 1) >= DEEP_REORG ? "critical" : "warn";
+  return reorg ? reorgLevel(reorg.depth ?? 1) : null;
 }
 
 /** majority is the top miner while it found more than half of the last week's blocks. */
