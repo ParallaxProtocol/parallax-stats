@@ -56,7 +56,7 @@ export default function Page() {
             <span className="font-sans text-base font-semibold sm:text-lg">Parallax</span>
           </a>
           <span aria-hidden className="h-5 w-px bg-border" />
-          <span className="font-sans text-base font-semibold text-muted-foreground sm:text-lg">Network Status</span>
+          <span className="font-sans text-base font-normal text-muted-foreground sm:text-lg">Network Status</span>
         </h1>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <About />
