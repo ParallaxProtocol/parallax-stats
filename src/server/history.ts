@@ -12,11 +12,14 @@ import {
   type MiningPool,
   type PropagationStats,
 } from "../lib/protocol.ts";
+import { median } from "../lib/derive.ts";
 import type { ReportedBlock } from "./sanitize.ts";
 
 const MAX_HISTORY = 2000;
 const HASHRATE_WINDOW = 64;
 const TOP_MINERS = 10;
+/** Who mined is judged over a week of blocks: enough that one lucky pool does not swing it. */
+const MINER_WINDOW_S = 7 * 86_400;
 
 /** Reports of the same reorganization by different nodes within this long count once. */
 const REORG_GROUP_MS = 2 * 60 * 1000;
@@ -45,7 +48,27 @@ interface Propagation {
   fork: number;
   received: number;
   propagation: number;
+  /** Whether the report measures propagation: from a synced node connected for a while, not history. */
+  counted?: boolean;
+  /** The node's one-way latency to the dashboard when it reported, ms. */
+  latency?: number;
 }
+
+/** How a report's timing can be trusted, from what the registry knows of the node. */
+export interface Timing {
+  counted: boolean;
+  latency: number;
+}
+
+const UNCOUNTED: Timing = { counted: false, latency: 0 };
+/** Blocks whose spread is judged, and the verified reports each needs. */
+const SPREAD_BLOCKS = 10;
+const SPREAD_MIN_REPORTERS = 3;
+/** How far back to look for a miner whose blocks spread slowly. */
+const SLOW_MINER_WINDOW = 100;
+const SLOW_MINER_MIN_BLOCKS = 5;
+const SLOW_MINER_MS = 15_000;
+const FAST_OTHERS_MS = 5_000;
 
 interface Height {
   height: number;
@@ -66,7 +89,24 @@ interface ReorgEvent {
   at: number;
   nodes: Set<string>;
   trusted: boolean;
+  /** Blocks replaced, the most measured so far. */
+  depth: number;
+  /**
+   * What is needed to measure the depth once the new chain's blocks arrive:
+   * the head the first node switched to, and the hashes it had reported on
+   * its old chain. Not saved across restarts.
+   */
+  measure?: { head: Head & { parentHash: string }; old: Map<number, string>; oldTop: number };
 }
+
+/** A verified node's current head, for spotting chain splits. */
+export interface Head {
+  number: number;
+  hash: string;
+}
+
+/** How far back to follow chains when measuring reorgs and splits. */
+const MAX_WALK = 100;
 
 /** What is saved of the history across restarts: the same data, with sets as arrays. */
 export interface HistoryState {
@@ -79,7 +119,7 @@ export interface HistoryState {
     forkReporters: { ids: string[]; trusted: boolean }[];
     propagTimes: Propagation[];
   }[];
-  reorgs: { height: number; at: number; nodes: string[]; trusted: boolean }[];
+  reorgs: { height: number; at: number; nodes: string[]; trusted: boolean; depth?: number }[];
 }
 
 export interface HistoryRequest {
@@ -110,6 +150,8 @@ export class History {
   private items: Height[] = [];
   private trustedOnly = false;
   private reorgs: ReorgEvent[] = [];
+  /** Blocks to ask nodes for after they switch chains, to measure how far back. */
+  private reorgRequests = new Map<string, HistoryRequest>();
   private startedAt = Date.now();
   /** Known pools by coinbase address. */
   private readonly pools: Map<string, MiningPool>;
@@ -128,7 +170,7 @@ export class History {
         forkReporters: item.forkReporters.map((r) => ({ ids: [...r.ids], trusted: r.trusted })),
         propagTimes: item.propagTimes,
       })),
-      reorgs: this.reorgs.map((e) => ({ ...e, nodes: [...e.nodes] })),
+      reorgs: this.reorgs.map(({ height, at, nodes, trusted, depth }) => ({ height, at, nodes: [...nodes], trusted, depth })),
     };
   }
 
@@ -146,7 +188,7 @@ export class History {
       }))
       .sort((a, b) => b.height - a.height)
       .slice(0, MAX_HISTORY);
-    this.reorgs = state.reorgs.slice(-MAX_REORG_EVENTS).map((e) => ({ ...e, nodes: new Set(e.nodes) }));
+    this.reorgs = state.reorgs.slice(-MAX_REORG_EVENTS).map((e) => ({ ...e, nodes: new Set(e.nodes), depth: e.depth ?? 1 }));
   }
 
   /**
@@ -169,7 +211,9 @@ export class History {
    * recorded (genesis, a height no trusted node has seen while one is
    * online, or one past the fork limit).
    */
-  add(reported: ReportedBlock, id: string, trusted: boolean, addingHistory = false): HistoryBlock | null {
+  add(reported: ReportedBlock, id: string, trusted: boolean, addingHistory = false, timing: Timing = UNCOUNTED): HistoryBlock | null {
+    const { counted, latency } = addingHistory ? UNCOUNTED : timing;
+
     if (reported.number <= 0) return null;
 
     const height = this.search(reported.number);
@@ -208,7 +252,7 @@ export class History {
       block.time = this.blockTime(block);
 
       if (accept) {
-        item.propagTimes.push({ node: id, trusted, fork: 0, received: now, propagation: 0 });
+        item.propagTimes.push({ node: id, trusted, fork: 0, received: now, propagation: 0, counted, latency });
         this.save(item);
         this.fillChildTimes(item.height);
       }
@@ -259,7 +303,7 @@ export class History {
     reporters.trusted ||= trusted;
 
     if (propIndex < 0) {
-      height.propagTimes.push({ node: id, trusted, fork: forkIndex, received: now, propagation: block.propagation });
+      height.propagTimes.push({ node: id, trusted, fork: forkIndex, received: now, propagation: block.propagation, counted, latency });
     }
 
     // A trusted report decides which fork the height shows
@@ -289,18 +333,134 @@ export class History {
 
     if (!switched) return;
 
+    const measure = this.oldChain(reported, id);
+    const depth = this.measureDepth(measure);
+
+    // Ask the node for its new chain's recent blocks, to see how far back it parts
+    this.reorgRequests.set(id, {
+      min: Math.max(1, reported.number - HISTORY_REQUEST_SIZE),
+      max: reported.number - 1,
+      list: Array.from({ length: Math.min(HISTORY_REQUEST_SIZE, reported.number - 1) }, (_, i) => reported.number - 1 - i).reverse(),
+    });
+
     const last = this.reorgs.at(-1);
 
     if (last && now - last.at < REORG_GROUP_MS && Math.abs(last.height - reported.number) <= 2) {
       last.nodes.add(id);
       last.trusted ||= trusted;
       last.height = Math.min(last.height, reported.number);
+      last.depth = Math.max(last.depth, depth);
+      last.measure ??= measure;
       return;
     }
 
-    this.reorgs.push({ height: reported.number, at: now, nodes: new Set([id]), trusted });
+    this.reorgs.push({ height: reported.number, at: now, nodes: new Set([id]), trusted, depth, measure });
 
     if (this.reorgs.length > MAX_REORG_EVENTS) this.reorgs.shift();
+  }
+
+  /** oldChain records what node `id` had before switching to `reported`, to measure the switch by. */
+  private oldChain(reported: ReportedBlock, id: string): NonNullable<ReorgEvent["measure"]> {
+    const old = new Map<number, string>();
+    let oldTop = reported.number - 1;
+
+    for (const item of this.items) {
+      if (item.height <= reported.number - MAX_WALK) break;
+
+      const hash = this.reportedHash(item, id);
+
+      if (hash === undefined) continue;
+
+      old.set(item.height, hash);
+      if (item.height >= reported.number) oldTop = Math.max(oldTop, item.height);
+    }
+
+    return { head: { number: reported.number, hash: reported.hash, parentHash: reported.parentHash }, old, oldTop };
+  }
+
+  /**
+   * measureDepth counts the blocks a switch replaced: from the node's old
+   * head down to the last block both chains share, following the new
+   * chain's parents through the history. Where the new chain's blocks are
+   * not known yet, the count stops there, so it is a lower bound until they
+   * arrive. At least 1.
+   */
+  private measureDepth({ head, old, oldTop }: NonNullable<ReorgEvent["measure"]>): number {
+    let hash = head.hash;
+    let parent: string | null = head.parentHash;
+    let ancestor = head.number - 1;
+
+    for (let k = head.number; k > head.number - MAX_WALK && k > 0; k--) {
+      const had = old.get(k);
+
+      if (had === hash || (had === undefined && k <= oldTop)) {
+        ancestor = k;
+        break;
+      }
+
+      ancestor = k - 1;
+
+      // Step to the new chain's block below, when it is known
+      const below = parent ?? this.search(k)?.forks.find((f) => f.hash === hash)?.parentHash;
+
+      if (!below) break;
+
+      hash = below;
+      parent = null;
+    }
+
+    return Math.max(1, oldTop - ancestor);
+  }
+
+  /** takeReorgRequest hands over the blocks to ask node `id` for after it switched chains, once. */
+  takeReorgRequest(id: string): HistoryRequest | null {
+    const request = this.reorgRequests.get(id) ?? null;
+
+    this.reorgRequests.delete(id);
+
+    return request;
+  }
+
+  /**
+   * split reports verified nodes following different chains. Chains that
+   * part at a node's head are a block race, settled by the next block, so
+   * a split needs every node at least two blocks past where they part.
+   */
+  private split(heads: Head[]): ChainHealth["split"] {
+    if (heads.length < 2) return null;
+
+    const byHeight = new Map(this.items.map((item) => [item.height, item]));
+    const hashAt = (head: Head, target: number): string | null => {
+      let hash = head.hash;
+
+      for (let k = head.number; k > target; k--) {
+        const fork = byHeight.get(k)?.forks.find((f) => f.hash === hash);
+
+        if (!fork) return null;
+        hash = fork.parentHash;
+      }
+
+      return hash;
+    };
+
+    const target = Math.min(...heads.map((h) => h.number)) - 1;
+
+    if (target < 1) return null;
+
+    const chains = new Set(heads.map((head) => hashAt(head, target)).filter((hash): hash is string => hash !== null));
+
+    if (chains.size < 2) return null;
+
+    let shared: number | null = null;
+
+    for (let k = target - 1; k > Math.max(0, target - MAX_WALK); k--) {
+      if (new Set(heads.map((head) => hashAt(head, k))).size === 1 && hashAt(heads[0], k) !== null) {
+        shared = k;
+        break;
+      }
+    }
+
+    return { height: shared, chains: chains.size, nodes: heads.length };
   }
 
   /** reportedHash is the hash node `id` last reported at a height, if any. */
@@ -319,7 +479,7 @@ export class History {
     return trusted || (!this.trustedOnly && reporters.size >= 2);
   }
 
-  private health(now = Date.now()): ChainHealth {
+  private health(heads: Head[], now = Date.now()): ChainHealth {
     const stale: { height: number; at: number }[] = [];
     let staleBlocks = 0;
 
@@ -338,6 +498,11 @@ export class History {
       }
     }
 
+    // The new chain's blocks may have arrived since: measure the latest switch again
+    const latest = this.reorgs.at(-1);
+
+    if (latest?.measure) latest.depth = Math.max(latest.depth, this.measureDepth(latest.measure));
+
     const since = Math.max(now - REORG_PERIOD_MS, this.startedAt);
     const counted = this.reorgs.filter((e) => this.credible(e.nodes, e.trusted));
     const last = counted.at(-1);
@@ -348,7 +513,8 @@ export class History {
       recentStale: stale.slice(0, RECENT_STALE),
       reorgs: counted.filter((e) => e.at >= since).length,
       since,
-      lastReorg: last ? { height: last.height, at: last.at, nodes: last.nodes.size } : null,
+      lastReorg: last ? { height: last.height, at: last.at, nodes: last.nodes.size, depth: last.depth } : null,
+      split: this.split(heads),
     };
   }
 
@@ -449,15 +615,41 @@ export class History {
   }
 
   /**
+   * delays returns, for each fork at a height, how long after the first
+   * counted report every counted report came: arrival times less each
+   * node's one-way latency, so a far-away node is not taken for a slow
+   * network. Sorted, the first (0) included.
+   */
+  private delays(item: Height, trustedOnly = false): { fork: number; delays: number[] }[] {
+    const byFork = new Map<number, number[]>();
+
+    for (const p of item.propagTimes) {
+      if (p.counted === false || (trustedOnly && !p.trusted)) continue;
+
+      const list = byFork.get(p.fork) ?? [];
+
+      list.push(p.received - (p.latency ?? 0));
+      byFork.set(p.fork, list);
+    }
+
+    return [...byFork].map(([fork, arrivals]) => {
+      const first = Math.min(...arrivals);
+
+      return { fork, delays: arrivals.map((a) => Math.max(0, a - first)).sort((a, b) => a - b) };
+    });
+  }
+
+  /**
    * blockPropagation summarizes how long blocks took to reach nodes after
-   * the first report. First reports are left out: their delay is 0 by
-   * definition, and counting them would pull every figure down.
+   * the first report, over counted reports only. First reports are left
+   * out: their delay is 0 by definition, and counting them would pull every
+   * figure down.
    */
   private blockPropagation(): PropagationStats {
     const samples: number[] = [];
 
     for (const item of this.items) {
-      for (const p of item.propagTimes) if (p.propagation > 0) samples.push(p.propagation);
+      for (const { delays } of this.delays(item)) samples.push(...delays.slice(1));
     }
 
     samples.sort((a, b) => a - b);
@@ -481,7 +673,61 @@ export class History {
       p90: percentile(0.9),
       p99: percentile(0.99),
       bands,
+      spread: this.spread(),
     };
+  }
+
+  /** reach90 is how long a block took to reach 90% of the verified nodes that reported it, or null with too few. */
+  private reach90(item: Height): number | null {
+    const shown = item.forks.indexOf(item.block);
+    const delays = this.delays(item, true).find((d) => d.fork === shown)?.delays ?? [];
+
+    return delays.length >= SPREAD_MIN_REPORTERS ? delays[Math.ceil(0.9 * delays.length) - 1] : null;
+  }
+
+  /**
+   * spread judges how fast recent blocks reach verified nodes, and whether
+   * one miner's blocks are consistently slow while everyone else's are fast,
+   * which points at that miner's connectivity.
+   */
+  private spread(): PropagationStats["spread"] {
+    const measured: { item: Height; reach: number }[] = [];
+
+    for (const item of this.items.slice(0, SLOW_MINER_WINDOW)) {
+      const reach = this.reach90(item);
+
+      if (reach !== null) measured.push({ item, reach });
+    }
+
+    const recent = measured.slice(0, SPREAD_BLOCKS).map((m) => m.reach);
+
+    if (recent.length < SPREAD_BLOCKS / 2) return null;
+
+    const byMiner = new Map<string, { miner: string; pool: string | null; reaches: number[] }>();
+
+    for (const { item, reach } of measured) {
+      const pool = this.pools.get(item.block.miner) ?? null;
+      const key = pool ? `pool:${pool.name}` : item.block.miner;
+      const entry = byMiner.get(key) ?? { miner: item.block.miner, pool: pool?.name ?? null, reaches: [] };
+
+      entry.reaches.push(reach);
+      byMiner.set(key, entry);
+    }
+
+    let slowMiner: NonNullable<PropagationStats["spread"]>["slowMiner"] = null;
+
+    for (const [key, entry] of byMiner) {
+      if (entry.reaches.length < SLOW_MINER_MIN_BLOCKS) continue;
+
+      const others = [...byMiner].filter(([k]) => k !== key).flatMap(([, e]) => e.reaches);
+      const own = median(entry.reaches);
+
+      if (others.length >= SLOW_MINER_MIN_BLOCKS && own > SLOW_MINER_MS && median(others) <= FAST_OTHERS_MS && own > (slowMiner?.median ?? 0)) {
+        slowMiner = { miner: entry.miner, pool: entry.pool, median: own, blocks: entry.reaches.length };
+      }
+    }
+
+    return { median: median(recent), blocks: recent.length, slowMiner };
   }
 
   /**
@@ -535,11 +781,18 @@ export class History {
     return span > 0 ? work / span : 0;
   }
 
-  /** minerCounts tallies recent blocks per miner, folding a known pool's addresses into one entry. */
-  private minerCounts(): Map<string, MinerCount> {
+  /** minerWindow is the blocks of the last MINER_WINDOW_S by timestamp, newest first. */
+  private minerWindow(): Height[] {
+    const head = this.items[0];
+
+    return head ? this.items.filter((item) => item.block.timestamp > head.block.timestamp - MINER_WINDOW_S) : [];
+  }
+
+  /** minerCounts tallies blocks per miner, folding a known pool's addresses into one entry. */
+  private minerCounts(window: Height[]): Map<string, MinerCount> {
     const byAddress = new Map<string, number>();
 
-    for (const item of this.latest(HISTORY_BINS)) byAddress.set(item.block.miner, (byAddress.get(item.block.miner) ?? 0) + 1);
+    for (const item of window) byAddress.set(item.block.miner, (byAddress.get(item.block.miner) ?? 0) + 1);
 
     const miners = new Map<string, MinerCount>();
 
@@ -565,16 +818,17 @@ export class History {
       .slice(0, TOP_MINERS);
   }
 
-  charts(): Charts {
+  /** charts gathers the chart data; `heads` are the verified nodes' heads, for spotting splits. */
+  charts(heads: Head[] = []): Charts {
     const recent = this.latest(HISTORY_BINS).reverse();
-    const minerCounts = this.minerCounts();
+    const minerWindow = this.minerWindow();
+    const minerCounts = this.minerCounts(minerWindow);
 
     return {
       height: recent.map((item) => item.height),
       blocktime: recent.map((item) => item.block.time / 1000),
       avgBlocktime: this.avgBlocktime(),
       difficulty: recent.map((item) => item.block.difficulty),
-      difficultyDay: this.difficultyChange(86_400),
       difficultyWeek: this.difficultyChange(7 * 86_400),
       transactions: recent.map((item) => item.block.txCount),
       gasSpending: recent.map((item) => item.block.gasUsed),
@@ -582,8 +836,10 @@ export class History {
       fees: recent.map((item) => item.block.fees),
       miners: this.miners(minerCounts),
       minerCount: minerCounts.size,
+      minerBlocks: minerWindow.length,
+      minerSpan: minerWindow.length > 1 ? minerWindow[0].block.timestamp - minerWindow[minerWindow.length - 1].block.timestamp : 0,
       propagation: this.blockPropagation(),
-      health: this.health(),
+      health: this.health(heads),
       avgHashrate: this.avgHashrate(),
     };
   }

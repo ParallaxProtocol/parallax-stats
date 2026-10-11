@@ -115,6 +115,13 @@ export interface PropagationStats {
   p99: number;
   /** Reports per speed band, one more entry than PROPAGATION_BANDS. */
   bands: number[];
+  /**
+   * How long recent blocks took to reach 90% of synced verified nodes, ms:
+   * the median over up to 10 blocks with enough verified reports, and a
+   * miner whose blocks spread far slower than everyone else's. Null while
+   * too few blocks qualify.
+   */
+  spread?: { median: number; blocks: number; slowMiner: { miner: string; pool: string | null; median: number; blocks: number } | null } | null;
 }
 
 /** Competing blocks and reorganizations, as seen by trustworthy reporters. */
@@ -129,7 +136,14 @@ export interface ChainHealth {
   reorgs: number;
   /** Server time the reorg count starts: 24 hours ago, or when the dashboard started. */
   since: number;
-  lastReorg: { height: number; at: number; nodes: number } | null;
+  /** The latest reorganization; `depth` is how many blocks it replaced. */
+  lastReorg: { height: number; at: number; nodes: number; depth: number } | null;
+  /**
+   * Set while verified nodes follow different chains, each at least two
+   * blocks past where they part: `height` is the last block they share,
+   * null when it lies beyond the history.
+   */
+  split: { height: number | null; chains: number; nodes: number } | null;
 }
 
 export interface MiningPool {
@@ -152,19 +166,21 @@ export interface Charts {
   blocktime: number[];
   avgBlocktime: number;
   difficulty: string[];
-  /** Change in difficulty over the last 24 hours, as a fraction; null when the history is shorter. */
-  difficultyDay: number | null;
-  /** The same over the last 7 days. */
+  /** Change in difficulty over the last 7 days, as a fraction; null when the history is shorter. */
   difficultyWeek: number | null;
   transactions: number[];
   gasSpending: number[];
   gasLimit: number[];
   /** Fees paid to the miner per block, wei as decimal strings; null where unknown. */
   fees: (string | null)[];
-  /** The miners of the most recent blocks, most blocks first, up to ten. */
+  /** The miners of the last 7 days of blocks, most blocks first, up to ten. */
   miners: MinerCount[];
   /** Distinct miners among the same blocks, each known pool counted once. */
   minerCount: number;
+  /** How many blocks the miner figures cover. */
+  minerBlocks: number;
+  /** Seconds those blocks span, oldest to newest; under 7 days while the history is shorter. */
+  minerSpan: number;
   propagation: PropagationStats;
   health: ChainHealth;
   avgHashrate: number;
@@ -176,6 +192,8 @@ export interface Snapshot {
   charts: Charts | null;
   /** Recommended gas price from the RPC endpoint, wei as a decimal string; null while unknown. */
   gasPrice: string | null;
+  /** Known mining pools by coinbase address (lowercase), from MINING_POOLS. */
+  pools: Record<string, MiningPool>;
 }
 
 export type ServerMessage =

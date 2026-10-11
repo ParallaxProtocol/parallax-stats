@@ -74,6 +74,7 @@ function refuse(socket: Duplex, status: string): void {
 export function createHub(settings: Settings, options: HubOptions = {}): Hub {
   const lookupGeo = options.lookupGeo ?? (() => null);
   const registry = new Registry(settings);
+  const pools = Object.fromEntries(settings.miningPools);
   const store = options.store ?? null;
 
   // Pick up where the last run left off
@@ -145,7 +146,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
   }
 
   function snapshot(): Snapshot {
-    return { serverTime: Date.now(), nodes: registry.all(), charts: charts ?? registry.charts(), gasPrice };
+    return { serverTime: Date.now(), nodes: registry.all(), charts: charts ?? registry.charts(), gasPrice, pools };
   }
 
   // The recommended fee, read from RPC and pushed to viewers when it changes.

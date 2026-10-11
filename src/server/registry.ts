@@ -3,11 +3,13 @@
 
 import { randomBytes } from "node:crypto";
 import type { Block, Charts, NameStatus, PublicNode } from "../lib/protocol.ts";
-import { History, type HistoryRequest, type HistoryState } from "./history.ts";
+import { History, type Head, type HistoryRequest, type HistoryState } from "./history.ts";
 import { NodeRecord, type Login, type NodeState } from "./node.ts";
 import { cleanId, type ReportedBlock } from "./sanitize.ts";
 import type { Settings } from "./settings.ts";
 
+/** A node's reports start counting toward propagation once it has been connected this long. */
+const PROPAGATION_WARMUP_MS = 2 * 60 * 1000;
 /** How long to wait for a history answer before asking another node. */
 const HISTORY_REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
 
@@ -177,7 +179,10 @@ export class Registry {
     // A block missing from the shared history (genesis, or a height no
     // trusted node has reported) is still the node's own head.
     const now = Date.now();
-    const block: Block = this.history.add(reported, id, node.trusted) ?? {
+    // Only a settled node's report measures propagation: not one syncing or just
+    // (re)connected and catching up. Its one-way latency to us is taken off.
+    const timing = { counted: !node.stats.syncing && now - node.connectedAt >= PROPAGATION_WARMUP_MS, latency: node.stats.latency };
+    const block: Block = this.history.add(reported, id, node.trusted, false, timing) ?? {
       ...reported,
       arrived: now,
       received: now,
@@ -225,9 +230,17 @@ export class Registry {
 
     if (!node || (this.hasTrusted() && !node.trusted) || !node.canUpdate()) return null;
 
-    if (node.stats.block.number < this.history.bestBlockNumber()) return null;
-
     if (this.historyRequest && now - this.historyRequest.at < HISTORY_REQUEST_TIMEOUT_MS) return null;
+
+    // A node that just switched chains is asked for its new chain first
+    const reorg = this.history.takeReorgRequest(id);
+
+    if (reorg) {
+      this.historyRequest = { id, at: now };
+      return reorg;
+    }
+
+    if (node.stats.block.number < this.history.bestBlockNumber()) return null;
 
     if (!this.history.requiresUpdate()) return null;
 
@@ -265,6 +278,17 @@ export class Registry {
   }
 
   charts(): Charts {
-    return this.history.charts();
+    return this.history.charts(this.verifiedHeads());
+  }
+
+  /**
+   * verifiedHeads are the heads of connected, synced verified nodes near the
+   * front, so a node still catching up does not look like another chain.
+   */
+  private verifiedHeads(): Head[] {
+    const nodes = [...this.nodes.values()].filter((node) => node.trusted && node.stats.active && !node.stats.syncing && node.stats.block.number > 0);
+    const front = Math.max(0, ...nodes.map((node) => node.stats.block.number));
+
+    return nodes.filter((node) => front - node.stats.block.number <= 6).map((node) => ({ number: node.stats.block.number, hash: node.stats.block.hash }));
   }
 }

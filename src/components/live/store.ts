@@ -2,7 +2,7 @@
 // keeps the node list and charts current, with reconnects and clock
 // offset tracking. Components read it through useSyncExternalStore.
 
-import { VIEWER_PATH, type Charts, type PublicNode, type ServerMessage, type Snapshot } from "@/lib/protocol";
+import { VIEWER_PATH, type Charts, type MiningPool, type PublicNode, type ServerMessage, type Snapshot } from "@/lib/protocol";
 
 export type Connection = "connecting" | "live" | "offline";
 
@@ -11,6 +11,8 @@ export interface LiveState {
   charts: Charts | null;
   /** Recommended gas price, wei as a decimal string. */
   gasPrice: string | null;
+  /** Known mining pools by coinbase address. */
+  pools: Record<string, MiningPool>;
   connection: Connection;
   /** Round trip to the server, ms; null until measured. */
   latency: number | null;
@@ -36,6 +38,7 @@ export class LiveStore {
       nodes: initial.nodes,
       charts: initial.charts,
       gasPrice: initial.gasPrice,
+      pools: initial.pools ?? {},
       connection: "connecting",
       latency: null,
       clockOffset: 0,
@@ -124,6 +127,7 @@ export class LiveStore {
           nodes: msg.nodes,
           charts: msg.charts,
           gasPrice: msg.gasPrice,
+          pools: msg.pools ?? {},
           connection: "live",
           clockOffset: this.state.latency === null ? msg.serverTime - Date.now() : this.state.clockOffset,
         });

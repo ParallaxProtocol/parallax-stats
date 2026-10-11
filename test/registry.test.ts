@@ -264,6 +264,27 @@ test("a known pool's addresses count as one miner", () => {
   assert.equal(charts.minerCount, 2);
 });
 
+test("miners are counted over the last 7 days of blocks", () => {
+  const nodes = new Registry(settings);
+  const [early, late] = ["a", "b"].map((x) => "0x" + x.repeat(40));
+
+  login(nodes, "a", "1.1.1.1", true);
+
+  // One block an hour for 10 days: the first 3 days by one miner, the rest by another
+  for (let n = 1; n <= 240; n++) nodes.addBlock("a", { ...block(n), timestamp: n * 3600, miner: n <= 72 ? early : late });
+
+  const charts = nodes.charts();
+
+  // Blocks 73 to 240 are within 7 days of the newest
+  assert.equal(charts.minerBlocks, 168);
+  assert.equal(charts.minerSpan, 167 * 3600);
+  assert.deepEqual(
+    charts.miners.map((m) => [m.miner, m.blocks]),
+    [[late, 168]],
+  );
+  assert.equal(charts.minerCount, 1);
+});
+
 test("unverified nodes are shown under a stable pseudonym", () => {
   const nodes = new Registry(settings);
 
@@ -292,20 +313,30 @@ test("viewers never see node addresses", () => {
   assert.ok(!JSON.stringify(nodes.all()).includes("8.8.8.8"));
 });
 
+/** settle makes logged-in nodes count toward propagation, as if connected for a while. */
+function settle(nodes: Registry, ...ids: string[]): void {
+  for (const id of ids) nodes.get(id)!.connectedAt = Date.now() - 10 * 60_000;
+}
+
+/** report has node `id` report `reported`, recorded as arriving `delay` ms after `base`. */
+function report(nodes: Registry, id: string, reported: ReportedBlock, base: number, delay: number): void {
+  nodes.addBlock(id, reported);
+
+  const own = nodes.history.search(reported.number)!.propagTimes.find((p) => p.node === id)!;
+
+  own.received = base + delay;
+}
+
 test("propagation stats skip first reports and split delays into speed bands", () => {
   const nodes = new Registry(settings);
   const delays = [0, 40, 60, 80, 120, 900, 1500, 4000, 9000];
+  const ids = delays.map((_, i) => "n" + i);
 
-  delays.forEach((_, i) => login(nodes, "n" + i, "10.1.0." + i, true));
-  nodes.addBlock("n0", block(10));
+  ids.forEach((id, i) => login(nodes, id, "10.1.0." + i, true));
+  settle(nodes, ...ids);
 
-  // Every other node reports the same block after its delay
-  const height = nodes.history.search(10)!;
-
-  delays.slice(1).forEach((delay, i) => {
-    nodes.addBlock("n" + (i + 1), block(10));
-    height.propagTimes.at(-1)!.propagation = delay;
-  });
+  // Every node reports the same block after its delay
+  delays.forEach((delay, i) => report(nodes, ids[i], block(10), 1_000_000, delay));
 
   const { propagation } = nodes.charts();
 
@@ -314,6 +345,52 @@ test("propagation stats skip first reports and split delays into speed bands", (
   assert.equal(propagation.p50, 120);
   assert.equal(propagation.p90, 9000);
   assert.equal(propagation.avg, Math.round((40 + 60 + 80 + 120 + 900 + 1500 + 4000 + 9000) / 8));
+});
+
+test("propagation ignores catching-up nodes and takes off each node's latency", () => {
+  const nodes = new Registry(settings);
+
+  for (const [id, ip] of [["first", "10.2.0.1"], ["far", "10.2.0.2"], ["fresh", "10.2.0.3"], ["syncing", "10.2.0.4"]]) login(nodes, id, ip, true);
+  settle(nodes, "first", "far", "syncing");
+  nodes.get("far")!.stats.latency = 300;
+  nodes.get("syncing")!.stats.syncing = true;
+
+  report(nodes, "first", block(10), 1_000_000, 0);
+  // 400 ms late, 300 of them its own link to the dashboard
+  report(nodes, "far", block(10), 1_000_000, 400);
+  // Just connected, and syncing: catch-up, minutes late, left out
+  report(nodes, "fresh", block(10), 1_000_000, 300_000);
+  report(nodes, "syncing", block(10), 1_000_000, 600_000);
+
+  const { propagation } = nodes.charts();
+
+  assert.equal(propagation.samples, 1);
+  assert.equal(propagation.p50, 100);
+});
+
+test("block spread is how long blocks take to reach most verified nodes", () => {
+  const nodes = new Registry(settings);
+  const ids = ["v1", "v2", "v3", "v4"];
+  const [fast, slow] = ["a", "b"].map((x) => "0x" + x.repeat(40));
+
+  ids.forEach((id, i) => login(nodes, id, "10.3.0." + i, true));
+  settle(nodes, ...ids);
+
+  // Every third block is mined by a badly connected miner and takes 30 s to reach the last node
+  for (let n = 1; n <= 30; n++) {
+    const reported = { ...block(n), miner: n % 3 === 0 ? slow : fast };
+    const last = n % 3 === 0 ? 30_000 : 1_000;
+
+    [0, 200, 400, last].forEach((delay, i) => report(nodes, ids[i], reported, n * 1_000_000, delay));
+  }
+
+  const { spread } = nodes.charts().propagation;
+
+  assert.ok(spread);
+  assert.equal(spread.blocks, 10);
+  // The newest 10 blocks: blocks 21 to 30, three of them slow
+  assert.equal(spread.median, 1_000);
+  assert.deepEqual(spread.slowMiner, { miner: slow, pool: null, median: 30_000, blocks: 10 });
 });
 
 test("fees are optional, sanitized, and carried into the charts", () => {
@@ -520,30 +597,6 @@ test("hashrate is the work of the newest unbroken run over its time span", () =>
   assert.equal(nodes.charts().avgHashrate, 100);
 });
 
-test("the 24 hour difficulty change compares with the block a day earlier", () => {
-  const nodes = new Registry(settings);
-
-  login(nodes, "a", "1.1.1.1", true);
-
-  // One block an hour for 30 hours, difficulty rising 1% a block
-  for (let n = 1; n <= 30; n++) {
-    nodes.addBlock("a", { ...block(n), timestamp: n * 3600, difficulty: String(Math.round(1_000_000 * 1.01 ** n)) });
-  }
-
-  // Block 30 against block 6, exactly 24 h earlier
-  const expected = Math.round(1_000_000 * 1.01 ** 30) / Math.round(1_000_000 * 1.01 ** 6) - 1;
-
-  assert.ok(Math.abs(nodes.charts().difficultyDay! - expected) < 1e-9);
-
-  // Less than a day of history gives no figure
-  const young = new Registry(settings);
-
-  login(young, "a", "1.1.1.1", true);
-  young.addBlock("a", { ...block(1), timestamp: 1000 });
-  young.addBlock("a", { ...block(2), timestamp: 2000 });
-  assert.equal(young.charts().difficultyDay, null);
-});
-
 test("the 7 day difficulty change compares with the block a week earlier", () => {
   const nodes = new Registry(settings);
 
@@ -559,11 +612,71 @@ test("the 7 day difficulty change compares with the block a week earlier", () =>
 
   assert.ok(Math.abs(nodes.charts().difficultyWeek! - expected) < 1e-9);
 
-  // Less than a week of history gives no figure, while a day is there
+  // Less than a week of history gives no figure
   const young = new Registry(settings);
 
   login(young, "a", "1.1.1.1", true);
   for (let n = 1; n <= 30; n++) young.addBlock("a", { ...block(n), timestamp: n * 3600 });
   assert.equal(young.charts().difficultyWeek, null);
-  assert.notEqual(young.charts().difficultyDay, null);
+});
+
+/** linked builds block `n` on chain `tag`, whose parent is on chain `parentTag`; tags are hex digits. */
+function linked(n: number, tag: string, parentTag = tag): ReportedBlock {
+  const reported = cleanBlock({
+    number: n,
+    hash: "0x" + (tag + n.toString(16)).padStart(64, "0"),
+    parentHash: "0x" + (parentTag + (n - 1).toString(16)).padStart(64, "0"),
+    difficulty: "1000",
+    totalDifficulty: String(n * 1000),
+    timestamp: n * 600,
+  });
+
+  if (!reported) throw new Error(`invalid test block ${n}`);
+
+  return reported;
+}
+
+test("a reorganization reports how many blocks it replaced", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+  for (let n = 1; n <= 10; n++) nodes.addBlock("a", linked(n, "a"));
+
+  // The node switches to a chain that parted after block 7, reporting only its new head
+  nodes.addBlock("a", linked(11, "b"));
+
+  // Until the new chain's blocks are known, at least one block was replaced
+  assert.equal(nodes.charts().health.lastReorg?.depth, 1);
+
+  // The node is asked for its recent blocks, and answers from its new chain
+  const request = nodes.nextHistoryRequest("a");
+
+  assert.ok(request);
+  assert.equal(request.max, 10);
+  nodes.addHistory("a", [linked(10, "b"), linked(9, "b"), linked(8, "b", "a"), ...[7, 6, 5, 4, 3, 2, 1].map((n) => linked(n, "a"))]);
+
+  // Blocks 8 to 10 were replaced
+  assert.equal(nodes.charts().health.lastReorg?.depth, 3);
+});
+
+test("verified nodes on different chains are a split, a block race is not", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+  login(nodes, "b", "2.2.2.2", true);
+
+  for (let n = 1; n <= 5; n++) {
+    nodes.addBlock("a", linked(n, "a"));
+    nodes.addBlock("b", linked(n, "a"));
+  }
+
+  // Each finds a different block 6: a race, settled by the next block
+  nodes.addBlock("a", linked(6, "a"));
+  nodes.addBlock("b", linked(6, "b", "a"));
+  assert.equal(nodes.charts().health.split, null);
+
+  // Each builds on its own: two chains that part after block 5
+  nodes.addBlock("a", linked(7, "a"));
+  nodes.addBlock("b", linked(7, "b"));
+  assert.deepEqual(nodes.charts().health.split, { height: 5, chains: 2, nodes: 2 });
 });

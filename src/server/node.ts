@@ -81,6 +81,8 @@ export class NodeRecord {
   history = new Array<number>(HISTORY_BINS).fill(-1);
   /** Connection time accounting behind the uptime figure. */
   uptime = { started: 0, up: 0, down: 0, lastStatus: false, lastUpdate: 0 };
+  /** When the current connection logged in: a node's first blocks after (re)connecting are catch-up, not propagation. */
+  connectedAt = 0;
   /** Until when a restored node may reconnect without the wait counting as downtime. */
   private graceUntil = 0;
 
@@ -140,7 +142,8 @@ export class NodeRecord {
     return true;
   }
 
-  login(login: Login): void {
+  login(login: Login, now = Date.now()): void {
+    this.connectedAt = now;
     this.info = login.info;
     this.ip = login.ip;
     this.geo = login.geo;
