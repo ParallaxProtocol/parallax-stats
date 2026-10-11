@@ -1,10 +1,12 @@
 "use client";
 
+import type { ReactNode } from "react";
+import { stallLevel } from "@/lib/alert-levels";
 import { formatClock, formatInt, gradeElapsed, survival, type Grade } from "@/lib/format";
 import { TARGET_BLOCK_TIME } from "@/lib/protocol";
 import { Indicator } from "./indicator";
 import { useServerNow } from "./live/provider";
-import { Label } from "./plate";
+import { Label, Plate } from "./plate";
 
 const VERDICT: Record<Grade, string> = {
   good: "On schedule",
@@ -30,6 +32,21 @@ const TICKS = [
  * waited since, against the 10 minute target. Intervals are exponential,
  * so it also says how often a wait runs this long.
  */
+/**
+ * ClockPlate is the best block's plate, tinted while no block has come for
+ * longer than the stall threshold. It ticks on its own, so the rest of the
+ * page does not re-render every second.
+ */
+export function ClockPlate({ foundAt, className, children }: { foundAt: number; className?: string; children: ReactNode }) {
+  const now = useServerNow();
+
+  return (
+    <Plate tone={stallLevel(foundAt, now)} className={className}>
+      {children}
+    </Plate>
+  );
+}
+
 export function BlockClock({ bestBlock, foundAt }: { bestBlock: number; foundAt: number }) {
   const now = useServerNow();
   // Miners' clocks may run a few minutes ahead of ours

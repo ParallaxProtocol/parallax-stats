@@ -6,12 +6,19 @@ websocket when started with `--prlstats`, and every viewer sees them update
 live:
 
 - **Block clock:** the best block and how long since it was found, against
-  the 10 minute target, with a warning when no block has come for 2 hours
+  the 10 minute target
+- **Alerts:** verified nodes on different chains, no block for 2 hours,
+  chain reorganizations and how many blocks deep, one miner holding most of
+  the last week's blocks, blocks slow to reach the network, no verified node
+  online, and a new client release that nodes have not caught up with
+- **New blocks:** a toast with who mined each block, how long it took, its
+  transactions and fees, and an optional chime (with its own sound for
+  reorganizations)
 - **Network figures:** average block time, hashrate, difficulty (also in
   the units pools use), active nodes in sync, the recommended fee, peer
   latency, uptime
 - **Charts:** block times, propagation, difficulty with the next block's
-  exact difficulty and its change over a day and a week, transactions,
+  exact difficulty and its change over a week, transactions,
   block fullness and fees paid to miners
 - **Supply:** the next halving and coins issued against the 21 million cap
 - **Decentralization:** who found recent blocks, graded by how few miners
@@ -51,7 +58,9 @@ pnpm simulate      # in another: 8 nodes against localhost:3000
 The simulator uses the secrets from your `.env` files and builds a chain
 that follows mainnet's difficulty rules. Add `TRUSTED_PROXIES=127.0.0.1,::1`
 to the `.env` file too, so the simulated nodes get map locations and are
-not all counted as one address.
+not all counted as one address. By default one simulated miner finds 60% of
+blocks, so the mining majority alert shows; `SIM_MAJORITY=0` spreads blocks
+out, and `SIM_BLOCK_MS` sets the block interval (default 20 s).
 
 ## Adding a node
 
@@ -169,7 +178,7 @@ unavailable and the rest of the dashboard carries on.
   none online, two nodes), so a node reporting made-up blocks cannot
   inflate them.
 - **Decentralization** is graded by the fewest miners that together found
-  most of the last 40 blocks, which is how many would have to collude to
+  most of the last 7 days of blocks, which is how many would have to collude to
   rewrite the chain: 4 or more is healthy, 3 fair, 2 concentrated and 1
   critical.
 - **Uptime** is the average of verified nodes' uptimes, the share of time
@@ -178,6 +187,21 @@ unavailable and the rest of the dashboard carries on.
 - **Recommended fee** is the RPC endpoint's `eth_gasPrice`. Parallax has
   no base fee, so the gas price is the whole fee; a plain transfer uses
   21,000 gas.
+- **Propagation** is how long after the first report each node reported a
+  block, less the node's own one-way latency to the dashboard. Only nodes
+  that are synced and have been connected for 2 minutes count, so a node
+  catching up after a restart or reconnect does not look like a slow
+  network. The alert uses how long recent blocks took to reach 90% of the
+  verified nodes: amber over 15 s, red over 60 s, or amber naming a miner
+  whose blocks are consistently that slow while everyone else's spread in
+  seconds.
+- **Reorg depth** is how many blocks a node had that its switch replaced,
+  down to the last block both chains share. The server asks the switching
+  node for its new chain's recent blocks to find that point; 3 or more is
+  shown as a deep reorganization.
+- **Chain splits** are verified nodes on different chains, each at least two
+  blocks past where they part. Chains that part only at the newest block
+  are an ordinary block race.
 - **Possible stall** shows after 2 hours without a block. Block intervals
   vary with luck: an hour happens, two hours is a one-in-160,000 wait at
   steady hashrate.

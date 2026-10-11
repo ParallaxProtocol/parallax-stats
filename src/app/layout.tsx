@@ -36,9 +36,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       </head>
       <body className="min-h-dvh antialiased">
         {children}
-        {/* The site-wide grain texture */}
+        {/* The site-wide grain texture. Left out on touch screens: a full-screen
+            SVG filter is redrawn whenever a phone's address bar resizes the
+            viewport, which made scrolling lag, and at 2% it is barely seen */}
         <svg
-          className="pointer-events-none fixed inset-0 z-[100] h-full w-full opacity-[0.02] light:opacity-[0.015]"
+          className="pointer-events-none fixed inset-0 z-[100] h-full w-full opacity-[0.02] light:opacity-[0.015] [@media(pointer:coarse)]:hidden"
           aria-hidden="true"
         >
           <filter id="grain">

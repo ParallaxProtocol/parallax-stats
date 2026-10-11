@@ -4,6 +4,8 @@ import type { ReactNode } from "react";
 import { formatAgo, formatInt } from "@/lib/format";
 import type { ChainHealth, PublicNode } from "@/lib/protocol";
 import type { Release } from "@/lib/releases";
+import { chainLevel } from "@/lib/alert-levels";
+import { compareParts, parseVersion } from "@/lib/version";
 import { useServerNow } from "./live/provider";
 import { Label, Plate } from "./plate";
 
@@ -35,7 +37,13 @@ function StaleBlocks({ health }: { health: ChainHealth }) {
   const period = now - since >= 23.5 * 3_600_000 ? "in the last 24 hours" : `since the dashboard started ${formatAgo(since, now)}`;
 
   return (
-    <Plate as="section" aria-labelledby="stale-title" className="flex min-w-0 flex-col gap-4 p-5">
+    <Plate
+      as="section"
+      id="stale-blocks"
+      aria-labelledby="stale-title"
+      tone={chainLevel(health, now)}
+      className="flex min-w-0 scroll-mt-4 flex-col gap-4 p-5"
+    >
       <Heading id="stale-title" title="Stale blocks" readout={window ? `last ${formatInt(window)} blocks` : undefined} />
 
       <p className="flex flex-wrap items-baseline gap-x-2">
@@ -92,21 +100,6 @@ interface Version {
   label: string;
   parts: number[] | null;
   count: number;
-}
-
-/** parseVersion reads the release out of a client string like Parallax/v2.1.0-stable-abc/linux-amd64/go1.27. */
-function parseVersion(client: string): { label: string; parts: number[] | null } {
-  const match = /\/v?(\d+)\.(\d+)\.(\d+)/.exec(client);
-
-  return match ? { label: `v${match[1]}.${match[2]}.${match[3]}`, parts: match.slice(1, 4).map(Number) } : { label: "unknown", parts: null };
-}
-
-function compareParts(a: number[] | null, b: number[] | null): number {
-  if (!a || !b) return a ? 1 : b ? -1 : 0;
-
-  for (let i = 0; i < 3; i++) if (a[i] !== b[i]) return a[i] - b[i];
-
-  return 0;
 }
 
 /**
@@ -219,7 +212,7 @@ export function NetworkHealth({
   return (
     <div className="grid gap-4 lg:grid-cols-2">
       <StaleBlocks
-        health={health ?? { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null }}
+        health={health ?? { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null, split: null }}
       />
       <ClientVersions nodes={nodes} latestRelease={latestRelease} />
     </div>

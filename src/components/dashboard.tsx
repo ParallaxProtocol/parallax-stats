@@ -7,7 +7,8 @@ import type { PublicNode, Snapshot } from "@/lib/protocol";
 import type { Release } from "@/lib/releases";
 import type { WorldMap } from "@/lib/world";
 import { Alerts } from "./alerts";
-import { BlockClock } from "./block-clock";
+import { BlockClock, ClockPlate } from "./block-clock";
+import { BlockToasts } from "./block-toast";
 import { ChartGrid } from "./charts";
 import { Figures } from "./figures";
 import { LiveProvider, useLive } from "./live/provider";
@@ -15,7 +16,6 @@ import { Monetary } from "./monetary";
 import { NetworkHealth } from "./health";
 import { NodeMap } from "./node-map";
 import { NodeTable } from "./node-table";
-import { Plate } from "./plate";
 
 export function Dashboard({
   initial,
@@ -44,7 +44,7 @@ function Live({
   publicSecret: string;
   latestRelease: Release | null;
 }) {
-  const { nodes, charts, gasPrice, connection, latency } = useLive();
+  const { nodes, charts, gasPrice, pools, connection, latency } = useLive();
   const summary = useMemo(() => summarize(nodes), [nodes]);
   const mainnet = useMemo(() => onMainnet(nodes), [nodes]);
   const best = summary.bestStats?.block ?? null;
@@ -53,11 +53,17 @@ function Live({
 
   return (
     <>
-      <Alerts foundAt={(summary.bestStats?.block.timestamp ?? 0) * 1000} health={charts?.health ?? null} />
-      <Plate className="flex flex-col gap-6 p-6 sm:p-8">
+      <Alerts
+        bestBlock={summary.bestBlock}
+        foundAt={(summary.bestStats?.block.timestamp ?? 0) * 1000}
+        charts={charts}
+        nodes={nodes}
+        latestRelease={latestRelease}
+      />
+      <ClockPlate foundAt={(summary.bestStats?.block.timestamp ?? 0) * 1000} className="flex flex-col gap-6 p-6 sm:p-8">
         <BlockClock bestBlock={summary.bestBlock} foundAt={(summary.bestStats?.block.timestamp ?? 0) * 1000} />
         <ConnectionStatus connection={connection} latency={latency} />
-      </Plate>
+      </ClockPlate>
       <Figures summary={summary} charts={charts} mining={mining} gasPrice={gasPrice} />
       <div className="grid gap-4 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
         <ChartGrid charts={charts} mainnetBest={mainnetBest} />
@@ -66,6 +72,7 @@ function Live({
       <Monetary bestBlock={summary.bestBlock} charts={charts} />
       <NetworkHealth health={charts?.health ?? null} nodes={nodes} latestRelease={latestRelease} />
       <NodeTable nodes={nodes} bestBlock={summary.bestBlock} publicSecret={publicSecret} />
+      <BlockToasts best={best} pools={pools} live={connection === "live"} />
     </>
   );
 }

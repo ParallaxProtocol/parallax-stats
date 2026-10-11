@@ -147,11 +147,13 @@
   pointer-events: none;
   opacity: 0;
   transition: opacity 300ms ease;
+  /* The brand teal, or a tinted plate's warning color */
+  --bracket: var(--plate-accent, var(--brand));
   background-image:
-    linear-gradient(var(--brand), var(--brand)), linear-gradient(var(--brand), var(--brand)),
-    linear-gradient(var(--brand), var(--brand)), linear-gradient(var(--brand), var(--brand)),
-    linear-gradient(var(--brand), var(--brand)), linear-gradient(var(--brand), var(--brand)),
-    linear-gradient(var(--brand), var(--brand)), linear-gradient(var(--brand), var(--brand));
+    linear-gradient(var(--bracket), var(--bracket)), linear-gradient(var(--bracket), var(--bracket)),
+    linear-gradient(var(--bracket), var(--bracket)), linear-gradient(var(--bracket), var(--bracket)),
+    linear-gradient(var(--bracket), var(--bracket)), linear-gradient(var(--bracket), var(--bracket)),
+    linear-gradient(var(--bracket), var(--bracket)), linear-gradient(var(--bracket), var(--bracket));
   background-repeat: no-repeat;
   background-size:
     10px 1px, 1px 10px,
@@ -189,6 +191,41 @@
 
 .modal-dialog[open]::backdrop {
   animation: backdrop-in 0.25s ease;
+}
+
+/* New block toasts slide in, count down along their bottom edge, and fade out */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(16px) scale(0.97);
+  }
+}
+
+@keyframes toast-leave {
+  to {
+    opacity: 0;
+    transform: translateX(16px) scale(0.97);
+  }
+}
+
+@keyframes toast-countdown {
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.block-toast {
+  animation: toast-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.block-toast-leave {
+  animation: toast-leave 0.2s ease-in forwards;
+}
+
+.block-toast-countdown {
+  animation-name: toast-countdown;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
 }
 
 html:has(dialog[open]) {

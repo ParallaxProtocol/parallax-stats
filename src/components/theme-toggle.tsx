@@ -37,7 +37,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={() => setLight(!light)}
-      className="inline-flex size-9 items-center justify-center rounded-md border border-border hover:bg-accent/50"
+      className="inline-flex size-8 items-center justify-center rounded-md border border-border hover:bg-accent/50 sm:size-9"
       aria-label={light ? "Switch to dark theme" : "Switch to light theme"}
     >
       <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>

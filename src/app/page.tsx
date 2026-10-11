@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { connection } from "next/server";
 import { Dashboard } from "@/components/dashboard";
 import { About } from "@/components/about";
+import { SoundToggle } from "@/components/block-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getLatestRelease } from "@/lib/releases";
 import { getWorld } from "@/lib/world";
@@ -48,17 +49,18 @@ export async function generateMetadata(): Promise<Metadata> {
 export default function Page() {
   return (
     <main className="mx-auto flex max-w-[1800px] flex-col gap-4 px-4 pt-4 pb-10 sm:px-6">
-      <header className="flex items-center justify-between gap-4 py-2">
-        <h1 className="flex items-center gap-3">
-          <a href="https://parallaxprotocol.org" className="flex items-center gap-3">
-            <Image src="/logo.svg" width={200} height={200} alt="" priority className="size-8 w-auto md:size-10" />
-            <span className="font-sans text-lg font-semibold">Parallax</span>
+      <header className="flex items-center justify-between gap-3 py-2">
+        <h1 className="flex min-w-0 items-center gap-2 whitespace-nowrap sm:gap-3">
+          <a href="https://parallaxprotocol.org" className="flex items-center gap-2 sm:gap-3">
+            <Image src="/logo.svg" width={200} height={200} alt="" priority className="size-7 w-auto sm:size-8 md:size-10" />
+            <span className="font-sans text-base font-semibold sm:text-lg">Parallax</span>
           </a>
           <span aria-hidden className="h-5 w-px bg-border" />
-          <span className="font-sans text-lg font-normal text-muted-foreground">Network Status</span>
+          <span className="font-sans text-base font-semibold text-muted-foreground sm:text-lg">Network Status</span>
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <About />
+          <SoundToggle />
           <ThemeToggle />
         </div>
       </header>

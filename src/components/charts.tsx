@@ -14,6 +14,7 @@ import {
   type Grade,
 } from "@/lib/format";
 import { TARGET_BLOCK_TIME, type Block, type Charts, type MinerCount, type PropagationStats } from "@/lib/protocol";
+import { majorityLevel, spreadLevel, type Level } from "@/lib/alert-levels";
 import { Indicator } from "./indicator";
 import { Label, Plate } from "./plate";
 import { useSize } from "./use-size";
@@ -34,16 +35,19 @@ function Tile({
   readout,
   value,
   qualifier,
+  tone,
   children,
 }: {
   title: string;
   readout?: ReactNode;
   value?: ReactNode;
   qualifier?: ReactNode;
+  /** Tints the tile while a warning about it applies. */
+  tone?: Level | null;
   children: ReactNode;
 }) {
   return (
-    <Plate as="figure" className="flex min-w-0 flex-col gap-3 p-5">
+    <Plate as="figure" tone={tone} className="flex min-w-0 flex-col gap-3 p-5">
       <figcaption className="flex items-baseline justify-between gap-3">
         <Label className="whitespace-nowrap">{title}</Label>
         <span className="min-w-0 truncate text-xs text-muted-foreground tabular-nums" aria-live="polite">
@@ -279,23 +283,14 @@ function signed(change: number): string {
 /**
  * DifficultyFooter shows where difficulty is heading: the exact difficulty
  * of the block being mined (mainnet ASERT, fixed by the parent alone), and
- * the change over the last day and week.
+ * the change over the last week.
  */
-function DifficultyFooter({
-  best,
-  day: reportedDay,
-  week: reportedWeek,
-}: {
-  best: Block | null;
-  day: number | null | undefined;
-  week: number | null | undefined;
-}) {
+function DifficultyFooter({ best, week: reportedWeek }: { best: Block | null; week: number | null | undefined }) {
   const next = best ? miningDifficulty(best) : null;
-  // A server from before these figures sends none
-  const day = typeof reportedDay === "number" ? reportedDay : null;
+  // A server from before this figure sends none
   const week = typeof reportedWeek === "number" ? reportedWeek : null;
 
-  if (next === null && day === null && week === null) return null;
+  if (next === null && week === null) return null;
 
   return (
     <dl className="grid grid-cols-2 gap-3 border-t border-border pt-3 text-xs">
@@ -321,21 +316,12 @@ function DifficultyFooter({
           </dd>
         </div>
       )}
-      {(day !== null || week !== null) && (
-        <div className="flex flex-col gap-2">
-          {[
-            ["Last 24 h", day, "The latest block's difficulty against the block mined 24 hours earlier."],
-            ["Last 7 days", week, "The latest block's difficulty against the block mined 7 days earlier."],
-          ].map(([label, change, hint]) =>
-            change === null ? null : (
-              <div key={label as string} className="flex flex-col gap-0.5">
-                <dt className={footLabel} title={hint as string}>
-                  {label as string}
-                </dt>
-                <dd className="font-mono text-sm tabular-nums">{signed(change as number)}</dd>
-              </div>
-            ),
-          )}
+      {week !== null && (
+        <div className="flex flex-col gap-1">
+          <dt className={footLabel} title="The latest block's difficulty against the block mined 7 days earlier.">
+            Last 7 days
+          </dt>
+          <dd className="font-mono text-sm tabular-nums">{signed(week)}</dd>
         </div>
       )}
     </dl>
@@ -374,7 +360,7 @@ function Difficulty({ c, block, best }: { c: Charts; block: (i: number) => strin
           label={`Difficulty of the last ${values.length} blocks, from ${formatDifficulty(Math.min(...values))} to ${formatDifficulty(Math.max(...values))}`}
         />
       )}
-      <DifficultyFooter best={best} day={c.difficultyDay} week={c.difficultyWeek} />
+      <DifficultyFooter best={best} week={c.difficultyWeek} />
     </Tile>
   );
 }
@@ -474,6 +460,7 @@ function Propagation({ stats }: { stats: PropagationStats }) {
 
   return (
     <Tile
+      tone={spreadLevel(stats)}
       title="Propagation"
       readout={samples ? `${formatInt(samples)} reports` : undefined}
       value={samples ? share(bands[0], samples) : undefined}
@@ -640,6 +627,12 @@ function gradeDecentralization(majority: number | null): { grade: Grade; verdict
  */
 const SLICE_STRENGTH = [100, 68, 46, 33, 25, 19, 15];
 
+/** The note to miners: amber while two miners hold a majority, red with its tile when one does. */
+const NOTE_TONE: Record<Level, { box: string; icon: string }> = {
+  warn: { box: "border-warn/40 bg-warn/10", icon: "text-warn" },
+  critical: { box: "border-critical/40 bg-critical/10", icon: "text-critical" },
+};
+
 function sliceColor(rank: number | null): string {
   return rank === null
     ? "color-mix(in oklch, var(--muted-foreground) 45%, var(--card))"
@@ -699,10 +692,15 @@ function Donut({ slices, total, active, onActive }: { slices: Slice[]; total: nu
  */
 export function Decentralization({ charts }: { charts: Charts | null }) {
   const c = charts ?? EMPTY;
-  const total = c.height.length;
+  // A server from before the weekly window sends no count: its miners cover the charted blocks
+  const total = typeof c.minerBlocks === "number" ? c.minerBlocks : c.height.length;
+  // Allow for the week's first block landing a little after the cutoff
+  const fullWeek = c.minerSpan >= 7 * 86_400 - 3_600;
   const majority = majorityHolders(c.miners, total);
   const judged = total >= DECENTRALIZATION_MIN_BLOCKS;
   const { grade, verdict } = gradeDecentralization(majority);
+  // The tile, and its note to miners, take the warning's color while one miner holds a majority
+  const tone = majorityLevel(charts);
   const [active, setActive] = useState<string | null>(null);
 
   const shown = c.miners.slice(0, SHOWN_MINERS);
@@ -730,8 +728,9 @@ export function Decentralization({ charts }: { charts: Charts | null }) {
 
   return (
     <Tile
+      tone={tone}
       title="Decentralization"
-      readout={total ? `who found the last ${total} blocks` : undefined}
+      readout={total ? (fullWeek ? `${formatInt(total)} blocks in the last 7 days` : `the last ${formatInt(total)} blocks`) : undefined}
       value={
         total === 0 ? undefined : judged ? (
           <span className="inline-flex items-center gap-2.5">
@@ -812,8 +811,8 @@ export function Decentralization({ charts }: { charts: Charts | null }) {
           </div>
 
           {judged && majority !== null && majority <= 2 && (
-            <p role="note" className="flex gap-2 border border-warn/40 bg-warn/10 px-3 py-2 text-xs">
-              <svg viewBox="0 0 16 16" className="mt-px size-3.5 shrink-0 text-warn" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+            <p role="note" className={`flex gap-2 border px-3 py-2 text-xs ${NOTE_TONE[tone ?? "warn"].box}`}>
+              <svg viewBox="0 0 16 16" className={`mt-px size-3.5 shrink-0 ${NOTE_TONE[tone ?? "warn"].icon}`} fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
                 <path d="M8 2 14.5 13.5h-13Z" strokeLinejoin="round" />
                 <path d="M8 6.5v3M8 11.6v.1" strokeLinecap="round" />
               </svg>
@@ -848,7 +847,6 @@ const EMPTY: Charts = {
   blocktime: [],
   avgBlocktime: 0,
   difficulty: [],
-  difficultyDay: null,
   difficultyWeek: null,
   transactions: [],
   gasSpending: [],
@@ -856,8 +854,10 @@ const EMPTY: Charts = {
   fees: [],
   miners: [],
   minerCount: 0,
+  minerBlocks: 0,
+  minerSpan: 0,
   propagation: { samples: 0, avg: 0, p50: 0, p90: 0, p99: 0, bands: [0, 0, 0, 0] },
-  health: { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null },
+  health: { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null, split: null },
   avgHashrate: 0,
 };
 

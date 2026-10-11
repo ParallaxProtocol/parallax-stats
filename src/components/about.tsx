@@ -29,7 +29,7 @@ export function About() {
       <button
         type="button"
         onClick={() => dialog.current?.showModal()}
-        className="inline-flex size-9 items-center justify-center rounded-md border border-border hover:bg-accent/50"
+        className="inline-flex size-8 items-center justify-center rounded-md border border-border hover:bg-accent/50 sm:size-9"
         aria-label="About this dashboard"
         aria-haspopup="dialog"
       >
