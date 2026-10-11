@@ -892,8 +892,8 @@ export function ChartGrid({ charts, mainnetBest }: { charts: Charts | null; main
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
       <BlockTime c={c} block={block} />
-      <Propagation stats={c.propagation} />
       <Difficulty c={c} block={block} best={mainnetBest} />
+      <Propagation stats={c.propagation} />
       <Transactions c={c} block={block} />
       <Fullness c={c} block={block} />
       <Fees c={c} block={block} />
