@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { createContext, use, useEffect, useState, type ReactNode, type RefObject } from "react";
 import { blockReward, WEI_PER_LAX } from "@/lib/emission";
 import { formatBlockTime, formatCompact, formatInt, formatMs, gradeAvgBlockTime, shortHash } from "@/lib/format";
 import { HISTORY_BINS, TARGET_BLOCK_TIME, TREND_SLICE_S, type Charts, type MinerCount, type PropagationStats } from "@/lib/protocol";
@@ -40,8 +40,13 @@ export function Tile({
   className?: string;
   children: ReactNode;
 }) {
+  const block = use(BestBlock);
+  // The block on first render: a tile only flashes for blocks that arrive while it is shown
+  const [first] = useState(block);
+
   return (
     <Plate as="figure" tone={tone} className={`flex min-w-0 flex-col gap-3 p-5 ${className}`}>
+      {block !== first && <span key={block} aria-hidden className="tile-flash" />}
       <figcaption className="flex items-baseline justify-between gap-3">
         <Label className="whitespace-nowrap">{title}</Label>
         <span className="min-w-0 truncate text-xs text-muted-foreground tabular-nums" aria-live="polite">
@@ -60,6 +65,9 @@ export function Tile({
     </Plate>
   );
 }
+
+/** BestBlock carries the best block to every tile, so each can flash when a new one lands. */
+export const BestBlock = createContext(0);
 
 export function Waiting({ children = "Waiting for blocks" }: { children?: ReactNode }) {
   return <p className="flex flex-1 items-center text-sm text-muted-foreground">{children}</p>;
@@ -80,6 +88,25 @@ interface PlotProps {
   label: string;
 }
 
+/** useSeen turns true once the element first scrolls into view, and stays true. */
+export function useSeen(ref: RefObject<Element | null>): boolean {
+  const [seen, setSeen] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+
+    if (!el || seen) return;
+
+    const observer = new IntersectionObserver(([entry]) => entry.isIntersecting && setSeen(true), { rootMargin: "0px 0px -10% 0px" });
+
+    observer.observe(el);
+
+    return () => observer.disconnect();
+  }, [ref, seen]);
+
+  return seen;
+}
+
 /** Plot sizes an SVG to fill the space left in its tile and gives every slot a hover target. */
 function Plot({
   values,
@@ -92,6 +119,7 @@ function Plot({
   children: (size: { width: number; height: number }, slot: number) => ReactNode;
 }) {
   const [ref, size] = useSize<HTMLDivElement>({ width: 320, height: MIN_PLOT });
+  const seen = useSeen(ref);
   const slot = values.length > 0 ? size.width / values.length : size.width;
 
   return (
@@ -99,7 +127,7 @@ function Plot({
       <svg
         viewBox={`0 0 ${size.width} ${size.height}`}
         preserveAspectRatio="none"
-        className="absolute inset-0 block size-full overflow-visible"
+        className={`absolute inset-0 block size-full overflow-visible ${seen ? "chart-reveal" : "chart-pending"}`}
         role="img"
         aria-label={label}
         onPointerLeave={() => onActive(null)}
@@ -146,6 +174,10 @@ function Bars({
 
         return (
           <>
+            {/* A baseline, so a block with none reads as zero rather than a gap */}
+            {!track && (
+              <line x1={0} x2={width} y1={height - 0.5} y2={height - 0.5} className="stroke-border" strokeWidth={1} vectorEffect="non-scaling-stroke" />
+            )}
             {values.map((v, i) => {
               const yTop = y(v);
 
@@ -197,11 +229,18 @@ export function TrendLine({
   active,
   onActive,
   label,
-}: Omit<PlotProps, "values"> & { values: (number | null)[] }) {
+  format,
+}: Omit<PlotProps, "values"> & {
+  values: (number | null)[];
+  /** Labels the scale's highest and lowest values at the plot's edge. */
+  format?: (value: number) => string;
+}) {
   const known = values.filter((v): v is number => v !== null);
   const min = Math.min(...known);
   const max = Math.max(...known);
   const pad = (max - min) * 0.15 || Math.abs(max) * 0.01 || 1;
+  // A single reading makes no line yet: it is drawn level, dashed, until a second arrives
+  const sparse = known.length < 2;
   // Runs of consecutive known values, each drawn as its own line
   const runs: number[][] = [];
 
@@ -214,50 +253,81 @@ export function TrendLine({
   const latest = runs.at(-1)?.at(-1) ?? null;
 
   return (
-    <Plot values={values} onActive={onActive} label={label}>
-      {({ height }, slot) => {
-        const x = (i: number) => i * slot + slot / 2;
-        const y = (v: number) => 6 + (1 - (v - (min - pad)) / (max + pad - (min - pad))) * (height - 12);
-        const focus = active !== null && values[active] !== null ? active : active === null ? latest : null;
+    <div className="relative flex min-h-0 flex-1 flex-col">
+      <Plot values={values} onActive={onActive} label={label}>
+        {({ width, height }, slot) => {
+          const x = (i: number) => i * slot + slot / 2;
+          const y = (v: number) => 6 + (1 - (v - (min - pad)) / (max + pad - (min - pad))) * (height - 12);
+          const focus = active !== null && values[active] !== null ? active : active === null ? latest : null;
 
-        return (
-          <>
-            {runs.map((run) => {
-              const points = run.map((i) => `${x(i)},${y(values[i]!)}`).join(" ");
+          return (
+            <>
+              {sparse && latest !== null && (
+                <line
+                  x1={0}
+                  x2={width}
+                  y1={y(values[latest]!)}
+                  y2={y(values[latest]!)}
+                  className="stroke-brand-mark opacity-40"
+                  strokeWidth={1.5}
+                  strokeDasharray="3 5"
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+              {!sparse &&
+                runs.map((run) => {
+                  const points = run.map((i) => `${x(i)},${y(values[i]!)}`).join(" ");
 
-              return (
-                <g key={run[0]}>
-                  <polygon points={`${x(run[0])},${height} ${points} ${x(run.at(-1)!)},${height}`} className="fill-brand-mark opacity-10" />
-                  <polyline
-                    points={points}
-                    fill="none"
-                    className="stroke-brand-mark"
-                    strokeWidth={2}
-                    strokeLinejoin="round"
-                    strokeLinecap="round"
-                    vectorEffect="non-scaling-stroke"
-                  />
+                  return (
+                    <g key={run[0]}>
+                      <polygon points={`${x(run[0])},${height} ${points} ${x(run.at(-1)!)},${height}`} className="fill-brand-mark opacity-10" />
+                      <polyline
+                        points={points}
+                        fill="none"
+                        className="stroke-brand-mark"
+                        strokeWidth={2}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                      />
+                    </g>
+                  );
+                })}
+              {active !== null && (
+                <line
+                  x1={x(active)}
+                  x2={x(active)}
+                  y1={0}
+                  y2={height}
+                  className="stroke-muted-foreground"
+                  strokeWidth={1}
+                  vectorEffect="non-scaling-stroke"
+                />
+              )}
+              {focus !== null && (
+                <circle cx={x(focus)} cy={y(values[focus]!)} r={4} className="fill-brand-mark stroke-surface-elevated" strokeWidth={2} />
+              )}
+              {!sparse && format && max > min && (
+                // The scale's range beside its highest and lowest points, so a small swing and a large one never look alike
+                <g aria-hidden className="pointer-events-none fill-muted-foreground font-mono text-[10px] tabular-nums">
+                  <text x={0} y={y(max)} dy={-6}>
+                    {format(max)}
+                  </text>
+                  <text x={0} y={y(min)} dy={13}>
+                    {format(min)}
+                  </text>
                 </g>
-              );
-            })}
-            {active !== null && (
-              <line
-                x1={x(active)}
-                x2={x(active)}
-                y1={0}
-                y2={height}
-                className="stroke-muted-foreground"
-                strokeWidth={1}
-                vectorEffect="non-scaling-stroke"
-              />
-            )}
-            {focus !== null && (
-              <circle cx={x(focus)} cy={y(values[focus]!)} r={4} className="fill-brand-mark stroke-surface-elevated" strokeWidth={2} />
-            )}
-          </>
-        );
-      }}
-    </Plot>
+              )}
+            </>
+          );
+        }}
+      </Plot>
+      {sparse && (
+        <span className="pointer-events-none absolute bottom-0 left-0 font-mono text-[10px] text-muted-foreground">
+          The trend fills in as readings arrive
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -365,6 +435,7 @@ export function BlockTime({ c, block }: { c: Charts; block: (i: number) => strin
             values={trend}
             active={active}
             onActive={setActive}
+            format={formatBlockTime}
             label={`Mean block time over the last 7 days, in ${TREND_SLICE_S / 3600} hour slices, from ${formatBlockTime(Math.min(...knownTrend))} to ${formatBlockTime(Math.max(...knownTrend))}`}
           />
         )
@@ -629,10 +700,23 @@ const SHOWN_MINERS = 7;
 const SLICE_STRENGTH = [100, 68, 46, 33, 25, 19, 15];
 
 /** The note to miners: amber while two miners hold a majority, red with its tile when one does. */
-const NOTE_TONE: Record<Level, { box: string; icon: string }> = {
-  warn: { box: "border-warn/40 bg-warn/10", icon: "text-warn" },
-  critical: { box: "border-critical/40 bg-critical/10", icon: "text-critical" },
+const NOTE_TONE: Record<Level, string> = {
+  warn: "text-warn-ink",
+  critical: "text-critical-ink",
 };
+
+/** MinerAddress shortens an address to its ends, short enough for the list never to cut it again. */
+function MinerAddress({ address, muted }: { address: string; muted: boolean }) {
+  const hex = address.startsWith("0x") ? address.slice(2) : address;
+
+  return (
+    <span className={`flex min-w-0 font-mono ${muted ? "text-muted-foreground" : ""}`} title={address}>
+      <span className="whitespace-nowrap">
+        {hex.slice(0, 4)}…{hex.slice(-4)}
+      </span>
+    </span>
+  );
+}
 
 function sliceColor(rank: number | null): string {
   return rank === null
@@ -731,7 +815,7 @@ export function Decentralization({ charts }: { charts: Charts | null }) {
     <Tile
       tone={tone}
       title="Decentralization"
-      readout={total ? (fullWeek ? `${formatInt(total)} blocks in the last 7 days` : `the last ${formatInt(total)} blocks`) : undefined}
+      readout={total ? (fullWeek ? "last 7 days" : `last ${formatInt(total)} blocks`) : undefined}
       value={
         total === 0 ? undefined : judged ? (
           <span className="inline-flex items-center gap-2.5">
@@ -746,10 +830,10 @@ export function Decentralization({ charts }: { charts: Charts | null }) {
         total === 0
           ? undefined
           : majority === null
-            ? `no ${Math.min(c.miners.length, 10)} miners hold a majority`
+            ? `no ${Math.min(c.miners.length, 10)} miners hold a majority of ${formatInt(total)} blocks`
             : majority === 1
-              ? "one miner holds a majority"
-              : `${majority} miners together hold a majority`
+              ? `one miner holds a majority of ${formatInt(total)} blocks`
+              : `${majority} miners together hold a majority of ${formatInt(total)} blocks`
       }
     >
       {c.miners.length === 0 ? (
@@ -792,12 +876,12 @@ export function Decentralization({ charts }: { charts: Charts | null }) {
                     >
                       {slice.label}
                     </a>
+                  ) : slice.miner ? (
+                    <MinerAddress address={slice.miner} muted={active !== slice.key} />
                   ) : (
                     <span
-                      className={`truncate ${slice.miner ? "font-mono" : ""} ${
-                        active !== slice.key && (slice.miner || !slice.pool) ? "text-muted-foreground" : ""
-                      }`}
-                      title={slice.pool ? `${slice.pool.name}, mining pool` : (slice.miner ?? undefined)}
+                      className={`truncate ${active !== slice.key && !slice.pool ? "text-muted-foreground" : ""}`}
+                      title={slice.pool ? `${slice.pool.name}, mining pool` : undefined}
                     >
                       {slice.label}
                     </span>
@@ -811,20 +895,13 @@ export function Decentralization({ charts }: { charts: Charts | null }) {
             </ol>
           </div>
 
-          {judged && majority !== null && majority <= 2 && (
-            <p role="note" className={`flex gap-2 border px-3 py-2 text-xs ${NOTE_TONE[tone ?? "warn"].box}`}>
-              <svg viewBox="0 0 16 16" className={`mt-px size-3.5 shrink-0 ${NOTE_TONE[tone ?? "warn"].icon}`} fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                <path d="M8 2 14.5 13.5h-13Z" strokeLinejoin="round" />
-                <path d="M8 6.5v3M8 11.6v.1" strokeLinecap="round" />
-              </svg>
-              <span className="text-muted-foreground">
-                Miners: spread your hashrate across more pools to keep the network decentralized.
-              </span>
-            </p>
-          )}
-
           <div className="mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
-            <span>Healthy when at least 4 miners are needed for a majority.</span>
+            {/* The banner above says why; here it is a reminder, in the warning's color */}
+            {judged && majority !== null && majority <= 2 ? (
+              <span className={NOTE_TONE[tone ?? "warn"]}>Miners: spread your hashrate across more pools.</span>
+            ) : (
+              <span>Healthy when at least 4 miners are needed for a majority.</span>
+            )}
             <a
               href={MINING_POOL_STATS}
               target="_blank"

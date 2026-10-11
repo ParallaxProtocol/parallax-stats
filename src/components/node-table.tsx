@@ -546,12 +546,19 @@ export function NodeTable({
                         {atHead ? (stats.block.propagation ? `+${formatMs(stats.block.propagation)}` : "first") : "n/a"}
                       </Cell>
                       <td className="px-3 py-3">
-                        <span className="inline-flex items-center gap-2">
-                          <PropagationStrip history={node.history} />
-                          <span className="text-xs whitespace-nowrap text-muted-foreground">
-                            {behind > HISTORY_BINS ? "n/a" : `avg ${formatMs(stats.propagationAvg)}`}
+                        {nodes.length < 2 ? (
+                          // With no other node, every block reaches this one first: nothing to compare
+                          <span className="text-muted-foreground" title="No other node to compare with">
+                            —
                           </span>
-                        </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-2">
+                            <PropagationStrip history={node.history} />
+                            <span className="text-xs whitespace-nowrap text-muted-foreground">
+                              {behind > HISTORY_BINS ? "n/a" : `avg ${formatMs(stats.propagationAvg)}`}
+                            </span>
+                          </span>
+                        )}
                       </td>
                       <Cell>{formatInt(stats.pending)}</Cell>
                       <Cell grade={active ? gradeUptime(stats.uptime) : undefined}>{stats.uptime}%</Cell>

@@ -77,7 +77,7 @@ function Countries({ nodes }: { nodes: PublicNode[] }) {
               {countryName(code)}
             </span>
             <span className="relative h-1 bg-border/60">
-              <span className="absolute inset-y-0 left-0 bg-brand-mark" style={{ width: `${(count / located) * 100}%` }} />
+              <span className="absolute inset-y-0 left-0 bg-brand-mark transition-[width] duration-700 ease-out" style={{ width: `${(count / located) * 100}%` }} />
             </span>
             <span className="text-right tabular-nums">{count}</span>
           </li>
@@ -130,14 +130,27 @@ export function NodeMap({
       <figcaption className="flex items-baseline justify-between gap-3">
         <Label>Where nodes run</Label>
         <span className="truncate text-xs text-muted-foreground" aria-live="polite">
-          {focus ? `${focus.node.info.name}, ${place(focus.node)}` : `${dots.length} located of ${nodes.length}`}
+          {focus
+            ? `${focus.node.info.name}, ${place(focus.node)}`
+            : dots.length > 0
+              ? `${dots.length} located of ${nodes.length}`
+              : undefined}
         </span>
       </figcaption>
 
-      <div className="flex min-h-0 flex-1 items-center">
+      <div className="relative flex min-h-0 flex-1 items-center">
+        {dots.length === 0 && nodes.length > 0 && (
+          // An empty map would read as a failed load: dim it and say why
+          <p className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-1 px-6 text-center">
+            <span className="text-sm">No node located yet</span>
+            <span className="max-w-xs text-xs text-muted-foreground">
+              Nodes on a private or local address can&apos;t be placed on the map. Public nodes appear here as they report.
+            </span>
+          </p>
+        )}
         <svg
           viewBox={`0 0 ${world.width} ${world.height}`}
-          className="h-auto max-h-full w-full"
+          className={`h-auto max-h-full w-full transition-opacity duration-500 ${dots.length === 0 && nodes.length > 0 ? "opacity-30" : ""}`}
           role="img"
           aria-label={`World map with ${dots.length} node locations`}
           onPointerLeave={() => setHovered(null)}

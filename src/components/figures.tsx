@@ -71,6 +71,7 @@ export function FigureTile({ figure, start, className = "" }: { figure: Figure; 
           values={trend}
           active={active}
           onActive={setActive}
+          format={figure.format}
           label={`${figure.label} over the last 7 days, in ${TREND_SLICE_S / 3600} hour slices, from ${figure.format(Math.min(...known))} to ${figure.format(Math.max(...known))}`}
         />
       )}

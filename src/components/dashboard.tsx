@@ -3,6 +3,7 @@
 import { useMemo, type ReactNode } from "react";
 import { miningDifficulty } from "@/lib/asert";
 import { onMainnet, summarize } from "@/lib/derive";
+import { majorityLevel, spreadLevel } from "@/lib/alert-levels";
 import { formatInt } from "@/lib/format";
 import type { Snapshot } from "@/lib/protocol";
 import type { Release, ReleaseCommits } from "@/lib/releases";
@@ -11,14 +12,14 @@ import { About } from "./about";
 import { AlertCount, Alerts, useAlerts } from "./alerts";
 import { BlockClock, ClockPlate, MiniClock } from "./block-clock";
 import { BlockToasts, SoundToggle } from "./block-toast";
-import { BlockTime, Decentralization, EMPTY_CHARTS, Fees, Fullness, Propagation, Transactions } from "./charts";
+import { BestBlock, BlockTime, Decentralization, EMPTY_CHARTS, Fees, Fullness, Propagation, Transactions } from "./charts";
 import { FigureTile, figures } from "./figures";
 import { ClientVersions, StaleBlocks } from "./health";
 import { LiveProvider, useLive } from "./live/provider";
 import { Supply } from "./monetary";
 import { NodeMap } from "./node-map";
 import { NodeTable } from "./node-table";
-import { sectionNumber, SectionNav, type SectionLink } from "./section-nav";
+import { sectionNumber, SectionNav, STATUS_DOT, type SectionLink } from "./section-nav";
 import { ThemeToggle } from "./theme-toggle";
 
 export function Dashboard({
@@ -64,9 +65,26 @@ function Live({
   const start = c.trends?.start ?? [];
   const foundAt = (summary.bestStats?.block.timestamp ?? 0) * 1000;
   const alerts = useAlerts({ bestBlock: summary.bestBlock, foundAt, charts, nodes, latestRelease });
+  // Warnings that stand whether or not their banner was dismissed, marked on their sections
+  const sections = useMemo(() => {
+    const status: Record<string, SectionLink["status"]> = {
+      mining: (() => {
+        const level = majorityLevel(charts);
+
+        return level && { level, label: level === "critical" ? "One miner holds a majority" : "Two miners hold a majority" };
+      })(),
+      nodes: (() => {
+        const level = spreadLevel(charts?.propagation);
+
+        return level && { level, label: "Blocks reach nodes slowly" };
+      })(),
+    };
+
+    return SECTIONS.map((section) => ({ ...section, status: status[section.id] ?? null }));
+  }, [charts]);
 
   return (
-    <>
+    <BestBlock value={summary.bestBlock}>
       <Alerts alerts={alerts} />
       <ClockPlate id="best-block" foundAt={foundAt} className="flex flex-col gap-6 p-6 sm:p-8">
         <BlockClock bestBlock={summary.bestBlock} foundAt={foundAt} />
@@ -74,7 +92,7 @@ function Live({
       </ClockPlate>
       {/* Once the block clock scrolls away, the bar carries it in brief, with the header's controls */}
       <SectionNav
-        sections={SECTIONS}
+        sections={sections}
         aside={
           <>
             <a href="#best-block" title="Back to the block clock" className="mr-2">
@@ -88,7 +106,7 @@ function Live({
         }
         asideAfter="best-block"
       />
-      <Section id="mining">
+      <Section id="mining" sections={sections}>
         <div className={FOUR}>
           <FigureTile figure={figure.hashrate} start={start} />
           <FigureTile figure={figure.difficulty} start={start} />
@@ -96,7 +114,7 @@ function Live({
           <Decentralization charts={charts} />
         </div>
       </Section>
-      <Section id="blocks">
+      <Section id="blocks" sections={sections}>
         <div className={FOUR}>
           <Transactions c={c} block={block} />
           <Fullness c={c} block={block} />
@@ -104,11 +122,11 @@ function Live({
           <FigureTile figure={figure.fee} start={start} />
         </div>
       </Section>
-      <Section id="supply">
+      <Section id="supply" sections={sections}>
         <Supply bestBlock={summary.bestBlock} />
       </Section>
       {/* Last: the node list grows with the network, and would push anything below it out of reach */}
-      <Section id="nodes">
+      <Section id="nodes" sections={sections}>
         <div className={FOUR}>
           <NodeMap world={world} nodes={nodes} bestBlock={summary.bestBlock} className="sm:col-span-2 xl:row-span-2" />
           <FigureTile figure={figure.active} start={start} />
@@ -121,7 +139,7 @@ function Live({
         <NodeTable nodes={nodes} bestBlock={summary.bestBlock} publicNodes={publicNodes} releaseCommits={releaseCommits} />
       </Section>
       <BlockToasts best={best} pools={pools} live={connection === "live"} />
-    </>
+    </BestBlock>
   );
 }
 
@@ -130,22 +148,41 @@ const FOUR = "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4";
 
 /** The page's sections, in order: the bar under the block clock links to each. */
 const SECTIONS: SectionLink[] = [
-  { id: "mining", title: "Mining" },
-  { id: "blocks", title: "Blocks & fees" },
-  { id: "supply", title: "Supply" },
-  { id: "nodes", title: "Nodes" },
+  { id: "mining", title: "Mining", description: "Hashrate, difficulty and who finds the blocks" },
+  { id: "blocks", title: "Blocks & fees", description: "What recent blocks carried, and what sending costs" },
+  { id: "supply", title: "Supply", description: "Issuance, halvings and the 21 million cap" },
+  { id: "nodes", title: "Nodes", description: "Where the network runs, and how well it keeps up" },
 ];
 
-/** Section is a numbered, titled group of tiles on one topic; it scrolls into view clear of the section bar. */
-function Section({ id, children }: { id: string; children: ReactNode }) {
-  const index = SECTIONS.findIndex((section) => section.id === id);
+/**
+ * Section is a numbered, titled group of tiles on one topic; it scrolls into
+ * view clear of the section bar. Its heading reads like an instrument's
+ * scale: a bracketed index, the title, and a ruled line out to any warning
+ * about the section.
+ */
+function Section({ id, sections, children }: { id: string; sections: SectionLink[]; children: ReactNode }) {
+  const index = sections.findIndex((section) => section.id === id);
+  const { title, description, status } = sections[index];
 
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="mt-6 flex scroll-mt-16 flex-col gap-4">
-      <h2 id={`${id}-title`} className="flex items-baseline gap-3 px-1">
-        <span className="font-mono text-xs text-brand tabular-nums">{sectionNumber(index)}</span>
-        <span className="font-sans text-xl font-medium tracking-tight">{SECTIONS[index].title}</span>
-      </h2>
+    <section id={id} aria-labelledby={`${id}-title`} className="mt-10 flex scroll-mt-16 flex-col gap-4 first-of-type:mt-6">
+      <header className="flex flex-wrap items-end gap-x-4 gap-y-1 px-1">
+        <h2 id={`${id}-title`} className="flex items-center gap-3">
+          <span className="section-index font-mono text-[11px] text-brand tabular-nums">{sectionNumber(index)}</span>
+          <span className="font-sans text-2xl font-medium tracking-tight">{title}</span>
+        </h2>
+        <p className="pb-0.5 text-sm text-muted-foreground max-sm:basis-full">{description}</p>
+        <span aria-hidden className="section-rule mb-1.5 hidden min-w-8 flex-1 sm:block" />
+        {status && (
+          <span className="mb-0.5 inline-flex items-center gap-2 font-mono text-[11px] tracking-wider text-muted-foreground uppercase">
+            <span className={`relative flex size-1.5`}>
+              <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 ${STATUS_DOT[status.level]}`} />
+              <span className={`relative inline-flex size-1.5 rounded-full ${STATUS_DOT[status.level]}`} />
+            </span>
+            {status.label}
+          </span>
+        )}
+      </header>
       {children}
     </section>
   );

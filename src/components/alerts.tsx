@@ -30,19 +30,43 @@ const MINING_POOL_STATS = "https://miningpoolstats.stream/parallax";
 
 export type Tone = "critical" | "warn" | "info";
 
-const TONE: Record<Tone, { box: string; icon: string }> = {
+/**
+ * Each tone's surface, as on the plates: square, a hairline border in the
+ * tone, a severity bar down the leading edge and a wash fading from it.
+ */
+const TONE: Record<Tone, { box: string; bar: string; icon: string; ink: string; label: string }> = {
   critical: {
-    box: "border-critical/30 bg-linear-to-r from-critical/15 via-critical/[0.06] to-transparent",
-    icon: "bg-critical/20 text-critical-ink",
+    box: "border-critical/35 bg-linear-to-r from-critical/[0.11] via-critical/[0.04] to-transparent",
+    bar: "bg-critical",
+    icon: "border-critical/40 text-critical-ink",
+    ink: "text-critical-ink",
+    label: "Critical",
   },
   warn: {
-    box: "border-warn/30 bg-linear-to-r from-warn/15 via-warn/[0.06] to-transparent",
-    icon: "bg-warn/20 text-warn-ink",
+    box: "border-warn/35 bg-linear-to-r from-warn/[0.11] via-warn/[0.04] to-transparent",
+    bar: "bg-warn",
+    icon: "border-warn/40 text-warn-ink",
+    ink: "text-warn-ink",
+    label: "Warning",
   },
   info: {
-    box: "border-info/30 bg-linear-to-r from-info/15 via-info/[0.06] to-transparent",
-    icon: "bg-info/20 text-info-ink",
+    box: "border-info/35 bg-linear-to-r from-info/[0.11] via-info/[0.04] to-transparent",
+    bar: "bg-info",
+    icon: "border-info/40 text-info-ink",
+    ink: "text-info-ink",
+    label: "Notice",
   },
+};
+
+/** What each kind of alert is about, named in its eyebrow after the severity. */
+const TOPIC: Record<keyof typeof ICON, string> = {
+  stall: "Block stall",
+  reorg: "Reorganization",
+  split: "Chain split",
+  majority: "Mining majority",
+  unverified: "No verified node",
+  spread: "Slow propagation",
+  release: "New release",
 };
 
 const ICON = {
@@ -122,45 +146,39 @@ function Banner({ alert, index }: { alert: Alert; index: number }) {
         if (e.animationName === "alert-out" && e.target === e.currentTarget) dismiss?.();
       }}
     >
-      <section
-        role="status"
-        className={`relative flex flex-col gap-3 rounded-lg border px-4 py-3 sm:flex-row sm:items-center sm:gap-4 ${dismiss ? "pr-10 sm:pr-4" : ""} ${TONE[tone].box}`}
-      >
-        <div className="flex min-w-0 flex-1 items-center gap-3">
+      <section role="status" className={`relative flex flex-col gap-3 border py-3.5 pr-4 pl-5 sm:flex-row sm:items-center sm:gap-6 ${TONE[tone].box}`}>
+        <span aria-hidden className={`absolute inset-y-0 -left-px w-0.5 ${TONE[tone].bar}`} />
+        <div className={`flex min-w-0 flex-1 items-start gap-3.5 ${dismiss ? "pr-8 sm:pr-0" : ""}`}>
           {/* A critical alert's icon pulses a few times as it arrives, then rests */}
           <span
-            className={`relative flex size-8 shrink-0 items-center justify-center rounded-full ${TONE[tone].icon} ${tone === "critical" && enter ? "alert-pulse" : ""}`}
+            className={`relative mt-0.5 flex size-8 shrink-0 items-center justify-center border bg-background/40 ${TONE[tone].icon} ${tone === "critical" && enter ? "alert-pulse" : ""}`}
           >
             <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
               {ICON[icon]}
             </svg>
           </span>
-          <p className="min-w-0 text-sm">
-            <span className="font-semibold">{title}</span> <span className="text-muted-foreground">{body}</span>
-          </p>
+          <div className="flex min-w-0 flex-col gap-1">
+            <p className={`font-mono text-[10px] tracking-[0.15em] uppercase ${TONE[tone].ink}`}>
+              {TONE[tone].label} <span className="text-muted-foreground/60">·</span> {TOPIC[icon]}
+            </p>
+            <p className="text-sm leading-5 font-semibold">{title}</p>
+            <p className="text-sm leading-5 text-muted-foreground">{body}</p>
+          </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 pl-11 sm:shrink-0 sm:pl-0">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-[2.875rem] sm:shrink-0 sm:pl-0">
           {facts.map((fact) => (
-            <span key={fact} className="rounded-full border border-border bg-background/50 px-2.5 py-0.5 text-xs whitespace-nowrap tabular-nums">
+            <span key={fact} className="font-mono text-xs whitespace-nowrap text-muted-foreground tabular-nums">
               {fact}
             </span>
           ))}
-          {action && (
-            <a
-              href={action.href}
-              {...(action.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-              className="px-1 text-xs whitespace-nowrap text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
-            >
-              {action.label}
-            </a>
-          )}
+          {action && <AlertAction action={action} />}
           {dismiss && (
             <button
               type="button"
               onClick={close}
               // In the top corner on phones, where the facts wrap below the text; at the end of the row otherwise
-              className="absolute top-2.5 right-2.5 inline-flex size-6 items-center justify-center rounded-full text-muted-foreground hover:bg-background/50 hover:text-foreground sm:static"
+              className="absolute top-3 right-3 inline-flex size-7 items-center justify-center text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground sm:static"
               aria-label="Dismiss"
             >
               <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
@@ -171,6 +189,26 @@ function Banner({ alert, index }: { alert: Alert; index: number }) {
         </div>
       </section>
     </div>
+  );
+}
+
+/** AlertAction is an alert's next step, a square button like the page's other controls. */
+function AlertAction({ action }: { action: NonNullable<Alert["action"]> }) {
+  return (
+    <a
+      href={action.href}
+      {...(action.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      className="inline-flex h-7 items-center gap-1.5 border border-border bg-background/50 px-2.5 text-xs whitespace-nowrap transition-colors hover:border-foreground/30 hover:bg-background"
+    >
+      {action.label}
+      <svg viewBox="0 0 16 16" className="size-3 text-muted-foreground" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+        {action.external ? (
+          <path d="M6 3.5h6.5V10M12.5 3.5 4 12" strokeLinecap="round" strokeLinejoin="round" />
+        ) : (
+          <path d="M3 8h10M9 4l4 4-4 4" strokeLinecap="round" strokeLinejoin="round" />
+        )}
+      </svg>
+    </a>
   );
 }
 
@@ -440,41 +478,41 @@ export function AlertCount({ alerts }: { alerts: Alert[] }) {
         aria-label={plural(alerts.length, "alert")}
         className={`inline-flex h-7 items-center gap-1.5 rounded-md border border-border px-2 font-mono text-[11px] tabular-nums hover:bg-accent/50 ${open ? "bg-accent/50" : ""}`}
       >
-        <span aria-hidden className={`size-2 rounded-full ${WARNING_DOT[alerts[0].tone]}`} />
+        <span aria-hidden className="relative flex size-2">
+          {alerts[0].tone === "critical" && (
+            <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 ${WARNING_DOT.critical}`} />
+          )}
+          <span className={`relative inline-flex size-2 rounded-full ${WARNING_DOT[alerts[0].tone]}`} />
+        </span>
         {alerts.length}
       </button>
       {open && (
         <div
           id={panel}
-          className="absolute top-full right-0 z-40 mt-2 flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-1 rounded-lg border border-border bg-surface-elevated p-2 shadow-2xl"
+          className="absolute top-full right-0 z-40 mt-2 flex w-96 max-w-[calc(100vw-2rem)] flex-col gap-1.5 border border-border bg-surface-elevated p-1.5 shadow-2xl"
         >
           {alerts.map((alert) => (
-            <section key={alert.key} className={`flex gap-3 rounded-md border p-3 ${TONE[alert.tone].box}`}>
-              <span className={`flex size-7 shrink-0 items-center justify-center rounded-full ${TONE[alert.tone].icon}`}>
+            <section key={alert.key} className={`relative flex gap-3 border py-3 pr-3 pl-3.5 ${TONE[alert.tone].box}`}>
+              <span aria-hidden className={`absolute inset-y-0 -left-px w-0.5 ${TONE[alert.tone].bar}`} />
+              <span className={`flex size-7 shrink-0 items-center justify-center border bg-background/40 ${TONE[alert.tone].icon}`}>
                 <svg viewBox="0 0 24 24" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
                   {ICON[alert.icon]}
                 </svg>
               </span>
-              <div className="flex min-w-0 flex-col gap-2 text-xs">
-                <p>
-                  <span className="font-semibold">{alert.title}</span> <span className="text-muted-foreground">{alert.body}</span>
+              <div className="flex min-w-0 flex-col gap-1 text-xs">
+                <p className={`font-mono text-[10px] tracking-[0.15em] uppercase ${TONE[alert.tone].ink}`}>
+                  {TONE[alert.tone].label} <span className="text-muted-foreground/60">·</span> {TOPIC[alert.icon]}
                 </p>
+                <p className="font-semibold">{alert.title}</p>
+                <p className="text-muted-foreground">{alert.body}</p>
                 {(alert.facts.length > 0 || alert.action) && (
-                  <div className="flex flex-wrap items-center gap-2">
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
                     {alert.facts.map((fact) => (
-                      <span key={fact} className="rounded-full border border-border bg-background/50 px-2 py-0.5 whitespace-nowrap tabular-nums">
+                      <span key={fact} className="font-mono whitespace-nowrap text-muted-foreground tabular-nums">
                         {fact}
                       </span>
                     ))}
-                    {alert.action && (
-                      <a
-                        href={alert.action.href}
-                        {...(alert.action.external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-                        className="whitespace-nowrap text-foreground underline decoration-border underline-offset-2 hover:decoration-foreground"
-                      >
-                        {alert.action.label}
-                      </a>
-                    )}
+                    {alert.action && <AlertAction action={alert.action} />}
                   </div>
                 )}
               </div>

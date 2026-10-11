@@ -97,7 +97,10 @@ function Halving({ height }: { height: number }) {
           aria-valuemax={100}
           aria-valuenow={Math.round(state.eraProgress * 100)}
         >
-          <div className="brand-gradient-mark absolute inset-y-0 left-0" style={{ width: `${state.eraProgress * 100}%` }} />
+          <div
+            className="brand-gradient-mark absolute inset-y-0 left-0 transition-[width] duration-700 ease-out"
+            style={{ width: `${state.eraProgress * 100}%` }}
+          />
         </div>
         <div className="flex justify-between font-mono text-[11px] text-muted-foreground tabular-nums">
           <span>#{formatInt(eraStart)}</span>
@@ -244,9 +247,9 @@ function SupplyCurve({ height }: { height: number }) {
             />
           ))}
         </svg>
-        <span className="pointer-events-none absolute top-0 left-1 font-mono text-[10px] text-muted-foreground">100%</span>
+        <span className="pointer-events-none absolute top-0 left-2 bg-surface-elevated px-1 font-mono text-[10px] text-muted-foreground">100%</span>
         <span
-          className="pointer-events-none absolute left-1 -translate-y-full font-mono text-[10px] text-muted-foreground"
+          className="pointer-events-none absolute left-2 -translate-y-full bg-surface-elevated px-1 font-mono text-[10px] text-muted-foreground"
           style={{ top: y(0.5) }}
         >
           50%
@@ -259,7 +262,15 @@ function SupplyCurve({ height }: { height: number }) {
             className="absolute -translate-x-1/2 first:translate-x-0 last:-translate-x-full"
             style={{ left: `${(i / CURVE_ERAS) * 100}%` }}
           >
-            {i === 0 ? "genesis" : i}
+            {/* Too long for the first gap on a phone */}
+            {i === 0 ? (
+              <>
+                <span className="sm:hidden">0</span>
+                <span className="hidden sm:inline">genesis</span>
+              </>
+            ) : (
+              i
+            )}
           </span>
         ))}
       </div>

@@ -175,7 +175,7 @@ export function ClientVersions({
                   </span>
                   <span className="relative h-1 bg-border/60" title={`${v.count} of ${total} nodes`}>
                     <span
-                      className={`absolute inset-y-0 left-0 ${state === "older" || state === null ? "bg-muted-foreground" : "bg-brand-mark"}`}
+                      className={`absolute inset-y-0 left-0 transition-[width] duration-700 ease-out ${state === "older" || state === null ? "bg-muted-foreground" : "bg-brand-mark"}`}
                       style={{ width: `${(v.count / total) * 100}%` }}
                     />
                   </span>

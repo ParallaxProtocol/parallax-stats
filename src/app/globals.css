@@ -51,7 +51,8 @@
   --background: oklch(0.98 0.005 80);
   --foreground: oklch(0.145 0 0);
   --card: oklch(0.96 0.005 80);
-  --surface-elevated: oklch(0.94 0.005 80);
+  /* Plates sit as white sheets on the warm page, lifted by a faint shadow */
+  --surface-elevated: oklch(1 0 0);
   --muted: oklch(0.94 0.005 80);
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.95 0.005 80);
@@ -178,6 +179,109 @@
   opacity: 1;
 }
 
+[data-theme="light"] .group\/plate {
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 4%),
+    0 4px 16px -8px oklch(0 0 0 / 8%);
+}
+
+/* Section headings: the index in corner brackets, like a plate's on hover,
+   and a rule with a scale's ticks running out to the row's end */
+.section-index {
+  display: inline-grid;
+  place-items: center;
+  min-width: 1.75rem;
+  height: 1.5rem;
+  padding: 0 0.25rem;
+  --bracket: var(--brand);
+  background-image:
+    linear-gradient(var(--bracket), var(--bracket)), linear-gradient(var(--bracket), var(--bracket)),
+    linear-gradient(var(--bracket), var(--bracket)), linear-gradient(var(--bracket), var(--bracket)),
+    linear-gradient(var(--bracket), var(--bracket)), linear-gradient(var(--bracket), var(--bracket)),
+    linear-gradient(var(--bracket), var(--bracket)), linear-gradient(var(--bracket), var(--bracket));
+  background-repeat: no-repeat;
+  background-size:
+    5px 1px, 1px 5px,
+    5px 1px, 1px 5px,
+    5px 1px, 1px 5px,
+    5px 1px, 1px 5px;
+  background-position:
+    left top, left top,
+    right top, right top,
+    left bottom, left bottom,
+    right bottom, right bottom;
+}
+
+.section-rule {
+  height: 6px;
+  border-bottom: 1px solid var(--border);
+  background-image:
+    linear-gradient(var(--muted-foreground), var(--muted-foreground)),
+    repeating-linear-gradient(to right, var(--border) 0 1px, transparent 1px 8px);
+  background-size:
+    1px 100%,
+    100% 4px;
+  background-position:
+    left bottom,
+    left bottom;
+  background-repeat: no-repeat;
+  opacity: 0.9;
+}
+
+/* A tile's border glows briefly when a new block lands */
+@keyframes tile-flash {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.tile-flash {
+  position: absolute;
+  inset: -1px;
+  pointer-events: none;
+  border: 1px solid var(--plate-accent, var(--brand));
+  box-shadow: inset 0 0 24px -12px var(--plate-accent, var(--brand));
+  opacity: 0;
+  animation: tile-flash 1.6s ease-out;
+}
+
+/* Charts sweep in from the left the first time they scroll into view */
+@keyframes chart-reveal {
+  from {
+    clip-path: inset(-8px 100% -8px -8px);
+  }
+  to {
+    clip-path: inset(-8px -8px -8px -8px);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .chart-pending {
+    clip-path: inset(-8px 100% -8px -8px);
+  }
+}
+
+.chart-reveal {
+  animation: chart-reveal 0.9s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+
+/* Digits that change roll up into place */
+@keyframes digit-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.45em);
+    filter: blur(2px);
+  }
+}
+
+.digit-in {
+  display: inline-block;
+  animation: digit-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
 /* Dialogs fade and rise in; the page behind stops scrolling */
 @keyframes dialog-in {
   from {
@@ -251,7 +355,7 @@
   content: "";
   position: absolute;
   inset: 0;
-  border-radius: 9999px;
+  border-radius: inherit;
   background: currentColor;
   opacity: 0;
   animation: alert-pulse 1.4s ease-out 0.4s 3;
