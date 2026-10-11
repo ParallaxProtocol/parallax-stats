@@ -9,24 +9,35 @@ import { inList, splitList, type Settings } from "./settings.ts";
 
 export type TrustLevel = "trusted" | "public";
 
+/** A private secret logging in under a name it may not verify. */
+export const WRONG_NAME = "wrong-name";
+
 function digest(value: string): Buffer {
   return createHash("sha256").update(value).digest();
 }
 
 /**
- * authenticate maps a login secret to a trust level, or null. Secrets are
- * compared in constant time, as digests so lengths do not leak either,
- * and every private secret is checked so the match position does not.
+ * authenticate maps a login secret and the node name it reports to a trust
+ * level, WRONG_NAME when a private secret may not verify that name, or null.
+ * Secrets are compared in constant time, as digests so lengths do not leak
+ * either, and every private secret is checked so the match position does not.
  */
-export function authenticate(settings: Settings, secret: unknown): TrustLevel | null {
+export function authenticate(settings: Settings, secret: unknown, name = ""): TrustLevel | typeof WRONG_NAME | null {
   if (typeof secret !== "string" || secret.length === 0 || secret.length > 1024) return null;
 
   const given = digest(secret);
-  let trusted = false;
+  let matched: Settings["privateSecrets"][number] | null = null;
 
-  for (const candidate of settings.privateSecrets) trusted = timingSafeEqual(given, digest(candidate)) || trusted;
+  for (const candidate of settings.privateSecrets) {
+    if (timingSafeEqual(given, digest(candidate.secret))) matched ??= candidate;
+  }
 
-  if (trusted) return "trusted";
+  // The same secret may be listed for several patterns: any of them allowing the name will do
+  if (matched) {
+    const allowed = settings.privateSecrets.some((c) => c.secret === matched.secret && (c.names === null || c.names.test(name)));
+
+    return allowed ? "trusted" : WRONG_NAME;
+  }
 
   if (settings.publicSecret.length > 0 && timingSafeEqual(given, digest(settings.publicSecret))) return "public";
 

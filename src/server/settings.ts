@@ -6,8 +6,8 @@ import type { MiningPool } from "../lib/protocol.ts";
 import { cloudflareEdges } from "./cloudflare.ts";
 
 export interface Settings {
-  /** Private secrets; nodes logging in with one are verified. */
-  privateSecrets: string[];
+  /** Private secrets; nodes logging in with one are verified, under the names it allows. */
+  privateSecrets: PrivateSecret[];
   /** Secret anyone may use; nodes logging in with it are unverified. */
   publicSecret: string;
   /** Reverse proxies allowed to set X-Forwarded-For: addresses or ranges such as 10.0.0.0/8. */
@@ -43,7 +43,43 @@ export interface Settings {
   miningPools: Map<string, MiningPool>;
 }
 
+/** A private secret, and the node names it may verify: any when `names` is null. */
+export interface PrivateSecret {
+  secret: string;
+  /** The pattern as written, such as `rplant-*`, for logs; null when unrestricted. */
+  pattern: string | null;
+  names: RegExp | null;
+}
+
 type Env = Record<string, string | undefined>;
+
+/** Characters a name pattern may use: node name characters and `*`. */
+const PATTERN = /^[A-Za-z0-9][A-Za-z0-9._()[\]#+*-]{0,63}$|^\*[A-Za-z0-9._()[\]#+*-]{0,63}$/;
+/** A secret after a pattern must be at least this long, so a short tail is never read as one. */
+const MIN_PATTERN_SECRET = 8;
+
+/**
+ * privateSecret reads one WS_SECRET entry: `pattern=secret` limits the secret
+ * to node names matching the pattern, `*` matching any run of characters;
+ * a plain `secret` verifies any name. An entry counts as having a pattern
+ * only when the part before the first `=` looks like one and the rest is at
+ * least 8 characters, so a secret that merely contains `=` (base64 padding,
+ * say) is read whole.
+ */
+export function privateSecret(entry: string): PrivateSecret {
+  const at = entry.indexOf("=");
+  const pattern = at > 0 ? entry.slice(0, at) : "";
+  const secret = at > 0 ? entry.slice(at + 1) : "";
+
+  if (!PATTERN.test(pattern) || secret.length < MIN_PATTERN_SECRET) return { secret: entry, pattern: null, names: null };
+
+  const source = pattern
+    .split("*")
+    .map((part) => part.replace(/[.()[\]#+\\^$|?{}-]/g, "\\$&"))
+    .join(".*");
+
+  return { secret, pattern, names: new RegExp(`^${source}$`) };
+}
 
 export function splitList(value: string | undefined): string[] {
   return String(value ?? "")
@@ -135,7 +171,9 @@ export function loadSettings(env: Env = process.env): Settings {
   return {
     // A public secret must never double as a private one, or every node
     // using the published value would be verified.
-    privateSecrets: splitList(env.WS_SECRET).filter((s) => s !== publicSecret),
+    privateSecrets: splitList(env.WS_SECRET)
+      .map(privateSecret)
+      .filter((s) => s.secret !== publicSecret),
     publicSecret,
     trustedProxies: addressList(splitList(env.TRUSTED_PROXIES)),
     cloudflare: /^(1|true|yes)$/i.test((env.BEHIND_CLOUDFLARE ?? "").trim()) ? cloudflareEdges() : null,

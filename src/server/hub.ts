@@ -16,7 +16,7 @@ import {
   type ServerMessage,
   type Snapshot,
 } from "../lib/protocol.ts";
-import { authenticate, clientIP, RateLimiter, TokenBucket } from "./guard.ts";
+import { authenticate, clientIP, RateLimiter, TokenBucket, WRONG_NAME } from "./guard.ts";
 import { log } from "./log.ts";
 import { STATE_VERSION, type Store } from "./persist.ts";
 import { LoginRefused, Registry } from "./registry.ts";
@@ -242,9 +242,14 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
     function hello(data: Record<string, unknown>): void {
       if (nodeId !== null) return;
 
-      const level = authenticate(settings, data.secret);
       const id = cleanId(data.id);
+      const level = authenticate(settings, data.secret, id ?? "");
       const info = cleanInfo(data.info);
+
+      if (level === WRONG_NAME) {
+        log.warn("API", "Login refused:", id, "is not a name its private secret may verify, from", ip);
+        return ws.close(1008, "Name not allowed for this secret");
+      }
 
       if (level === null || id === null || info === null || settings.reservedNames.includes(id)) {
         log.warn("API", "Wrong secret or invalid login from", ip);

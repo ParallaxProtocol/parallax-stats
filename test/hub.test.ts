@@ -15,6 +15,7 @@ import { loadSettings } from "../src/server/settings.ts";
 
 const HASH = "0x" + "cd".repeat(32);
 const PRIVATE = "priv-7f3a91c2e8";
+const POOL_SECRET = "pool-4c19e0b7d2";
 
 let server: Server;
 let hub: Hub;
@@ -23,7 +24,7 @@ let base: string;
 before(async () => {
   log.quiet = true;
   hub = createHub(
-    loadSettings({ WS_SECRET: PRIVATE, PUBLIC_SECRET: "open", MAX_NODES_PER_IP: "2", CONN_PER_MINUTE: "1000" }),
+    loadSettings({ WS_SECRET: `${PRIVATE}|pool-*=${POOL_SECRET}`, PUBLIC_SECRET: "open", MAX_NODES_PER_IP: "2", CONN_PER_MINUTE: "1000" }),
     { fetchGasPrice: async () => 117_391_737_659n },
   );
   server = createServer((req, res) => {
@@ -99,6 +100,22 @@ async function viewNodes(): Promise<PublicNode[]> {
 
   return (snapshot as Snapshot).nodes;
 }
+
+test("a secret limited to some names verifies those and refuses others", async () => {
+  const pool = await report("pool-eu", POOL_SECRET);
+
+  await waitFor(() => isReady(pool));
+  assert.equal((await viewNodes()).find((n) => n.id === "pool-eu")?.trusted, true);
+
+  // The pool's secret cannot verify a name outside its own
+  const impostor = await report("seed-1", POOL_SECRET);
+
+  await waitFor(() => impostor.closed);
+  assert.ok(!isReady(impostor));
+  assert.equal((await viewNodes()).find((n) => n.id === "seed-1"), undefined);
+
+  pool.close();
+});
 
 test("a wrong secret is refused", async () => {
   const ws = await report("intruder", "guess");

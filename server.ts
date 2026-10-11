@@ -27,7 +27,7 @@ if (settings.privateSecrets.length === 0 && settings.publicSecret.length === 0) 
 
 // A private secret makes a node verified, so it must not be guessable.
 // Only the count is logged, never the secrets themselves.
-const weak = settings.privateSecrets.filter((secret) => secret.length < 16).length;
+const weak = settings.privateSecrets.filter(({ secret }) => secret.length < 16).length;
 
 if (weak > 0) {
   log.warn("CFG", `${weak} WS_SECRET value(s) shorter than 16 characters; use a random one, e.g. \`openssl rand -hex 32\``);

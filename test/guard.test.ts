@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { authenticate, clientIP, RateLimiter, TokenBucket } from "../src/server/guard.ts";
+import { authenticate, clientIP, RateLimiter, TokenBucket, WRONG_NAME } from "../src/server/guard.ts";
 import { cleanBlock, cleanHistory, cleanId, cleanInfo, cleanStats } from "../src/server/sanitize.ts";
 import { addressList, inList, loadSettings, miningPools } from "../src/server/settings.ts";
 
@@ -24,7 +24,32 @@ test("authenticate maps secrets to trust levels", () => {
 });
 
 test("the public secret never doubles as a private one", () => {
-  assert.deepEqual(settings.privateSecrets, ["private-a", "private-b"]);
+  assert.deepEqual(
+    settings.privateSecrets.map((s) => s.secret),
+    ["private-a", "private-b"],
+  );
+});
+
+test("a private secret can be limited to the node names it verifies", () => {
+  const scoped = loadSettings({
+    WS_SECRET: "operator-secret-1|rplant-*=rplant-secret-1|exchange-x=exchange-secret|dGVzdA==|backup=exchange-secret",
+    PUBLIC_SECRET: "open",
+  });
+
+  // An unrestricted secret verifies any name
+  assert.equal(authenticate(scoped, "operator-secret-1", "anything"), "trusted");
+  // A pool's secret verifies only its own names, and refuses others rather than listing them unverified
+  assert.equal(authenticate(scoped, "rplant-secret-1", "rplant-eu"), "trusted");
+  assert.equal(authenticate(scoped, "rplant-secret-1", "exchange-x"), WRONG_NAME);
+  assert.equal(authenticate(scoped, "rplant-secret-1", "rplant"), WRONG_NAME);
+  // One secret listed for several names may use any of them
+  assert.equal(authenticate(scoped, "exchange-secret", "exchange-x"), "trusted");
+  assert.equal(authenticate(scoped, "exchange-secret", "backup"), "trusted");
+  assert.equal(authenticate(scoped, "exchange-secret", "exchange-y"), WRONG_NAME);
+  // A secret that merely contains "=" is read whole, and the public secret is unaffected
+  assert.equal(authenticate(scoped, "dGVzdA==", "x"), "trusted");
+  assert.equal(authenticate(scoped, "open", "rplant-eu"), "public");
+  assert.equal(authenticate(scoped, "rplant-*=rplant-secret-1", "rplant-eu"), null);
 });
 
 test("clientIP ignores forwarding headers from untrusted peers", () => {

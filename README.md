@@ -98,7 +98,7 @@ All settings come from the environment.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `WS_SECRET` | | Private secrets, separated by `\|`. Nodes using one are **verified**. |
+| `WS_SECRET` | | Private secrets, separated by `\|`. Nodes using one are **verified**, under the names it allows: see below. |
 | `PUBLIC_SECRET` | | Secret you publish for everyone else. Nodes using it are unverified. |
 | `PORT` | `3000` | Listen port |
 | `RPC_URL` | `https://rpc.parallaxprotocol.org` | Parallax RPC endpoint the recommended fee is read from |
@@ -121,6 +121,24 @@ All settings come from the environment.
 Lists are separated by `|` or `,`. At least one of `WS_SECRET` and
 `PUBLIC_SECRET` must be set. The public secret is shown on the page, in
 the "Add your node" instructions, along with a command that uses it.
+
+Give each verified operator (your own nodes, a pool, an exchange) a secret
+of their own, so one can be revoked without touching the others, and limit
+it to the names they report under by writing `pattern=secret`, where `*`
+matches anything:
+
+```
+WS_SECRET=<yours>|rplant-*=<rplant's secret>|exchange-x=<exchange's secret>
+```
+
+A limited secret verifies only matching names: a node reporting another
+name with it is refused, and the server logs why, so a pool cannot appear
+as an exchange or take over another operator's name. A secret without a
+pattern verifies any name; keep those to your own nodes. Listing the same
+secret twice with different patterns allows both. An entry counts as
+`pattern=secret` only when the part before the first `=` is made of name
+characters and `*`, and the secret after it is at least 8 characters, so a
+secret that just contains `=` is read whole.
 
 `MINING_POOLS` names the pools behind coinbase addresses in the
 Decentralization tile, optionally with a website their name links to. Pools are separated by `|`; each is
@@ -256,6 +274,9 @@ treated as untrusted:
   page takes the best block from them. An unverified node reporting a
   made-up height shows that height in its own row without moving the best
   block or the charts for anyone else.
+- **Verified operators.** A secret given to someone else can be limited to
+  the names they report under (`pattern=secret` in `WS_SECRET`), so it
+  cannot verify another operator's nodes or take over their names.
 - **Names.** A name connected from one address cannot be taken from
   another, stays bound to its address for `NAME_HOLD_MINUTES` after it
   disconnects, and a verified node's name is never available to
