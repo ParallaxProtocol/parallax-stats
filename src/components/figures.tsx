@@ -3,6 +3,7 @@ import {
   formatBlockTime,
   formatDifficulty,
   formatGasPrice,
+  formatInt,
   formatPoolDifficulty,
   formatHashrate,
   gradeAvgBlockTime,
@@ -50,7 +51,12 @@ export function Figures({
       label: "Avg block time",
       value: formatBlockTime(charts?.avgBlocktime ?? 0),
       grade: gradeAvgBlockTime(charts?.avgBlocktime ?? 0),
-      note: "target 10 min",
+      // Says which blocks it averages, unlike the Block time tile's last 40
+      note: !charts?.minerBlocks
+        ? "target 10 min"
+        : charts.minerSpan >= 7 * 86_400 - 3_600
+          ? "last 7 days, target 10 min"
+          : `last ${formatInt(charts.minerBlocks)} blocks, target 10 min`,
     },
     { label: "Network hashrate", value: charts?.avgHashrate ? formatHashrate(charts.avgHashrate) : "n/a" },
     {

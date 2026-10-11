@@ -749,9 +749,9 @@ export class History {
     return before > 0 ? Number(head.block.difficulty) / before - 1 : null;
   }
 
-  /** avgBlocktime is the mean time between blocks, in seconds, over blocks whose parent is known. */
-  private avgBlocktime(): number {
-    const times = this.items.filter((item) => item.block.time > 0).map((item) => item.block.time);
+  /** avgBlocktime is the mean time between blocks over the last 7 days, in seconds, of blocks whose parent is known. */
+  private avgBlocktime(window: Height[]): number {
+    const times = window.filter((item) => item.block.time > 0).map((item) => item.block.time);
 
     return times.length > 0 ? times.reduce((a, b) => a + b, 0) / times.length / 1000 : 0;
   }
@@ -781,7 +781,7 @@ export class History {
     return span > 0 ? work / span : 0;
   }
 
-  /** minerWindow is the blocks of the last MINER_WINDOW_S by timestamp, newest first. */
+  /** minerWindow is the blocks of the last MINER_WINDOW_S by timestamp, newest first: the week the miner figures and the average block time cover. */
   private minerWindow(): Height[] {
     const head = this.items[0];
 
@@ -827,7 +827,7 @@ export class History {
     return {
       height: recent.map((item) => item.height),
       blocktime: recent.map((item) => item.block.time / 1000),
-      avgBlocktime: this.avgBlocktime(),
+      avgBlocktime: this.avgBlocktime(minerWindow),
       difficulty: recent.map((item) => item.block.difficulty),
       difficultyWeek: this.difficultyChange(7 * 86_400),
       transactions: recent.map((item) => item.block.txCount),

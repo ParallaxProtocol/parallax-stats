@@ -278,6 +278,8 @@ test("miners are counted over the last 7 days of blocks", () => {
   // Blocks 73 to 240 are within 7 days of the newest
   assert.equal(charts.minerBlocks, 168);
   assert.equal(charts.minerSpan, 167 * 3600);
+  // The average block time covers the same week
+  assert.equal(charts.avgBlocktime, 3600);
   assert.deepEqual(
     charts.miners.map((m) => [m.miner, m.blocks]),
     [[late, 168]],

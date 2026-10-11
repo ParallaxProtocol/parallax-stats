@@ -164,6 +164,7 @@ export interface Charts {
   height: number[];
   /** Seconds per block. */
   blocktime: number[];
+  /** Mean seconds per block over the last 7 days (see minerBlocks and minerSpan). */
   avgBlocktime: number;
   difficulty: string[];
   /** Change in difficulty over the last 7 days, as a fraction; null when the history is shorter. */
@@ -177,7 +178,7 @@ export interface Charts {
   miners: MinerCount[];
   /** Distinct miners among the same blocks, each known pool counted once. */
   minerCount: number;
-  /** How many blocks the miner figures cover. */
+  /** How many blocks the miner figures, and avgBlocktime, cover: the last 7 days of them. */
   minerBlocks: number;
   /** Seconds those blocks span, oldest to newest; under 7 days while the history is shorter. */
   minerSpan: number;

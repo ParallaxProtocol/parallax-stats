@@ -163,7 +163,9 @@ unavailable and the rest of the dashboard carries on.
 ## How the figures are worked out
 
 - **Block times** are the difference between a block's timestamp and its
-  parent's. Blocks whose parent is not yet in the history have none.
+  parent's. Blocks whose parent is not yet in the history have none. The
+  average block time among the top figures covers the last 7 days; the
+  Block time chart shows the last 40 blocks and their own average.
 - **Hashrate** is the total difficulty of the newest unbroken run of up to
   64 blocks over the time they took: a block takes `difficulty` hashes on
   average.
