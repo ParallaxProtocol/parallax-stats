@@ -3,8 +3,8 @@
 
 import { randomBytes } from "node:crypto";
 import type { Block, Charts, NameStatus, PublicNode } from "../lib/protocol.ts";
-import { History, type HistoryRequest } from "./history.ts";
-import { NodeRecord, type Login } from "./node.ts";
+import { History, type HistoryRequest, type HistoryState } from "./history.ts";
+import { NodeRecord, type Login, type NodeState } from "./node.ts";
 import { cleanId, type ReportedBlock } from "./sanitize.ts";
 import type { Settings } from "./settings.ts";
 
@@ -13,18 +13,51 @@ const HISTORY_REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
 
 export class LoginRefused extends Error {}
 
+/** What is saved of the registry across restarts. */
+export interface RegistryState {
+  /** The pseudonym key, hex, so unverified nodes keep their pseudonyms. */
+  pseudonymKey: string;
+  nodes: NodeState[];
+  history: HistoryState;
+}
+
 export class Registry {
   private readonly settings: Settings;
   private readonly nodes = new Map<string, NodeRecord>();
   readonly history: History;
-  // Pseudonyms are stable while the server runs but cannot be reversed
-  // by trying candidate names.
-  private readonly pseudonymKey = randomBytes(32);
+  // Pseudonyms are stable while the server runs, and across restarts
+  // when state is saved, but cannot be reversed by trying candidate names.
+  private pseudonymKey = randomBytes(32);
   private historyRequest: { id: string; at: number } | null = null;
 
   constructor(settings: Settings) {
     this.settings = settings;
     this.history = new History(settings.miningPools);
+  }
+
+  toState(): RegistryState {
+    return {
+      pseudonymKey: this.pseudonymKey.toString("hex"),
+      nodes: [...this.nodes.values()].map((node) => node.toState()),
+      history: this.history.toState(),
+    };
+  }
+
+  /**
+   * restore replaces the registry with saved state. Nodes come back
+   * disconnected until they report again; `downtime` is how long the
+   * dashboard was down, kept out of their uptimes.
+   */
+  restore(state: RegistryState, downtime: number, now = Date.now()): void {
+    const key = Buffer.from(state.pseudonymKey, "hex");
+
+    if (key.length === 32) this.pseudonymKey = key;
+
+    this.nodes.clear();
+    for (const saved of state.nodes) this.nodes.set(saved.id, NodeRecord.fromState(saved, this.pseudonymKey, downtime, now));
+
+    this.history.restore(state.history);
+    this.removeOldNodes(now);
   }
 
   get(id: string): NodeRecord | undefined {

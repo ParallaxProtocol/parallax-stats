@@ -17,6 +17,7 @@ import {
 } from "../lib/protocol.ts";
 import { authenticate, clientIP, RateLimiter, TokenBucket } from "./guard.ts";
 import { log } from "./log.ts";
+import { STATE_VERSION, type Store } from "./persist.ts";
 import { LoginRefused, Registry } from "./registry.ts";
 import { cleanBlock, cleanHistory, cleanId, cleanInfo, cleanLatency, cleanPending, cleanStats } from "./sanitize.ts";
 import { inList, type Settings } from "./settings.ts";
@@ -30,6 +31,8 @@ const GAS_PRICE_POLL_MS = 60_000;
 
 /** Name lookups per address per minute: enough to type a name, too few to enumerate them. */
 const NAME_CHECKS_PER_MINUTE = 20;
+/** How often state is saved, when a store is configured. */
+const SAVE_INTERVAL_MS = 30_000;
 /** Viewers that fall this far behind are dropped rather than buffered. */
 const VIEWER_MAX_BUFFERED = 4 * 1024 * 1024;
 
@@ -38,6 +41,8 @@ export interface HubOptions {
   lookupGeo?: (ip: string) => Geo | null | Promise<Geo | null>;
   /** Reads the recommended gas price, in wei; polled every GAS_PRICE_POLL_MS. */
   fetchGasPrice?: () => Promise<bigint | null>;
+  /** Where state is saved across restarts; without one it lives in memory only. */
+  store?: Store;
 }
 
 export interface Hub {
@@ -69,6 +74,31 @@ function refuse(socket: Duplex, status: string): void {
 export function createHub(settings: Settings, options: HubOptions = {}): Hub {
   const lookupGeo = options.lookupGeo ?? (() => null);
   const registry = new Registry(settings);
+  const store = options.store ?? null;
+
+  // Pick up where the last run left off
+  if (store) {
+    const saved = store.load();
+
+    if (saved) {
+      const now = Date.now();
+
+      registry.restore(saved.registry, Math.max(0, now - saved.savedAt), now);
+      log.ok("DATA", `Restored ${registry.all().length} nodes and ${registry.history.length} blocks saved ${Math.round((now - saved.savedAt) / 1000)} s ago`);
+    }
+  }
+
+  function save(): void {
+    if (!store) return;
+
+    try {
+      store.save({ version: STATE_VERSION, savedAt: Date.now(), registry: registry.toState() });
+    } catch (err) {
+      log.error("DATA", "Could not save state:", (err as Error).message);
+    }
+  }
+
+  const saving = store ? setInterval(save, SAVE_INTERVAL_MS) : null;
   const reporters = new WebSocketServer({ noServer: true, maxPayload: settings.maxMessageBytes });
   const viewers = new WebSocketServer({ noServer: true, maxPayload: VIEWER_MAX_PAYLOAD });
   const connectionLimiter = new RateLimiter(settings.connPerMinute);
@@ -422,6 +452,11 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
     publicSecret: settings.publicSecret,
 
     close() {
+      // Save before dropping connections, so connected nodes are saved as up
+      save();
+      if (saving) clearInterval(saving);
+      store?.close();
+
       if (gasPricePoll) clearInterval(gasPricePoll);
       clearInterval(heartbeat);
       clearInterval(prune);

@@ -68,6 +68,20 @@ interface ReorgEvent {
   trusted: boolean;
 }
 
+/** What is saved of the history across restarts: the same data, with sets as arrays. */
+export interface HistoryState {
+  startedAt: number;
+  items: {
+    height: number;
+    /** Which fork is the block shown for the height. */
+    shown: number;
+    forks: HistoryBlock[];
+    forkReporters: { ids: string[]; trusted: boolean }[];
+    propagTimes: Propagation[];
+  }[];
+  reorgs: { height: number; at: number; nodes: string[]; trusted: boolean }[];
+}
+
 export interface HistoryRequest {
   min: number;
   max: number;
@@ -96,12 +110,43 @@ export class History {
   private items: Height[] = [];
   private trustedOnly = false;
   private reorgs: ReorgEvent[] = [];
-  private readonly startedAt = Date.now();
+  private startedAt = Date.now();
   /** Known pools by coinbase address. */
   private readonly pools: Map<string, MiningPool>;
 
   constructor(pools: Map<string, MiningPool> = new Map()) {
     this.pools = pools;
+  }
+
+  toState(): HistoryState {
+    return {
+      startedAt: this.startedAt,
+      items: this.items.map((item) => ({
+        height: item.height,
+        shown: Math.max(0, item.forks.indexOf(item.block)),
+        forks: item.forks,
+        forkReporters: item.forkReporters.map((r) => ({ ids: [...r.ids], trusted: r.trusted })),
+        propagTimes: item.propagTimes,
+      })),
+      reorgs: this.reorgs.map((e) => ({ ...e, nodes: [...e.nodes] })),
+    };
+  }
+
+  /** restore replaces the history with saved state. */
+  restore(state: HistoryState): void {
+    this.startedAt = Math.min(state.startedAt, Date.now());
+    this.items = state.items
+      .filter((item) => item.forks.length > 0)
+      .map((item) => ({
+        height: item.height,
+        block: item.forks[item.shown] ?? item.forks[0],
+        forks: item.forks,
+        forkReporters: item.forkReporters.map((r) => ({ ids: new Set(r.ids), trusted: r.trusted })),
+        propagTimes: item.propagTimes,
+      }))
+      .sort((a, b) => b.height - a.height)
+      .slice(0, MAX_HISTORY);
+    this.reorgs = state.reorgs.slice(-MAX_REORG_EVENTS).map((e) => ({ ...e, nodes: new Set(e.nodes) }));
   }
 
   /**

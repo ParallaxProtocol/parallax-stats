@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import nextEnv from "@next/env";
 import next from "next";
 import { createGeoLookup } from "./src/server/geo.ts";
+import { openStore } from "./src/server/persist.ts";
 import { createHub } from "./src/server/hub.ts";
 import { fetchGasPrice } from "./src/server/rpc.ts";
 import { log } from "./src/server/log.ts";
@@ -34,7 +35,11 @@ if (weak > 0) {
 
 const port = Number.parseInt(process.env.PORT ?? "3000", 10);
 const rpcURL = process.env.RPC_URL || "https://rpc.parallaxprotocol.org";
-const hub = createHub(settings, { lookupGeo: createGeoLookup(), fetchGasPrice: () => fetchGasPrice(rpcURL) });
+const hub = createHub(settings, {
+  lookupGeo: createGeoLookup(),
+  fetchGasPrice: () => fetchGasPrice(rpcURL),
+  store: settings.dataDir ? openStore(settings.dataDir) : undefined,
+});
 
 publishHub(hub);
 

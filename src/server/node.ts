@@ -7,6 +7,8 @@ import type { ReportedStats } from "./sanitize.ts";
 
 /** Disconnected nodes are forgotten after this long. */
 export const MAX_INACTIVE_MS = 4 * 60 * 60 * 1000;
+/** After a restart, nodes this quick to reconnect lose no uptime for the wait. */
+export const RECONNECT_GRACE_MS = 2 * 60 * 1000;
 
 const EMPTY_BLOCK: Block = {
   number: 0,
@@ -41,6 +43,18 @@ export interface Login {
   geo: Geo | null;
 }
 
+/** What is saved of a node across restarts. */
+export interface NodeState {
+  id: string;
+  trusted: boolean;
+  ip: string;
+  info: NodeInfo;
+  geo: Geo | null;
+  stats: NodeStats;
+  history: number[];
+  uptime: NodeRecord["uptime"];
+}
+
 export class NodeRecord {
   readonly id: string;
   readonly publicId: string;
@@ -67,6 +81,8 @@ export class NodeRecord {
   history = new Array<number>(HISTORY_BINS).fill(-1);
   /** Connection time accounting behind the uptime figure. */
   uptime = { started: 0, up: 0, down: 0, lastStatus: false, lastUpdate: 0 };
+  /** Until when a restored node may reconnect without the wait counting as downtime. */
+  private graceUntil = 0;
 
   constructor(login: Login, pseudonymKey: Buffer) {
     this.id = login.id;
@@ -77,6 +93,38 @@ export class NodeRecord {
     this.publicId = "node-" + createHmac("sha256", pseudonymKey).update(login.id).digest("hex").slice(0, 8);
     this.stats.latency = login.latency;
     this.login(login);
+  }
+
+  toState(): NodeState {
+    const { id, trusted, ip, info, geo, stats, history, uptime } = this;
+
+    return { id, trusted, ip, info, geo, stats, history, uptime };
+  }
+
+  /**
+   * fromState restores a saved node as disconnected. `downtime` is how long
+   * the dashboard itself was down: it is left out of the node's uptime,
+   * since the node may well have been running.
+   */
+  static fromState(state: NodeState, pseudonymKey: Buffer, downtime: number, now = Date.now()): NodeRecord {
+    const node = new NodeRecord(
+      { id: state.id, info: state.info, ip: state.ip, connection: 0, latency: state.stats.latency, trusted: state.trusted, geo: state.geo },
+      pseudonymKey,
+    );
+
+    node.stats = { ...state.stats };
+    node.history = [...state.history];
+    node.uptime = { ...state.uptime };
+
+    if (node.uptime.started !== 0) {
+      node.uptime.started += downtime;
+      node.uptime.lastUpdate += downtime;
+    }
+
+    node.setState(false, Math.max(now, node.uptime.lastUpdate));
+    node.graceUntil = now + RECONNECT_GRACE_MS;
+
+    return node;
   }
 
   /** viewId is the id viewers see. */
@@ -189,12 +237,16 @@ export class NodeRecord {
 
     if (u.started === 0) {
       u.started = now;
+    } else if (!u.lastStatus && now <= this.graceUntil) {
+      // Reconnecting after the dashboard restarted: the wait was ours, not the node's
+      u.started += now - u.lastUpdate;
     } else if (u.lastStatus) {
       u.up += now - u.lastUpdate;
     } else {
       u.down += now - u.lastUpdate;
     }
 
+    this.graceUntil = 0;
     this.stats.active = active;
     u.lastStatus = active;
     u.lastUpdate = now;

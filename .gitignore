@@ -16,3 +16,6 @@ npm-debug.log*
 
 # env files
 .env*
+
+# saved state (DATA_DIR) from local runs
+/data/

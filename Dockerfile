@@ -9,7 +9,9 @@ COPY . .
 RUN pnpm build && pnpm prune --prod
 
 FROM node:24-alpine
-RUN apk add --no-cache dumb-init
+# /data belongs to the app user, so a volume mounted there for DATA_DIR
+# starts out writable
+RUN apk add --no-cache dumb-init && mkdir /data && chown node:node /data
 WORKDIR /app
 ENV NODE_ENV=production PORT=3000 NEXT_TELEMETRY_DISABLED=1
 COPY --from=build --chown=node:node /app/package.json /app/server.ts /app/next.config.ts ./

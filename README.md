@@ -105,6 +105,7 @@ All settings come from the environment.
 | `NAME_HOLD_MINUTES` | `60` | How long a disconnected name stays bound to its address |
 | `MAX_MESSAGE_BYTES` | `4194304` | Largest reporter message accepted |
 | `MAX_VIEWERS_PER_IP` | `20` | Dashboard connections one address may hold open |
+| `DATA_DIR` | | Directory to save state in, so restarts keep the node list, uptimes and block history. Without it, state lives in memory only. |
 | `MINING_POOLS` | | Known pools, shown by name under Decentralization: see below |
 
 Lists are separated by `|` or `,`. At least one of `WS_SECRET` and
@@ -220,6 +221,9 @@ treated as untrusted:
   `BEHIND_CLOUDFLARE`, `CF-Connecting-IP` is used only when that address
   is one of [Cloudflare's](https://www.cloudflare.com/ips/), so a client
   connecting to the server directly cannot set its address with it.
+- **Saved state.** The file in `DATA_DIR` holds node addresses and the
+  names behind pseudonyms, so it is created readable by the server's
+  user only. It never holds secrets.
 
 What a public dashboard cannot prevent: an unverified node can report
 false stats about itself (peers, latency, sync state), and someone with
@@ -240,8 +244,13 @@ self-reported.
   the first response, so the page shows data before any script runs. The
   browser then keeps it current over `/live`.
 
-All state is in memory. After a restart the node list refills as nodes
-reconnect, and the block history backfills from them within minutes.
+The server works from memory. With `DATA_DIR` set, it also saves its
+state to a SQLite file there every 30 seconds and on shutdown, and loads
+it at startup: nodes come back as offline until they report again, with
+their uptimes (neither the time the dashboard was down nor the first 2
+minutes of reconnecting is held against them), pseudonyms and propagation history, along with the block history
+and reorg counts. Without it, the node list refills as nodes reconnect
+and the recent block history backfills from them within minutes.
 
 ## Deployment
 
@@ -261,7 +270,12 @@ The server keeps its state in memory, so run a single instance.
    PUBLIC_SECRET=<the secret you publish>
    TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
    SITE_URL=https://stats.example.org
+   DATA_DIR=/data
    ```
+
+   For state to survive redeploys, add a volume under **Persistent
+   Storage**: name it (e.g. `parallax-stats-data`), leave the source path
+   empty and set the destination path to `/data`. Then set `DATA_DIR=/data`.
 
    `TRUSTED_PROXIES` matters: Traefik reaches the app from a Docker network
    address that can change between deploys. Without it, every node and
