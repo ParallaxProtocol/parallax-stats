@@ -115,6 +115,18 @@ export function clientVersion(node: string): string {
   return version ?? parts[0] ?? "";
 }
 
+/**
+ * shortVersion trims a version like v2.1.2-stable-1dea7a08 to v2.1.2 when
+ * the commit is the one GitHub's v2.1.2 release tag points at, so official
+ * builds read as their release. Any other build keeps its full version.
+ */
+export function shortVersion(version: string, releases: Record<string, string>): string {
+  const match = /^(v\d+\.\d+\.\d+)-stable-([0-9a-f]{7,40})$/i.exec(version);
+  const commit = match ? releases[match[1]] : undefined;
+
+  return match && commit?.startsWith(match[2].toLowerCase()) ? match[1] : version;
+}
+
 // Grades
 
 /**

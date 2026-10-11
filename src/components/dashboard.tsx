@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import { miningDifficulty } from "@/lib/asert";
 import { onMainnet, summarize } from "@/lib/derive";
 import type { Snapshot } from "@/lib/protocol";
-import type { Release } from "@/lib/releases";
+import type { Release, ReleaseCommits } from "@/lib/releases";
 import type { WorldMap } from "@/lib/world";
 import { Alerts } from "./alerts";
 import { BlockClock, ClockPlate } from "./block-clock";
@@ -22,15 +22,17 @@ export function Dashboard({
   world,
   publicNodes,
   latestRelease,
+  releaseCommits,
 }: {
   initial: Snapshot;
   world: WorldMap;
   publicNodes: boolean;
   latestRelease: Release | null;
+  releaseCommits: ReleaseCommits;
 }) {
   return (
     <LiveProvider initial={initial}>
-      <Live world={world} publicNodes={publicNodes} latestRelease={latestRelease} />
+      <Live world={world} publicNodes={publicNodes} latestRelease={latestRelease} releaseCommits={releaseCommits} />
     </LiveProvider>
   );
 }
@@ -39,10 +41,12 @@ function Live({
   world,
   publicNodes,
   latestRelease,
+  releaseCommits,
 }: {
   world: WorldMap;
   publicNodes: boolean;
   latestRelease: Release | null;
+  releaseCommits: ReleaseCommits;
 }) {
   const { nodes, charts, gasPrice, pools, connection, latency } = useLive();
   const summary = useMemo(() => summarize(nodes), [nodes]);
@@ -71,7 +75,7 @@ function Live({
       </div>
       <Monetary bestBlock={summary.bestBlock} charts={charts} />
       <NetworkHealth health={charts?.health ?? null} nodes={nodes} latestRelease={latestRelease} />
-      <NodeTable nodes={nodes} bestBlock={summary.bestBlock} publicNodes={publicNodes} />
+      <NodeTable nodes={nodes} bestBlock={summary.bestBlock} publicNodes={publicNodes} releaseCommits={releaseCommits} />
       <BlockToasts best={best} pools={pools} live={connection === "live"} />
     </>
   );

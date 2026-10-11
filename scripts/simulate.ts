@@ -44,6 +44,11 @@ const ADDRESSES = [
   "62.210.16.6",
 ];
 
+// Client versions as parallaxd reports them: official release builds, whose
+// commits match the GitHub release tags, and a build from source with local
+// changes, whose commit matches no release.
+const VERSIONS = ["v2.1.2-stable-1dea7a08", "v2.1.1-stable-09519094", "v2.1.2-stable-4f2c9e1b", "v2.1.0-stable-e87747a4"];
+
 // Fourteen miners. The first finds SIM_MAJORITY of blocks (default 0.6, so
 // the dashboard shows a critical mining majority; 0 spreads them out), and
 // a few of the rest find most of the others.
@@ -168,7 +173,7 @@ function startNode(index: number): void {
       secret: verified ? privateSecret : "",
       info: {
         name: id,
-        node: `Parallax/${["v2.1.1", "v2.1.0", "v2.0.0"][index % 3]}-stable/linux-amd64/go1.27.1`,
+        node: `Parallax/${VERSIONS[index % VERSIONS.length]}/linux-amd64/go1.27.1`,
         port: 32110,
         net: "2110",
         protocol: "prl/68, snap/1",

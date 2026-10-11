@@ -14,6 +14,7 @@ import {
   gradePropagation,
   gradeUptime,
   shortHash,
+  shortVersion,
   type Grade,
 } from "@/lib/format";
 import { HISTORY_BINS, PROPAGATION_BANDS, type PublicNode } from "@/lib/protocol";
@@ -98,22 +99,21 @@ interface Column {
   key: SortKey;
   label: string;
   title: string;
-  className?: string;
   /** Sort direction on first click: big values first for counts. */
   desc?: boolean;
 }
 
 const COLUMNS: Column[] = [
   { key: "name", label: "Node", title: "Node name" },
-  { key: "client", label: "Client", title: "Client version", className: "hidden lg:table-cell" },
+  { key: "client", label: "Client", title: "Client version" },
   { key: "sync", label: "Sync", title: "Sync state" },
   { key: "peers", label: "Peers", title: "Connected peers", desc: true },
   { key: "peerLatency", label: "Latency", title: "Median of the minimum ping to each peer" },
   { key: "block", label: "Block", title: "Latest block", desc: true },
   { key: "mining", label: "Mining", title: "Whether the node is mining; hover the icon for its hashrate", desc: true },
   { key: "propagation", label: "Propagation", title: "Delay after the first node reported the block" },
-  { key: "propagationAvg", label: "Propagation history", title: "Propagation delay for each of the last 40 blocks, and the average", className: "hidden lg:table-cell" },
-  { key: "pending", label: "Mempool size", title: "Transactions waiting in the node's mempool", className: "hidden 2xl:table-cell", desc: true },
+  { key: "propagationAvg", label: "Propagation history", title: "Propagation delay for each of the last 40 blocks, and the average" },
+  { key: "pending", label: "Mempool size", title: "Transactions waiting in the node's mempool", desc: true },
   { key: "uptime", label: "Uptime", title: "Share of time connected since first seen", desc: true },
 ];
 
@@ -381,10 +381,12 @@ export function NodeTable({
   nodes,
   bestBlock,
   publicNodes,
+  releaseCommits,
 }: {
   nodes: PublicNode[];
   bestBlock: number;
   publicNodes: boolean;
+  releaseCommits: Record<string, string>;
 }) {
   const now = useServerNow();
   // null is the default order; a new key, so a sort saved by older versions starts from the default
@@ -445,7 +447,7 @@ export function NodeTable({
                   <th
                     key={column.key}
                     scope="col"
-                    className={`px-3 py-3 font-mono text-xs font-normal tracking-wider whitespace-nowrap uppercase ${column.className ?? ""}`}
+                    className="px-3 py-3 font-mono text-xs font-normal tracking-wider whitespace-nowrap uppercase"
                     aria-sort={sort?.key === column.key ? (sort.desc ? "descending" : "ascending") : undefined}
                   >
                     <button
@@ -471,6 +473,7 @@ export function NodeTable({
                 const pinned = pins.includes(node.id);
                 const expanded = open === node.id;
                 const atHead = behind <= 0;
+                const version = clientVersion(node.info.node);
 
                 return (
                   <Fragment key={node.id}>
@@ -524,7 +527,9 @@ export function NodeTable({
                         </button>
                         {node.trusted && <VerifiedIcon />}
                       </td>
-                      <Cell className="hidden font-mono text-xs text-muted-foreground lg:table-cell">{clientVersion(node.info.node) || "unknown"}</Cell>
+                      <Cell className="font-mono text-xs text-muted-foreground">
+                        <span title={version || undefined} className="max-w-28 truncate">{version ? shortVersion(version, releaseCommits) : "unknown"}</span>
+                      </Cell>
                       <SyncStatus active={active} syncing={stats.syncing} />
                       <Cell grade={active ? gradePeers(stats.peers) : undefined}>{stats.peers}</Cell>
                       <Cell grade={active ? gradePeerLatency(stats.peerLatency) : undefined}>
@@ -540,7 +545,7 @@ export function NodeTable({
                       <Cell grade={active && atHead ? gradePropagation(stats.block.propagation) : undefined}>
                         {atHead ? (stats.block.propagation ? `+${formatMs(stats.block.propagation)}` : "first") : "n/a"}
                       </Cell>
-                      <td className="hidden px-3 py-3 lg:table-cell">
+                      <td className="px-3 py-3">
                         <span className="inline-flex items-center gap-2">
                           <PropagationStrip history={node.history} />
                           <span className="text-xs whitespace-nowrap text-muted-foreground">
@@ -548,7 +553,7 @@ export function NodeTable({
                           </span>
                         </span>
                       </td>
-                      <Cell className="hidden 2xl:table-cell">{formatInt(stats.pending)}</Cell>
+                      <Cell>{formatInt(stats.pending)}</Cell>
                       <Cell grade={active ? gradeUptime(stats.uptime) : undefined}>{stats.uptime}%</Cell>
                     </tr>
                     {(expanded || closing === node.id) && (

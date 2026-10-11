@@ -7,7 +7,7 @@ import { Dashboard } from "@/components/dashboard";
 import { About } from "@/components/about";
 import { SoundToggle } from "@/components/block-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
-import { getLatestRelease } from "@/lib/releases";
+import { getLatestRelease, getReleaseCommits } from "@/lib/releases";
 import { getWorld } from "@/lib/world";
 import { getPublicNodes, getSnapshot } from "@/server/store";
 
@@ -76,10 +76,16 @@ async function LiveDashboard() {
   // The node list is live state: render it per request, never at build time
   await connection();
 
-  const [world, latestRelease] = await Promise.all([getWorld(), getLatestRelease()]);
+  const [world, latestRelease, releaseCommits] = await Promise.all([getWorld(), getLatestRelease(), getReleaseCommits()]);
 
   return (
-    <Dashboard initial={getSnapshot()} world={world} publicNodes={getPublicNodes()} latestRelease={latestRelease} />
+    <Dashboard
+      initial={getSnapshot()}
+      world={world}
+      publicNodes={getPublicNodes()}
+      latestRelease={latestRelease}
+      releaseCommits={releaseCommits}
+    />
   );
 }
 
