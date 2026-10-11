@@ -1,9 +1,9 @@
 "use client";
 
 import { useMemo } from "react";
-import { MAINNET_NETWORK, miningDifficulty } from "@/lib/asert";
-import { summarize } from "@/lib/derive";
-import type { PublicNode, Snapshot } from "@/lib/protocol";
+import { miningDifficulty } from "@/lib/asert";
+import { onMainnet, summarize } from "@/lib/derive";
+import type { Snapshot } from "@/lib/protocol";
 import type { Release } from "@/lib/releases";
 import type { WorldMap } from "@/lib/world";
 import { Alerts } from "./alerts";
@@ -75,19 +75,6 @@ function Live({
       <BlockToasts best={best} pools={pools} live={connection === "live"} />
     </>
   );
-}
-
-/**
- * onMainnet reports whether the nodes are on mainnet, going by verified
- * nodes when any are online, so unverified nodes cannot switch the
- * mainnet-only figures on or off.
- */
-function onMainnet(nodes: PublicNode[]): boolean {
-  const active = nodes.filter((node) => node.stats.active);
-  const verified = active.filter((node) => node.trusted);
-  const pool = verified.length > 0 ? verified : active;
-
-  return pool.length > 0 && pool.filter((node) => node.info.net === MAINNET_NETWORK).length * 2 > pool.length;
 }
 
 function ConnectionStatus({ connection, latency }: { connection: string; latency: number | null }) {

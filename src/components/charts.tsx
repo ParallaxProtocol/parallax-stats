@@ -11,10 +11,10 @@ import {
   formatMs,
   formatPoolDifficulty,
   shortHash,
-  type Grade,
 } from "@/lib/format";
 import { TARGET_BLOCK_TIME, type Block, type Charts, type MinerCount, type PropagationStats } from "@/lib/protocol";
 import { majorityLevel, spreadLevel, type Level } from "@/lib/alert-levels";
+import { DECENTRALIZATION_MIN_BLOCKS, gradeDecentralization, majorityHolders } from "@/lib/decentralization";
 import { Indicator } from "./indicator";
 import { Label, Plate } from "./plate";
 import { useSize } from "./use-size";
@@ -604,40 +604,8 @@ function Fees({ c, block }: { c: Charts; block: (i: number) => string }) {
 
 const MINING_POOL_STATS = "https://miningpoolstats.stream/parallax";
 
-/** Fewer blocks than this say too little about who mines to grade. */
-const DECENTRALIZATION_MIN_BLOCKS = 10;
 /** Miners named in the chart; the rest are drawn together as other miners. */
 const SHOWN_MINERS = 7;
-
-/**
- * majorityHolders is the fewest miners that together found more than half
- * of the blocks (the Nakamoto coefficient over the window), or null when
- * the miners listed do not reach a majority.
- */
-function majorityHolders(miners: { blocks: number }[], total: number): number | null {
-  let sum = 0;
-
-  for (let i = 0; i < miners.length; i++) {
-    sum += miners[i].blocks;
-
-    if (sum * 2 > total) return i + 1;
-  }
-
-  return null;
-}
-
-/**
- * gradeDecentralization grades how many miners it takes to hold a majority
- * of recent blocks, which is how many would have to collude to rewrite
- * the chain. null means more than the miners listed.
- */
-function gradeDecentralization(majority: number | null): { grade: Grade; verdict: string } {
-  if (majority === null || majority >= 4) return { grade: "good", verdict: "Healthy" };
-  if (majority === 3) return { grade: "warn", verdict: "Fair" };
-  if (majority === 2) return { grade: "serious", verdict: "Concentrated" };
-
-  return { grade: "critical", verdict: "Critical" };
-}
 
 /**
  * Slice colours: the brand teal, stepping toward the surface by rank, so

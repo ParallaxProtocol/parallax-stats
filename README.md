@@ -114,6 +114,7 @@ All settings come from the environment.
 | `NAME_HOLD_MINUTES` | `60` | How long a disconnected name stays bound to its address |
 | `MAX_MESSAGE_BYTES` | `4194304` | Largest reporter message accepted |
 | `MAX_VIEWERS_PER_IP` | `20` | Dashboard connections one address may hold open |
+| `API_PER_MINUTE` | `60` | Requests to the JSON stats endpoints per address per minute |
 | `DATA_DIR` | | Directory to save state in, so restarts keep the node list, uptimes and block history. Without it, state lives in memory only. |
 | `MINING_POOLS` | | Known pools, shown by name under Decentralization: see below |
 
@@ -151,14 +152,47 @@ unavailable and the rest of the dashboard carries on.
 
 ## JSON API
 
-- `GET /api/v1/stats` returns a summary of the network (best block, when
-  it arrived, node counts, median peer latency, average block time,
-  hashrate and difficulty) for scripts and other sites. It allows
-  cross-origin requests.
-- `GET /api/v1/names?name=…` tells the caller whether they can report under
-  a node name: `available`, `yours` (held for the caller's own address),
-  `taken`, `reserved` or `invalid`. It answers only that, never which node
-  holds a name, and allows 20 checks per minute per address.
+All endpoints allow cross-origin requests. The stats endpoints allow
+`API_PER_MINUTE` requests per minute per address (60 by default, shared
+between them) and answer `429` with `Retry-After: 60` beyond that; poll
+once every few seconds at most, as the figures change with each block.
+
+### `GET /api/v2/stats`
+
+Everything the dashboard shows. Times are Unix milliseconds unless a field
+says seconds; difficulties are decimal strings, as they overflow JSON
+numbers; shares are fractions from 0 to 1.
+
+| Field | What it holds |
+|---|---|
+| `network` | `"mainnet"`, `"other"`, or `null` with no nodes reporting |
+| `bestBlock` | `number`, `hash`, `miner`, `pool` (name, when known), `timestamp`, `arrived` |
+| `nodes` | `total`, `active`, `synced`, and `latencyMs`: the median of the reporting nodes' latency to their peers |
+| `blockTime` | `targetSeconds`; `week`: the 7 day average (`averageSeconds`, `blocks`, `spanSeconds`, and `fullWeek`, false while the server holds less than a week); `recent`: the last 40 blocks' average |
+| `hashrate` | `hashesPerSecond`, estimated from difficulty and block times |
+| `difficulty` | `latest` (the best block's), `next` (the block being mined, exact on mainnet), `nextPoolUnits` (÷2^32, as pools show it), `changeWeek` |
+| `recommendedFee` | `wei`, `gwei`, and `transferLax`: the fee of a plain 21,000 gas transfer |
+| `uptime` | `verifiedAveragePercent`: verified nodes' average uptime |
+| `decentralization` | over the last 7 days of blocks: `grade` (`healthy`, `fair`, `concentrated`, `critical`), `majorityHolders` (the fewest miners holding a majority, `null` when more than are listed), `distinctMiners`, `topMiners` (`name` and `website` for known pools, `address`, `blocks`, `share`) |
+| `staleBlocks` | `window`, `count`, `recent` stale heights, `reorgs` (count and `since`), `lastReorg` and `lastDeepReorg` (`height`, `at`, `nodes`, `depth`), `split`, and the panel's warning `level` |
+| `propagation` | `reports`, `medianMs`, `p90Ms`, `p99Ms`, and `reach90`: how long recent blocks took to reach 90% of verified nodes, with any consistently slow miner |
+| `alerts` | the alerts showing on the page, most severe first: `type` (`split`, `stall`, `reorg`, `majority`, `propagation`, `slow-miner`, `no-verified-node`, `release`), `level` (`critical`, `warn`, `info`), `since` where it applies, and `details` |
+
+The figures cover the nodes reporting to this dashboard, not the whole
+network: see the page's About dialog.
+
+### `GET /api/v1/stats`
+
+The original summary, kept unchanged for existing scripts: best block, when
+it arrived, node counts, median latency to peers, average block time,
+hashrate and difficulty.
+
+### `GET /api/v1/names?name=…`
+
+Tells the caller whether they can report under a node name: `available`,
+`yours` (held for the caller's own address), `taken`, `reserved` or
+`invalid`. It answers only that, never which node holds a name, and allows
+20 checks per minute per address.
 
 ## How the figures are worked out
 

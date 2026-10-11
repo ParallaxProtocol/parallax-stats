@@ -7,6 +7,7 @@ import type { Duplex } from "node:stream";
 import { WebSocket, WebSocketServer, type RawData } from "ws";
 import {
   NAME_CHECK_PATH,
+  STATS_PATHS,
   REPORTER_PATH,
   VIEWER_PATH,
   type Charts,
@@ -104,6 +105,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
   const viewers = new WebSocketServer({ noServer: true, maxPayload: VIEWER_MAX_PAYLOAD });
   const connectionLimiter = new RateLimiter(settings.connPerMinute);
   const nameCheckLimiter = new RateLimiter(NAME_CHECKS_PER_MINUTE);
+  const apiLimiter = new RateLimiter(settings.apiPerMinute);
   const viewersPerIP = new Map<string, number>();
   let connections = 0;
 
@@ -385,6 +387,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
   const prune = setInterval(() => {
     connectionLimiter.prune();
     nameCheckLimiter.prune();
+    apiLimiter.prune();
   }, 60_000);
 
   const cleanup = setInterval(() => {
@@ -395,12 +398,31 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
     handleRequest(req, res) {
       const url = new URL(req.url ?? "/", "http://localhost");
 
-      if (url.pathname !== NAME_CHECK_PATH) return false;
-
-      const reply = (status: number, body: unknown) => {
-        res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+      const reply = (status: number, body: unknown, headers: Record<string, string> = {}) => {
+        res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store", ...headers });
         res.end(JSON.stringify(body));
       };
+
+      // The stats endpoints are answered by Next.js, which cannot see the
+      // client's address: limit them here, by the same address as everything else
+      if (STATS_PATHS.includes(url.pathname)) {
+        const ip = clientIP(settings, req);
+        const cors = { "Access-Control-Allow-Origin": "*" };
+
+        if (inList(settings.bannedIPs, ip)) {
+          reply(403, { error: "Forbidden" }, cors);
+          return true;
+        }
+
+        if (!apiLimiter.allow(ip)) {
+          reply(429, { error: `Too many requests: at most ${settings.apiPerMinute} a minute per address` }, { ...cors, "Retry-After": "60" });
+          return true;
+        }
+
+        return false;
+      }
+
+      if (url.pathname !== NAME_CHECK_PATH) return false;
 
       if (req.method !== "GET") {
         reply(405, { error: "Method not allowed" });

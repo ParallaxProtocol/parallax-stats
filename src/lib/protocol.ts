@@ -6,6 +6,8 @@ export const VIEWER_PATH = "/live";
 export const REPORTER_PATH = "/api";
 /** GET ?name=… tells an operator whether they can log in with a node name. */
 export const NAME_CHECK_PATH = "/api/v1/names";
+/** The JSON stats endpoints, served by Next.js once the hub has rate limited them. */
+export const STATS_PATHS = ["/api/v1/stats", "/api/v2/stats"];
 
 /**
  * Whether the asker can use a node name: free, already theirs (held for

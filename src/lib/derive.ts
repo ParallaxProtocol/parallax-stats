@@ -1,5 +1,6 @@
 // Network-wide figures derived from the node list.
 
+import { MAINNET_NETWORK } from "./asert.ts";
 import type { NodeStats, PublicNode } from "./protocol.ts";
 
 export interface Summary {
@@ -48,4 +49,17 @@ export function summarize(nodes: PublicNode[]): Summary {
     peerLatency: median(active.map((node) => node.stats.peerLatency).filter((latency) => latency > 0)),
     uptime: average(nodes.filter((node) => node.trusted).map((node) => node.stats.uptime)),
   };
+}
+
+/**
+ * onMainnet reports whether the nodes are on mainnet, going by verified
+ * nodes when any are online, so unverified nodes cannot switch the
+ * mainnet-only figures on or off.
+ */
+export function onMainnet(nodes: PublicNode[]): boolean {
+  const active = nodes.filter((node) => node.stats.active);
+  const verified = active.filter((node) => node.trusted);
+  const pool = verified.length > 0 ? verified : active;
+
+  return pool.length > 0 && pool.filter((node) => node.info.net === MAINNET_NETWORK).length * 2 > pool.length;
 }

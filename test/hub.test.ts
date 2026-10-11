@@ -324,3 +324,36 @@ test("viewers get the recommended gas price in the snapshot", async () => {
   assert.equal(snapshot.gasPrice, "117391737659");
   ws.close();
 });
+
+test("the stats endpoints are rate limited per address", async () => {
+  const limited = createHub(loadSettings({ PUBLIC_SECRET: "open", API_PER_MINUTE: "3" }));
+  const api = createServer((req, res) => {
+    // What the hub lets through, Next.js answers
+    if (!limited.handleRequest(req, res)) res.end("{}");
+  });
+
+  await new Promise<void>((resolve) => api.listen(0, "127.0.0.1", resolve));
+
+  const url = `http://127.0.0.1:${(api.address() as AddressInfo).port}`;
+
+  try {
+    const statuses = [];
+
+    for (let i = 0; i < 4; i++) statuses.push((await fetch(`${url}/api/v2/stats`)).status);
+
+    assert.deepEqual(statuses, [200, 200, 200, 429]);
+
+    // The limit is per address and shared by both versions
+    const v1 = await fetch(`${url}/api/v1/stats`);
+
+    assert.equal(v1.status, 429);
+    assert.equal(v1.headers.get("retry-after"), "60");
+    assert.equal(v1.headers.get("access-control-allow-origin"), "*");
+
+    // Other paths are not counted
+    assert.equal((await fetch(`${url}/`)).status, 200);
+  } finally {
+    limited.close();
+    api.close();
+  }
+});

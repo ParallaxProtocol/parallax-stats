@@ -35,6 +35,8 @@ export interface Settings {
   msgBurst: number;
   /** Viewer connections one address may hold open. */
   maxViewersPerIP: number;
+  /** Requests to the JSON stats endpoints per address per minute. */
+  apiPerMinute: number;
   /** Directory state is saved in across restarts; null keeps it in memory only. */
   dataDir: string | null;
   /** Known mining pools by coinbase address (lowercase). */
@@ -152,6 +154,7 @@ export function loadSettings(env: Env = process.env): Settings {
     msgPerSecond: 5,
     msgBurst: 50,
     maxViewersPerIP: intSetting(env, "MAX_VIEWERS_PER_IP", 20),
+    apiPerMinute: intSetting(env, "API_PER_MINUTE", 60),
     dataDir: env.DATA_DIR?.trim() || null,
     miningPools: miningPools(env.MINING_POOLS),
   };
