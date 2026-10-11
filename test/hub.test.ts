@@ -140,6 +140,19 @@ test("public and private secrets log in with different trust", async () => {
   priv.close();
 });
 
+test("a node without a secret logs in unverified", async () => {
+  const ws = await report("no-secret-node", "");
+
+  await waitFor(() => isReady(ws));
+
+  const nodes = await viewNodes();
+
+  assert.equal(nodes.find((n) => n.id === "no-secret-node"), undefined);
+  assert.ok(nodes.some((n) => !n.trusted && /^node-[0-9a-f]{8}$/.test(n.id)));
+
+  ws.close();
+});
+
 test("reports are attributed to the logged in node, not the claimed id", async () => {
   const victim = await report("victim", PRIVATE);
   const attacker = await report("attacker", "open");
@@ -302,8 +315,9 @@ test("fees reported with a block reach viewers in the charts", async () => {
   ws.close();
 });
 
-test("the hub exposes the public secret for the page, never a private one", () => {
-  assert.equal(hub.publicSecret, "open");
+test("the hub tells the page whether public nodes are open, and never exposes a secret", () => {
+  assert.equal(hub.publicNodes, true);
+  assert.ok(!JSON.stringify(hub).includes("open"));
   assert.ok(!JSON.stringify(hub).includes(PRIVATE));
 });
 

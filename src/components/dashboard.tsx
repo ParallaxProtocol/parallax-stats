@@ -20,28 +20,28 @@ import { NodeTable } from "./node-table";
 export function Dashboard({
   initial,
   world,
-  publicSecret,
+  publicNodes,
   latestRelease,
 }: {
   initial: Snapshot;
   world: WorldMap;
-  publicSecret: string;
+  publicNodes: boolean;
   latestRelease: Release | null;
 }) {
   return (
     <LiveProvider initial={initial}>
-      <Live world={world} publicSecret={publicSecret} latestRelease={latestRelease} />
+      <Live world={world} publicNodes={publicNodes} latestRelease={latestRelease} />
     </LiveProvider>
   );
 }
 
 function Live({
   world,
-  publicSecret,
+  publicNodes,
   latestRelease,
 }: {
   world: WorldMap;
-  publicSecret: string;
+  publicNodes: boolean;
   latestRelease: Release | null;
 }) {
   const { nodes, charts, gasPrice, pools, connection, latency } = useLive();
@@ -71,7 +71,7 @@ function Live({
       </div>
       <Monetary bestBlock={summary.bestBlock} charts={charts} />
       <NetworkHealth health={charts?.health ?? null} nodes={nodes} latestRelease={latestRelease} />
-      <NodeTable nodes={nodes} bestBlock={summary.bestBlock} publicSecret={publicSecret} />
+      <NodeTable nodes={nodes} bestBlock={summary.bestBlock} publicNodes={publicNodes} />
       <BlockToasts best={best} pools={pools} live={connection === "live"} />
     </>
   );

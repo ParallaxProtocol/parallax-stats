@@ -52,8 +52,8 @@ export interface Hub {
   /** handleUpgrade takes websocket upgrades for the stats paths and returns false for anything else. */
   handleUpgrade(req: IncomingMessage, socket: Duplex, head: Buffer): boolean;
   snapshot(): Snapshot;
-  /** The reporting secret anyone may use, for the page's instructions. Private secrets never leave the hub. */
-  readonly publicSecret: string;
+  /** Whether anyone may report without a secret, for the page's instructions. Secrets never leave the hub. */
+  readonly publicNodes: boolean;
   /** recheckSecrets disconnects verified nodes whose private secret no longer verifies them, after the secrets change. */
   recheckSecrets(): void;
   close(): void;
@@ -484,7 +484,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
 
     snapshot,
 
-    publicSecret: settings.publicSecret,
+    publicNodes: settings.publicNodes,
 
     recheckSecrets() {
       for (const [connection, login] of verifiedLogins) {

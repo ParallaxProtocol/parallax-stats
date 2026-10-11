@@ -4,7 +4,8 @@
 //   pnpm simulate [url] [nodes]
 //
 // It reads the same .env files as the server and logs in with its
-// WS_SECRET and PUBLIC_SECRET, so a third of the nodes are verified. Set
+// WS_SECRET, and without a secret when PUBLIC_SECRET opens the server to
+// public nodes, so a third of the nodes are verified. Set
 // TRUSTED_PROXIES=127.0.0.1,::1 for the server so the simulated addresses
 // count (locations on the map, and the per-address limits). SIM_BLOCK_MS
 // sets the average block interval (default 20 s; the real target is 10 min),
@@ -164,7 +165,7 @@ function startNode(index: number): void {
   ws.on("open", () => {
     emit("hello", {
       id,
-      secret: verified ? privateSecret : publicSecret,
+      secret: verified ? privateSecret : "",
       info: {
         name: id,
         node: `Parallax/${["v2.1.1", "v2.1.0", "v2.0.0"][index % 3]}-stable/linux-amd64/go1.27.1`,

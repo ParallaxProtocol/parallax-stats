@@ -9,7 +9,7 @@ import { SoundToggle } from "@/components/block-toast";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { getLatestRelease } from "@/lib/releases";
 import { getWorld } from "@/lib/world";
-import { getPublicSecret, getSnapshot } from "@/server/store";
+import { getPublicNodes, getSnapshot } from "@/server/store";
 
 const title = "Network Status | Parallax";
 const description = "Live status of Parallax nodes: block times, hashrate, difficulty, propagation and sync state.";
@@ -79,7 +79,7 @@ async function LiveDashboard() {
   const [world, latestRelease] = await Promise.all([getWorld(), getLatestRelease()]);
 
   return (
-    <Dashboard initial={getSnapshot()} world={world} publicSecret={getPublicSecret()} latestRelease={latestRelease} />
+    <Dashboard initial={getSnapshot()} world={world} publicNodes={getPublicNodes()} latestRelease={latestRelease} />
   );
 }
 

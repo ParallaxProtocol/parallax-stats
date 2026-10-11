@@ -380,11 +380,11 @@ function Details({
 export function NodeTable({
   nodes,
   bestBlock,
-  publicSecret,
+  publicNodes,
 }: {
   nodes: PublicNode[];
   bestBlock: number;
-  publicSecret: string;
+  publicNodes: boolean;
 }) {
   const now = useServerNow();
   // null is the default order; a new key, so a sort saved by older versions starts from the default
@@ -423,7 +423,7 @@ export function NodeTable({
         </Label>
         <div className="flex items-center gap-4">
           <p className="hidden text-xs text-muted-foreground sm:block">Select a node for details.</p>
-          <AddNode publicSecret={publicSecret} />
+          <AddNode publicNodes={publicNodes} />
         </div>
       </header>
 

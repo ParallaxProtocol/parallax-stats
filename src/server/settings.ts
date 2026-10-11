@@ -9,7 +9,9 @@ import { cloudflareEdges } from "./cloudflare.ts";
 export interface Settings {
   /** Private secrets; nodes logging in with one are verified, under the names it allows. */
   privateSecrets: PrivateSecret[];
-  /** Secret anyone may use; nodes logging in with it are unverified. */
+  /** Whether anyone may report without a secret, as an unverified node. */
+  publicNodes: boolean;
+  /** The secret public nodes once reported with, still accepted from nodes using it. */
   publicSecret: string;
   /** Reverse proxies allowed to set X-Forwarded-For: addresses or ranges such as 10.0.0.0/8. */
   trustedProxies: BlockList;
@@ -177,6 +179,8 @@ export function loadSettings(env: Env = process.env): Settings {
     privateSecrets: splitList(env.WS_SECRET)
       .map(privateSecret)
       .filter((s) => s.secret !== publicSecret),
+    // Setting PUBLIC_SECRET, to anything, opens the dashboard to public nodes
+    publicNodes: publicSecret.length > 0,
     publicSecret,
     trustedProxies: addressList(splitList(env.TRUSTED_PROXIES)),
     cloudflare: /^(1|true|yes)$/i.test((env.BEHIND_CLOUDFLARE ?? "").trim()) ? cloudflareEdges() : null,

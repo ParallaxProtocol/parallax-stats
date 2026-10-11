@@ -19,11 +19,16 @@ function digest(value: string): Buffer {
 /**
  * authenticate maps a login secret and the node name it reports to a trust
  * level, WRONG_NAME when a private secret may not verify that name, or null.
- * Secrets are compared in constant time, as digests so lengths do not leak
- * either, and every private secret is checked so the match position does not.
+ * No secret logs in as a public node when public nodes are open; so does the
+ * old public secret, for nodes still reporting with it. Any other secret is
+ * refused rather than listed unverified, so a mistyped private secret fails
+ * loudly. Secrets are compared in constant time, as digests so lengths do not
+ * leak either, and every private secret is checked so the match position does not.
  */
 export function authenticate(settings: Settings, secret: unknown, name = ""): TrustLevel | typeof WRONG_NAME | null {
-  if (typeof secret !== "string" || secret.length === 0 || secret.length > 1024) return null;
+  if (typeof secret !== "string" || secret.length > 1024) return null;
+
+  if (secret.length === 0) return settings.publicNodes ? "public" : null;
 
   const given = digest(secret);
   let matched: Settings["privateSecrets"][number] | null = null;

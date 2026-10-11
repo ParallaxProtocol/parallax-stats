@@ -41,7 +41,7 @@ and pnpm.
 ```bash
 pnpm install
 pnpm build
-WS_SECRET=my-private-secret PUBLIC_SECRET=open-secret pnpm start
+WS_SECRET=my-private-secret PUBLIC_SECRET=true pnpm start
 ```
 
 The dashboard is served at http://localhost:3000.
@@ -65,19 +65,22 @@ out, and `SIM_BLOCK_MS` sets the block interval (default 20 s).
 ## Adding a node
 
 The page's "Add your node" button walks operators through it and checks
-whether a name is free. In short, start `parallaxd` with the dashboard's
-address and a secret:
+whether a name is free. In short, start `parallaxd` with a name for the
+node and the dashboard's address:
 
 ```bash
-parallaxd --prlstats "my-node:open-secret@stats.example.org"
+parallaxd --prlstats "my-node@stats.example.org"
 ```
 
 or put the same value in the config file and start with `--config`:
 
 ```toml
 [ParallaxStats]
-URL = "my-node:open-secret@stats.example.org"
+URL = "my-node@stats.example.org"
 ```
+
+Nodes without a secret are unverified and listed under a pseudonym, so
+the name only identifies the node to the dashboard across reconnects.
 
 The node dials `wss://<host>/api` and falls back to `ws://`, so it needs
 no open ports. For a node using a private secret, write the scheme so it
@@ -99,7 +102,7 @@ All settings come from the environment.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `WS_SECRET` | | Private secrets, separated by `\|`. Nodes using one are **verified**, under the names it allows: see below. |
-| `PUBLIC_SECRET` | | Secret you publish for everyone else. Nodes using it are unverified. |
+| `PUBLIC_SECRET` | | Set to anything to let anyone report without a secret, as an unverified node. Nodes reporting with its value are accepted too, for those set up when public nodes needed a secret. |
 | `PORT` | `3000` | Listen port |
 | `RPC_URL` | `https://rpc.parallaxprotocol.org` | Parallax RPC endpoint the recommended fee is read from |
 | `SITE_URL` | | Public address, such as `https://stats.example.org`, for absolute links in link previews. Without it, the forwarded host is used. |
@@ -120,8 +123,11 @@ All settings come from the environment.
 | `MINING_POOLS` | | Known pools, shown by name under Decentralization: see below |
 
 Lists are separated by `|` or `,`. At least one of `WS_SECRET` and
-`PUBLIC_SECRET` must be set. The public secret is shown on the page, in
-the "Add your node" instructions, along with a command that uses it.
+`PUBLIC_SECRET` must be set. With `PUBLIC_SECRET` set, the page's "Add
+your node" instructions show a command for public nodes. A node giving a
+secret that matches neither a private secret nor `PUBLIC_SECRET` is
+refused rather than listed unverified, so a mistyped private secret
+fails loudly.
 
 Give each verified operator (your own nodes, a pool, an exchange) a secret
 of their own, so one can be revoked without touching the others, and limit
@@ -295,7 +301,7 @@ Tells the caller whether they can report under a node name: `available`,
 
 ## Security model
 
-With a public secret anyone can report, so everything a node sends is
+With public nodes open anyone can report, so everything a node sends is
 treated as untrusted:
 
 - **Verified nodes.** Run your own nodes with a private `WS_SECRET`. While
@@ -381,7 +387,7 @@ The server keeps its state in memory, so run a single instance.
 
    ```
    WS_SECRET=<random, e.g. openssl rand -hex 32>
-   PUBLIC_SECRET=<the secret you publish>
+   PUBLIC_SECRET=true
    TRUSTED_PROXIES=10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
    SITE_URL=https://stats.example.org
    DATA_DIR=/data
@@ -429,7 +435,7 @@ and start the server with `TRUSTED_PROXIES=127.0.0.1`.
 
 ```bash
 docker build -t parallax-stats .
-docker run -p 3000:3000 -e WS_SECRET=... -e PUBLIC_SECRET=... parallax-stats
+docker run -p 3000:3000 -e WS_SECRET=... -e PUBLIC_SECRET=true parallax-stats
 ```
 
 ## Tests

@@ -13,14 +13,24 @@ function req(remote: string, xff?: string, extra: Record<string, string> = {}) {
 test("authenticate maps secrets to trust levels", () => {
   assert.equal(authenticate(settings, "private-a"), "trusted");
   assert.equal(authenticate(settings, "private-b"), "trusted");
+  // No secret is a public node, and so is the old public secret, still in use by some nodes
+  assert.equal(authenticate(settings, ""), "public");
   assert.equal(authenticate(settings, "open"), "public");
+  // Any other secret, such as a mistyped private one, is refused rather than listed unverified
   assert.equal(authenticate(settings, "wrong"), null);
-  assert.equal(authenticate(settings, ""), null);
   assert.equal(authenticate(settings, undefined), null);
   // Near misses and oversized input are refused
   assert.equal(authenticate(settings, "private-a "), null);
   assert.equal(authenticate(settings, "private-"), null);
   assert.equal(authenticate(settings, "x".repeat(5000)), null);
+});
+
+test("without PUBLIC_SECRET only private secrets log in", () => {
+  const closed = loadSettings({ WS_SECRET: "private-a" });
+
+  assert.equal(closed.publicNodes, false);
+  assert.equal(authenticate(closed, ""), null);
+  assert.equal(authenticate(closed, "private-a"), "trusted");
 });
 
 test("the public secret never doubles as a private one", () => {

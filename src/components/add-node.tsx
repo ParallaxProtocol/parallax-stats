@@ -56,22 +56,22 @@ function Code({ children, label }: { children: string; label: string }) {
 
 /**
  * AddNode opens instructions for listing a node on the dashboard: any
- * operator can report with the public secret, and operators of fixed
+ * operator can report without a secret, and operators of fixed
  * infrastructure can ask for a private secret to be verified.
  */
-export function AddNode({ publicSecret }: { publicSecret: string }) {
+export function AddNode({ publicNodes }: { publicNodes: boolean }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const id = useId();
   const [host, setHost] = useState("");
   const [name, setName] = useState("my-node");
-  const [tab, setTab] = useState<Tab>(publicSecret ? "public" : "verified");
+  const [tab, setTab] = useState<Tab>(publicNodes ? "public" : "verified");
   const [isOpen, setIsOpen] = useState(false);
   const valid = NAME.test(name);
   const status = useNameStatus(name, isOpen && tab === "public" && valid);
   const statusLine = status && status !== "invalid" ? STATUS[status] : null;
   const shown = valid ? name : "my-node";
-  const url = `${shown}:${publicSecret}@${host}`;
-  const tabs: { key: Tab; label: string }[] = publicSecret
+  const url = `${shown}@${host}`;
+  const tabs: { key: Tab; label: string }[] = publicNodes
     ? [
         { key: "public", label: "Public node" },
         { key: "verified", label: "Verified node" },
