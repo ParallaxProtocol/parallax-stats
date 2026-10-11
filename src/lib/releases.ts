@@ -1,6 +1,8 @@
 // The latest parallaxd release, from GitHub. Fetched on the server and
-// cached for an hour, so every viewer shares one request: unauthenticated
-// GitHub API calls are limited to 60 an hour per address.
+// cached, so every viewer shares one request: unauthenticated GitHub API
+// calls are limited to 60 an hour per address, and a refresh every 10
+// minutes uses 6 of them while a new release shows up soon after it is
+// published.
 
 import { cacheLife } from "next/cache";
 
@@ -15,7 +17,7 @@ const LATEST = "https://api.github.com/repos/ParallaxProtocol/parallax/releases/
 /** fetchLatestRelease throws on failure, so a failed lookup is never cached. */
 async function fetchLatestRelease(): Promise<Release> {
   "use cache";
-  cacheLife("hours");
+  cacheLife({ stale: 300, revalidate: 600, expire: 3600 });
 
   const res = await fetch(LATEST, {
     headers: { Accept: "application/vnd.github+json", "User-Agent": "parallax-stats" },

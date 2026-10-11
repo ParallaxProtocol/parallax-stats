@@ -129,7 +129,8 @@ function ClientVersions({ nodes, latestRelease }: { nodes: PublicNode[]; latestR
   const latest = latestRelease ? parseVersion(`/${latestRelease.tag}`) : null;
   const status = (v: Version) =>
     !latest?.parts || !v.parts ? null : compareParts(v.parts, latest.parts) === 0 ? "latest" : compareParts(v.parts, latest.parts) > 0 ? "development" : "older";
-  const onLatest = versions.filter((v) => status(v) === "latest").reduce((sum, v) => sum + v.count, 0);
+  // A node ahead of the release runs a build at least as new
+  const current = versions.filter((v) => status(v) === "latest" || status(v) === "development").reduce((sum, v) => sum + v.count, 0);
   const behind = versions.filter((v) => status(v) === "older").reduce((sum, v) => sum + v.count, 0);
   const total = online.length;
 
@@ -144,8 +145,8 @@ function ClientVersions({ nodes, latestRelease }: { nodes: PublicNode[]; latestR
           <p className="flex flex-wrap items-baseline gap-x-2">
             {latest ? (
               <>
-                <span className="text-3xl tabular-nums">{Math.round((onLatest / total) * 100)}%</span>
-                <span className="text-sm text-muted-foreground">run the latest release, {latest.label}</span>
+                <span className="text-3xl tabular-nums">{Math.round((current / total) * 100)}%</span>
+                <span className="text-sm text-muted-foreground">run the latest release, {latest.label}, or newer</span>
               </>
             ) : (
               <>
