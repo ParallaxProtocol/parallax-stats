@@ -428,10 +428,10 @@ function Fullness({ c, block }: { c: Charts; block: (i: number) => string }) {
 
 /** The speed bands, in the order of PROPAGATION_BANDS in lib/protocol. */
 const BANDS = [
-  { label: "Under 1 s", swatch: "bg-good" },
-  { label: "1–3 s", swatch: "bg-warn" },
-  { label: "3–7 s", swatch: "bg-serious" },
-  { label: "7 s or more", swatch: "bg-critical" },
+  { label: "Under 5 s", swatch: "bg-good" },
+  { label: "5–15 s", swatch: "bg-warn" },
+  { label: "15–60 s", swatch: "bg-serious" },
+  { label: "60 s or more", swatch: "bg-critical" },
 ];
 
 /** share formats a fraction as a percentage that never rounds a nonzero part to 0% or a partial whole to 100%. */
@@ -466,7 +466,7 @@ function Propagation({ stats }: { stats: PropagationStats }) {
       title="Propagation"
       readout={samples ? `${formatInt(samples)} reports` : undefined}
       value={samples ? share(bands[0], samples) : undefined}
-      qualifier="reached nodes within 1 s"
+      qualifier="reached nodes within 5 s"
     >
       {samples === 0 ? (
         <Waiting>Waiting for blocks to reach a second node</Waiting>

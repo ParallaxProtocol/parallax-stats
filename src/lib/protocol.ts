@@ -100,10 +100,12 @@ export interface PublicNode {
 }
 
 /**
- * Upper bounds of the propagation speed bands, ms: under 1 s, 1–3 s,
- * 3–7 s, and 7 s or more. The node table grades delays the same way.
+ * Upper bounds of the propagation speed bands, ms: under 5 s, 5–15 s,
+ * 15–60 s, and 60 s or more. With 10 minute blocks, 15 s is about a 2.5%
+ * chance of a competing block and 60 s about 10%: the thresholds of the
+ * propagation alert. The node table grades delays the same way.
  */
-export const PROPAGATION_BANDS = [1000, 3000, 7000] as const;
+export const PROPAGATION_BANDS = [5000, 15_000, 60_000] as const;
 
 /** How long blocks took to reach nodes after the first report. */
 export interface PropagationStats {

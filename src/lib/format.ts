@@ -1,7 +1,7 @@
 // Number and time formatting, and the status grades that drive the
 // indicator colors. Pure functions shared by server and client renders.
 
-import { TARGET_BLOCK_TIME } from "./protocol.ts";
+import { PROPAGATION_BANDS, TARGET_BLOCK_TIME } from "./protocol.ts";
 
 /** A status grade. Each renders as a colored mark with a text label beside it. */
 export type Grade = "good" | "warn" | "serious" | "critical" | "info" | "off";
@@ -157,18 +157,16 @@ export function gradeRatio(ratio: number): Grade {
   return "critical";
 }
 
+/**
+ * gradePeerLatency grades a node's median ping to its peers. Relaying a block
+ * takes a few round trips, so with 10 minute blocks even a second adds little
+ * stale risk; intercontinental and Tor links are slow and fine.
+ */
 export function gradePeerLatency(ms: number): Grade {
   if (!ms) return "off";
-  if (ms <= 100) return "good";
-  if (ms <= 300) return "warn";
-  if (ms <= 1000) return "serious";
-
-  return "critical";
-}
-
-export function gradeLatency(ms: number): Grade {
-  if (ms <= 100) return "good";
-  if (ms <= 1000) return "warn";
+  if (ms < 1000) return "good";
+  if (ms < 3000) return "warn";
+  if (ms < 10_000) return "serious";
 
   return "critical";
 }
@@ -180,11 +178,12 @@ export function gradePeers(peers: number): Grade {
   return "good";
 }
 
+/** gradePropagation grades how late a block reached a node, by the speed bands, which match the propagation alert. */
 export function gradePropagation(ms: number): Grade {
   if (ms === 0) return "info";
-  if (ms < 1000) return "good";
-  if (ms < 3000) return "warn";
-  if (ms < 7000) return "serious";
+  if (ms < PROPAGATION_BANDS[0]) return "good";
+  if (ms < PROPAGATION_BANDS[1]) return "warn";
+  if (ms < PROPAGATION_BANDS[2]) return "serious";
 
   return "critical";
 }

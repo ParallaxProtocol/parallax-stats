@@ -80,7 +80,7 @@ export function About() {
               <span className="font-medium">The node list is not the whole network.</span>{" "}
               <span className="text-muted-foreground">
                 Only nodes whose operators turned on stats reporting appear here, and most nodes don&apos;t. Node
-                counts, the map, peer latency, client versions and uptime describe those nodes only. For a wider view,
+                counts, the map, latency, client versions and uptime describe those nodes only. For a wider view,
                 see the{" "}
                 <a href={ATLAS} target="_blank" rel="noopener noreferrer" className={link}>
                   Network Atlas

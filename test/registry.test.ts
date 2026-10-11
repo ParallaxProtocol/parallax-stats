@@ -331,7 +331,7 @@ function report(nodes: Registry, id: string, reported: ReportedBlock, base: numb
 
 test("propagation stats skip first reports and split delays into speed bands", () => {
   const nodes = new Registry(settings);
-  const delays = [0, 40, 60, 80, 120, 900, 1500, 4000, 9000];
+  const delays = [0, 400, 1200, 2500, 4000, 6000, 12_000, 30_000, 90_000];
   const ids = delays.map((_, i) => "n" + i);
 
   ids.forEach((id, i) => login(nodes, id, "10.1.0." + i, true));
@@ -343,10 +343,11 @@ test("propagation stats skip first reports and split delays into speed bands", (
   const { propagation } = nodes.charts();
 
   assert.equal(propagation.samples, 8);
-  assert.deepEqual(propagation.bands, [5, 1, 1, 1]);
-  assert.equal(propagation.p50, 120);
-  assert.equal(propagation.p90, 9000);
-  assert.equal(propagation.avg, Math.round((40 + 60 + 80 + 120 + 900 + 1500 + 4000 + 9000) / 8));
+  // Under 5 s, 5–15 s, 15–60 s, 60 s or more
+  assert.deepEqual(propagation.bands, [4, 2, 1, 1]);
+  assert.equal(propagation.p50, 4000);
+  assert.equal(propagation.p90, 90_000);
+  assert.equal(propagation.avg, Math.round((400 + 1200 + 2500 + 4000 + 6000 + 12_000 + 30_000 + 90_000) / 8));
 });
 
 test("propagation ignores catching-up nodes and takes off each node's latency", () => {

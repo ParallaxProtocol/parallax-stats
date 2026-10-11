@@ -9,7 +9,6 @@ import {
   formatInt,
   formatMs,
   gradeBehind,
-  gradeLatency,
   gradePeerLatency,
   gradePeers,
   gradePropagation,
@@ -17,7 +16,7 @@ import {
   shortHash,
   type Grade,
 } from "@/lib/format";
-import { HISTORY_BINS, type PublicNode } from "@/lib/protocol";
+import { HISTORY_BINS, PROPAGATION_BANDS, type PublicNode } from "@/lib/protocol";
 import { AddNode } from "./add-node";
 import { CopyButton } from "./copy-button";
 import { GRADE_NAME, GRADE_TEXT } from "./indicator";
@@ -31,7 +30,6 @@ type SortKey =
   | "sync"
   | "peers"
   | "peerLatency"
-  | "latency"
   | "block"
   | "mining"
   | "propagation"
@@ -44,7 +42,6 @@ interface Sort {
   desc: boolean;
 }
 
-const DEFAULT_SORT: Sort = { key: "block", desc: true };
 const NO_PINS: string[] = [];
 
 const SORT_VALUE: Record<SortKey, (n: PublicNode) => number | string> = {
@@ -53,7 +50,6 @@ const SORT_VALUE: Record<SortKey, (n: PublicNode) => number | string> = {
   sync: (n) => (n.stats.syncing ? 1 : 0),
   peers: (n) => n.stats.peers,
   peerLatency: (n) => n.stats.peerLatency || Number.MAX_SAFE_INTEGER,
-  latency: (n) => n.stats.latency,
   block: (n) => n.stats.block.number,
   // Miners first, by hashrate; offline nodes count as not mining
   mining: (n) => (n.stats.active && n.stats.mining ? 1 + n.stats.hashrate : 0),
@@ -70,27 +66,31 @@ function compare(a: number | string, b: number | string): number {
 const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
 
 /**
- * sortNodes puts pinned nodes first, then verified ones, each group in
- * name order so they keep their places. The rest follow: connected before
- * offline, then by the chosen column.
+ * sortNodes keeps pinned nodes first, in name order and out of any sort, so
+ * they stay where the viewer put them. Verified nodes follow, then the rest,
+ * each group with connected nodes above offline ones and ordered by the
+ * chosen column; without one, verified nodes are in name order and the rest
+ * by block.
  */
-function sortNodes(nodes: PublicNode[], sort: Sort, pins: string[]): PublicNode[] {
+function sortNodes(nodes: PublicNode[], sort: Sort | null, pins: string[]): PublicNode[] {
   // A sort saved by an older version may name a column that no longer exists
-  const value = SORT_VALUE[sort.key] ?? SORT_VALUE[DEFAULT_SORT.key];
+  const value = sort ? SORT_VALUE[sort.key] : undefined;
   const rank = (node: PublicNode) => (pins.includes(node.id) ? 0 : node.trusted ? 1 : 2);
+  const byNodeName = (a: PublicNode, b: PublicNode) => byName.compare(a.info.name, b.info.name) || a.id.localeCompare(b.id);
 
   return [...nodes].sort((a, b) => {
     const group = rank(a) - rank(b);
 
     if (group !== 0) return group;
-    if (rank(a) < 2) return byName.compare(a.info.name, b.info.name) || a.id.localeCompare(b.id);
+    if (rank(a) === 0) return byNodeName(a, b);
 
-    return (
-      Number(b.stats.active) - Number(a.stats.active) ||
-      compare(value(a), value(b)) * (sort.desc ? -1 : 1) ||
-      a.stats.block.propagation - b.stats.block.propagation ||
-      a.id.localeCompare(b.id)
-    );
+    const order = Number(b.stats.active) - Number(a.stats.active);
+
+    if (order !== 0) return order;
+    if (sort && value) return compare(value(a), value(b)) * (sort.desc ? -1 : 1) || byNodeName(a, b);
+    if (rank(a) < 2) return byNodeName(a, b);
+
+    return b.stats.block.number - a.stats.block.number || a.stats.block.propagation - b.stats.block.propagation || byNodeName(a, b);
   });
 }
 
@@ -108,8 +108,7 @@ const COLUMNS: Column[] = [
   { key: "client", label: "Client", title: "Client version", className: "hidden lg:table-cell" },
   { key: "sync", label: "Sync", title: "Sync state" },
   { key: "peers", label: "Peers", title: "Connected peers", desc: true },
-  { key: "peerLatency", label: "Peer latency", title: "Median of the minimum ping to each peer" },
-  { key: "latency", label: "Latency", title: "Round trip from the node to this dashboard", className: "hidden sm:table-cell" },
+  { key: "peerLatency", label: "Latency", title: "Median of the minimum ping to each peer" },
   { key: "block", label: "Block", title: "Latest block", desc: true },
   { key: "mining", label: "Mining", title: "Whether the node is mining; hover the icon for its hashrate", desc: true },
   { key: "propagation", label: "Propagation", title: "Delay after the first node reported the block" },
@@ -220,7 +219,8 @@ function SyncStatus({ active, syncing }: { active: boolean; syncing: boolean }) 
 
 /** PropagationStrip draws a node's delay for each recent block as a row of tiny columns. */
 function PropagationStrip({ history }: { history: number[] }) {
-  const ceiling = 8000;
+  // Full height at the top of the amber band: a bar's height and color say the same
+  const ceiling = PROPAGATION_BANDS[1];
   const h = 18;
 
   return (
@@ -362,8 +362,7 @@ function Details({
                   title="Activity"
                   rows={[
                     ["Peers", formatInt(stats.peers)],
-                    ["Peer latency", stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"],
-                    ["Latency to dashboard", `${stats.latency} ms`],
+                    ["Latency to peers", stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"],
                     ["Mempool size", formatInt(stats.pending)],
                     ["Mining", stats.mining ? formatHashrate(stats.hashrate) : "no"],
                     ["Gas price", formatGasPrice(stats.gasPrice)],
@@ -388,7 +387,8 @@ export function NodeTable({
   publicSecret: string;
 }) {
   const now = useServerNow();
-  const [sort, setSort] = usePersistent<Sort>("sort", DEFAULT_SORT);
+  // null is the default order; a new key, so a sort saved by older versions starts from the default
+  const [sort, setSort] = usePersistent<Sort | null>("node-sort", null);
   const [pins, setPins] = usePersistent<string[]>("pins", NO_PINS);
   const [open, setOpen] = useState<string | null>(null);
   // A panel that is animating closed stays mounted until it finishes
@@ -402,8 +402,13 @@ export function NodeTable({
   const sorted = sortNodes(nodes, sort, pins);
   const colSpan = COLUMNS.length + 1;
 
+  /** sortBy cycles a column through its first direction, the reverse, and back to the default order. */
   function sortBy(column: Column) {
-    setSort(sort.key === column.key ? { key: column.key, desc: !sort.desc } : { key: column.key, desc: column.desc ?? false });
+    const first = column.desc ?? false;
+
+    if (sort?.key !== column.key) setSort({ key: column.key, desc: first });
+    else if (sort.desc === first) setSort({ key: column.key, desc: !first });
+    else setSort(null);
   }
 
   function togglePin(id: string) {
@@ -441,17 +446,17 @@ export function NodeTable({
                     key={column.key}
                     scope="col"
                     className={`px-3 py-3 font-mono text-xs font-normal tracking-wider whitespace-nowrap uppercase ${column.className ?? ""}`}
-                    aria-sort={sort.key === column.key ? (sort.desc ? "descending" : "ascending") : undefined}
+                    aria-sort={sort?.key === column.key ? (sort.desc ? "descending" : "ascending") : undefined}
                   >
                     <button
                       type="button"
-                      className="inline-flex items-center gap-1 uppercase hover:text-foreground"
-                      title={column.title}
+                      className={`inline-flex items-center gap-1 uppercase hover:text-foreground ${sort?.key === column.key ? "text-foreground" : ""}`}
+                      title={`${column.title}. Click to sort, again to reverse, a third time for the default order.`}
                       onClick={() => sortBy(column)}
                     >
                       {column.label}
-                      <span aria-hidden className={sort.key === column.key ? "text-brand" : "invisible"}>
-                        {sort.desc ? "↓" : "↑"}
+                      <span aria-hidden className={sort?.key === column.key ? "text-brand" : "invisible"}>
+                        {sort?.desc ? "↓" : "↑"}
                       </span>
                     </button>
                   </th>
@@ -524,9 +529,6 @@ export function NodeTable({
                       <Cell grade={active ? gradePeers(stats.peers) : undefined}>{stats.peers}</Cell>
                       <Cell grade={active ? gradePeerLatency(stats.peerLatency) : undefined}>
                         {stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"}
-                      </Cell>
-                      <Cell className="hidden sm:table-cell" grade={active ? gradeLatency(stats.latency) : undefined}>
-                        {`${stats.latency} ms`}
                       </Cell>
                       <Cell grade={active ? gradeBehind(behind) : undefined}>
                         #{formatInt(stats.block.number)}

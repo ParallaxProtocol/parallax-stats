@@ -77,10 +77,10 @@ export function Figures({
       note: transfer !== null ? `≈ ${significant.format(transfer)} LAX per transfer` : undefined,
     },
     {
-      label: "Peer latency",
+      label: "Latency",
       value: summary.peerLatency ? `${summary.peerLatency} ms` : "n/a",
       grade: gradePeerLatency(summary.peerLatency),
-      note: "median",
+      note: "median to peers",
     },
     {
       label: "Uptime",

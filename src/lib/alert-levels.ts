@@ -2,7 +2,7 @@
 // page and the sections they are about are tinted by the same rules.
 
 import { STALL_MS } from "./format.ts";
-import type { Charts, ChainHealth, PropagationStats } from "./protocol.ts";
+import { PROPAGATION_BANDS, type Charts, type ChainHealth, type PropagationStats } from "./protocol.ts";
 
 export type Level = "warn" | "critical";
 
@@ -13,8 +13,8 @@ export const DEEP_REORG = 3;
 /** Fewer blocks than this say too little about who mines. */
 export const MAJORITY_MIN_BLOCKS = 10;
 /** Blocks taking longer than these to reach most verified nodes are slow, and far too slow. */
-export const SLOW_SPREAD_MS = 15_000;
-export const VERY_SLOW_SPREAD_MS = 60_000;
+export const SLOW_SPREAD_MS = PROPAGATION_BANDS[1];
+export const VERY_SLOW_SPREAD_MS = PROPAGATION_BANDS[2];
 
 /** stallLevel: no block for longer than the stall threshold. */
 export function stallLevel(foundAt: number, now: number): Level | null {
