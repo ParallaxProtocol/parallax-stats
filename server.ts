@@ -10,6 +10,7 @@ import { createHub } from "./src/server/hub.ts";
 import { fetchGasPrice } from "./src/server/rpc.ts";
 import { log } from "./src/server/log.ts";
 import { loadSettings } from "./src/server/settings.ts";
+import { watchSecrets } from "./src/server/secrets.ts";
 import { publishHub } from "./src/server/store.ts";
 
 const dev = process.env.NODE_ENV !== "production";
@@ -20,8 +21,8 @@ nextEnv.loadEnvConfig(process.cwd(), dev);
 
 const settings = loadSettings();
 
-if (settings.privateSecrets.length === 0 && settings.publicSecret.length === 0) {
-  console.error("Neither WS_SECRET nor PUBLIC_SECRET is set");
+if (settings.privateSecrets.length === 0 && settings.publicSecret.length === 0 && !settings.secretsFile) {
+  console.error("Neither WS_SECRET, PUBLIC_SECRET nor a secrets file is set");
   process.exit(1);
 }
 
@@ -42,6 +43,10 @@ const hub = createHub(settings, {
 });
 
 publishHub(hub);
+
+// Private secrets from the secrets file: changes apply while running, and
+// nodes whose secret was removed are disconnected
+const stopWatchingSecrets = settings.secretsFile ? watchSecrets(settings, settings.secretsFile, () => hub.recheckSecrets()) : () => {};
 
 const server = createServer();
 const app = next({ dev, port, httpServer: server });
@@ -66,6 +71,7 @@ server.listen(port, () => {
 });
 
 function shutdown(): void {
+  stopWatchingSecrets();
   hub.close();
   server.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 5000).unref();

@@ -115,6 +115,7 @@ All settings come from the environment.
 | `MAX_MESSAGE_BYTES` | `4194304` | Largest reporter message accepted |
 | `MAX_VIEWERS_PER_IP` | `20` | Dashboard connections one address may hold open |
 | `API_PER_MINUTE` | `60` | Requests to the JSON stats endpoints per address per minute |
+| `SECRETS_FILE` | `DATA_DIR/secrets` | A file of further private secrets, one per line, applied while the server runs: see below |
 | `DATA_DIR` | | Directory to save state in, so restarts keep the node list, uptimes and block history. Without it, state lives in memory only. |
 | `MINING_POOLS` | | Known pools, shown by name under Decentralization: see below |
 
@@ -139,6 +140,35 @@ secret twice with different patterns allows both. An entry counts as
 `pattern=secret` only when the part before the first `=` is made of name
 characters and `*`, and the secret after it is at least 8 characters, so a
 secret that just contains `=` is read whole.
+
+### Changing secrets without a restart
+
+Private secrets can also live in a file, `secrets` in `DATA_DIR` unless
+`SECRETS_FILE` says otherwise, one entry per line in the same form, with
+`#` comments. The server checks it every second: a line added takes effect
+at once, and a line removed disconnects the nodes using that secret
+straight away. Its entries add to `WS_SECRET`'s.
+
+```
+# /data/secrets
+rplant-*=3f9a…
+exchange-x=7c21…
+```
+
+On Coolify, open the application's **Terminal** and edit the file there,
+for example:
+
+```bash
+# Make a secret for the pool's nodes, add it, and print it to hand over
+S=$(node -e "console.log(crypto.randomBytes(32).toString('hex'))")
+echo "rplant-*=$S" >> /data/secrets && chmod 600 /data/secrets && echo "$S"
+```
+
+To revoke it, delete its line, for example with `sed -i '/^rplant-\*=/d' /data/secrets`.
+
+The server logs how many entries it loaded, never the secrets, and warns
+when the file is readable by other users. If the file cannot be read, the
+secrets loaded before stay in force rather than everyone being cut off.
 
 `MINING_POOLS` names the pools behind coinbase addresses in the
 Decentralization tile, optionally with a website their name links to. Pools are separated by `|`; each is

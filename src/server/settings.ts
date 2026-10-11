@@ -2,6 +2,7 @@
 // does.
 
 import { BlockList, isIPv4, isIPv6 } from "node:net";
+import { join } from "node:path";
 import type { MiningPool } from "../lib/protocol.ts";
 import { cloudflareEdges } from "./cloudflare.ts";
 
@@ -39,6 +40,8 @@ export interface Settings {
   apiPerMinute: number;
   /** Directory state is saved in across restarts; null keeps it in memory only. */
   dataDir: string | null;
+  /** A file of further private secrets, reloaded while running; null for none. */
+  secretsFile: string | null;
   /** Known mining pools by coinbase address (lowercase). */
   miningPools: Map<string, MiningPool>;
 }
@@ -194,6 +197,8 @@ export function loadSettings(env: Env = process.env): Settings {
     maxViewersPerIP: intSetting(env, "MAX_VIEWERS_PER_IP", 20),
     apiPerMinute: intSetting(env, "API_PER_MINUTE", 60),
     dataDir: env.DATA_DIR?.trim() || null,
+    // Beside the saved state by default, on the volume that survives redeploys
+    secretsFile: env.SECRETS_FILE?.trim() || (env.DATA_DIR?.trim() ? join(env.DATA_DIR.trim(), "secrets") : null),
     miningPools: miningPools(env.MINING_POOLS),
   };
 }

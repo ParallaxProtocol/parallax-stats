@@ -54,6 +54,8 @@ export interface Hub {
   snapshot(): Snapshot;
   /** The reporting secret anyone may use, for the page's instructions. Private secrets never leave the hub. */
   readonly publicSecret: string;
+  /** recheckSecrets disconnects verified nodes whose private secret no longer verifies them, after the secrets change. */
+  recheckSecrets(): void;
   close(): void;
 }
 
@@ -107,6 +109,8 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
   const nameCheckLimiter = new RateLimiter(NAME_CHECKS_PER_MINUTE);
   const apiLimiter = new RateLimiter(settings.apiPerMinute);
   const viewersPerIP = new Map<string, number>();
+  // Connected nodes verified by a private secret, kept to re-check when the secrets change
+  const verifiedLogins = new Map<number, { ws: Socket; id: string; secret: string }>();
   let connections = 0;
 
   // Viewers
@@ -282,6 +286,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
         }
 
         nodeId = id;
+        if (level === "trusted" && typeof data.secret === "string") verifiedLogins.set(connection, { ws, id, secret: data.secret });
         emit("ready");
         log.ok("API", "Connected:", id, node.trusted ? "(verified)" : "");
         broadcast({ type: "node", node: node.toPublic() });
@@ -365,6 +370,8 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
     }
 
     ws.on("close", () => {
+      verifiedLogins.delete(connection);
+
       if (nodeId === null) return;
 
       const node = registry.inactive(nodeId, connection);
@@ -478,6 +485,16 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
     snapshot,
 
     publicSecret: settings.publicSecret,
+
+    recheckSecrets() {
+      for (const [connection, login] of verifiedLogins) {
+        if (authenticate(settings, login.secret, login.id) === "trusted") continue;
+
+        log.warn("API", "Secret revoked: disconnecting", login.id);
+        verifiedLogins.delete(connection);
+        login.ws.close(1008, "Secret revoked");
+      }
+    },
 
     close() {
       // Save before dropping connections, so connected nodes are saved as up
