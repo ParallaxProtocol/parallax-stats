@@ -28,7 +28,7 @@ const TRANSFER_GAS = 21_000;
 const POOL_UNIT = 2 ** 32;
 
 export interface ApiAlert {
-  type: "split" | "stall" | "reorg" | "majority" | "propagation" | "slow-miner" | "no-verified-node" | "release";
+  type: "split" | "stall" | "reorg" | "majority" | "propagation" | "slow-miner" | "release";
   level: Level | "info";
   /** When the condition began, where it has a start. */
   since: number | null;
@@ -170,10 +170,6 @@ export function activeAlerts(snapshot: Snapshot, latestRelease: Release | null, 
     const slow = spread.slowMiner;
 
     alerts.push({ type: "slow-miner", level: "warn", since: null, details: { name: slow.pool, address: slow.miner, medianMs: slow.median, blocks: slow.blocks } });
-  }
-
-  if (nodes.some((node) => node.trusted) && !nodes.some((node) => node.trusted && node.stats.active)) {
-    alerts.push({ type: "no-verified-node", level: "info", since: null, details: {} });
   }
 
   const latest = latestRelease ? parseVersion(`/${latestRelease.tag}`) : null;

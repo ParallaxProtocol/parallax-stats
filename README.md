@@ -233,7 +233,7 @@ numbers; shares are fractions from 0 to 1.
 | `decentralization` | over the last 7 days of blocks: `grade` (`healthy`, `fair`, `concentrated`, `critical`), `majorityHolders` (the fewest miners holding a majority, `null` when more than are listed), `distinctMiners`, `topMiners` (`name` and `website` for known pools, `address`, `blocks`, `share`) |
 | `staleBlocks` | `window`, `count`, `recent` stale heights, `reorgs` (count and `since`), `lastReorg` and `lastDeepReorg` (`height`, `at`, `nodes`, `depth`), `split`, and the panel's warning `level` |
 | `propagation` | `reports`, `medianMs`, `p90Ms`, `p99Ms`, and `reach90`: how long recent blocks took to reach 90% of verified nodes, with any consistently slow miner |
-| `alerts` | the alerts showing on the page, most severe first: `type` (`split`, `stall`, `reorg`, `majority`, `propagation`, `slow-miner`, `no-verified-node`, `release`), `level` (`critical`, `warn`, `info`), `since` where it applies, and `details` |
+| `alerts` | the alerts showing on the page, most severe first: `type` (`split`, `stall`, `reorg`, `majority`, `propagation`, `slow-miner`, `release`), `level` (`critical`, `warn`, `info`), `since` where it applies, and `details` |
 
 The figures cover the nodes reporting to this dashboard, not the whole
 network: see the page's About dialog.
