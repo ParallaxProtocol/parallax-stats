@@ -6,7 +6,7 @@
 
 import { DEEP_REORG, majority, reorgLevel, SLOW_SPREAD_MS, spreadLevel, stallLevel } from "../lib/alert-levels.ts";
 import { formatInt, formatMs, shortHash, STALL_MS } from "../lib/format.ts";
-import type { Charts, Incident, IncidentKind, IncidentLog, MiningPool, PublicNode } from "../lib/protocol.ts";
+import type { Charts, Incident, IncidentKind, IncidentLog, MiningPool } from "../lib/protocol.ts";
 
 /** Incidents kept, by when they ended: the page shows 30 days of them. */
 export const KEEP_MS = 90 * 86_400_000;
@@ -25,6 +25,9 @@ const MAJORITY_WINDOW_S = 7 * 86_400;
 const MAJORITY_FULL_S = MAJORITY_WINDOW_S - 3_600;
 
 const RANK = { info: 0, warn: 1, critical: 2 } as const;
+
+/** The kinds recorded; saved incidents of any other kind, from an earlier version, are dropped. */
+const KINDS = new Set<IncidentKind>(["majority", "spread", "split", "stall", "reorg"]);
 
 type Level = Incident["level"];
 type SpanKind = Exclude<IncidentKind, "reorg">;
@@ -64,7 +67,7 @@ const plural = (count: number, word: string) => `${formatInt(count)} ${count ===
  * observe works out which conditions hold now, by the rules the alerts use.
  * `foundAt` is the best block's timestamp, ms, as the block clock has it.
  */
-export function observe(charts: Charts | null, nodes: PublicNode[], foundAt: number, bestBlock: number, now: number): Partial<{ [K in SpanKind]: Observation }> {
+export function observe(charts: Charts | null, foundAt: number, bestBlock: number, now: number): Partial<{ [K in SpanKind]: Observation }> {
   const seen: Partial<{ [K in SpanKind]: Observation }> = {};
   const split = charts?.health.split ?? null;
 
@@ -100,10 +103,6 @@ export function observe(charts: Charts | null, nodes: PublicNode[], foundAt: num
           };
   }
 
-  if (nodes.some((node) => node.trusted) && !nodes.some((node) => node.trusted && node.stats.active)) {
-    seen.unverified = { level: "info", peak: 0, detail: "No verified node online" };
-  }
-
   return seen;
 }
 
@@ -131,7 +130,7 @@ export class Incidents {
   update(seen: Partial<{ [K in SpanKind]: Observation }>, now: number): boolean {
     let changed = false;
 
-    for (const kind of ["majority", "spread", "split", "stall", "unverified"] as const) {
+    for (const kind of ["majority", "spread", "split", "stall"] as const) {
       const observation = seen[kind];
       const open = this.list.find((r) => r.kind === kind && r.end === null);
       const confirm = kind === "stall" ? STALL_CONFIRM_MS : CONFIRM_MS;
@@ -334,7 +333,7 @@ export class Incidents {
     this.rebuiltFrom = typeof state.rebuiltFrom === "number" ? state.rebuiltFrom : null;
     this.rebuilt = state.rebuilt === true;
     this.list = (Array.isArray(state.list) ? state.list : [])
-      .filter((r) => r && typeof r.id === "string" && typeof r.start === "number" && (r.end === null || typeof r.end === "number"))
+      .filter((r) => r && KINDS.has(r.kind) && typeof r.id === "string" && typeof r.start === "number" && (r.end === null || typeof r.end === "number"))
       .sort((a, b) => b.start - a.start);
   }
 

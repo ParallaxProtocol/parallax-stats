@@ -64,7 +64,6 @@ const TOPIC: Record<keyof typeof ICON, string> = {
   reorg: "Reorganization",
   split: "Chain split",
   majority: "Mining majority",
-  unverified: "No verified node",
   spread: "Slow propagation",
   release: "New release",
 };
@@ -92,14 +91,6 @@ const ICON = {
       <circle cx="12" cy="12" r="8.25" />
       {/* Most of the pie filled, from the top round to about 300°, so it never reads as a clock */}
       <path d="M12 12V3.75A8.25 8.25 0 1 1 4.86 7.88Z" fill="currentColor" fillOpacity="0.35" strokeLinejoin="round" />
-    </>
-  ),
-  // An eye with a slash: nothing verified is watching
-  unverified: (
-    <>
-      <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" strokeLinejoin="round" />
-      <circle cx="12" cy="12" r="2.75" />
-      <path d="m4 20 16-16" strokeLinecap="round" />
     </>
   ),
   // Ripples spreading slowly from a source, for slow propagation
@@ -239,7 +230,7 @@ const plural = (count: number, word: string) => `${formatInt(count)} ${count ===
 /**
  * useAlerts works out what needs attention, most severe first: verified nodes on different chains, no block for longer than the
  * stall threshold, a recent chain reorganization, one miner holding a
- * majority, blocks slow to reach the network, no verified node online, and
+ * majority, blocks slow to reach the network, and
  * a client release most nodes have not caught up with.
  */
 export function useAlerts({
@@ -389,18 +380,6 @@ export function useAlerts({
       title: `Blocks from ${slow.pool ?? shortHash(slow.miner)} take ${formatMs(slow.median)} to reach most nodes.`,
       body: "Other miners' blocks spread within seconds, so this usually means the miner is poorly connected to the network.",
       facts: [plural(slow.blocks, "block")],
-    });
-  }
-
-  // Verified nodes known, but none online
-  if (nodes.some((node) => node.trusted) && !nodes.some((node) => node.trusted && node.stats.active)) {
-    alerts.push({
-      key: "unverified",
-      tone: "info",
-      icon: "unverified",
-      title: "No verified node is online.",
-      body: "The best block and charts follow self-reported nodes until one returns, and what they report is not checked.",
-      facts: [],
     });
   }
 

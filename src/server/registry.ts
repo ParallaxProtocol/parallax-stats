@@ -325,7 +325,7 @@ export class Registry {
 
     changed = this.incidents.reorgs(this.history.deepReorgs(), now) || changed;
 
-    return this.incidents.update(observe(charts, nodes, foundAt, summary.bestBlock, now), now) || changed;
+    return this.incidents.update(observe(charts, foundAt, summary.bestBlock, now), now) || changed;
   }
 
   incidentLog(): IncidentLog {

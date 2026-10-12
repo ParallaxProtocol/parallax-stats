@@ -247,7 +247,7 @@ export interface Price {
 }
 
 /** The kinds of incident the dashboard records: what its alerts warn of, kept once they pass. */
-export type IncidentKind = "majority" | "spread" | "split" | "stall" | "reorg" | "unverified";
+export type IncidentKind = "majority" | "spread" | "split" | "stall" | "reorg";
 
 /** Something that went wrong, from when it started to when it ended. */
 export interface Incident {

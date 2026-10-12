@@ -9,8 +9,8 @@ live:
   the 10 minute target
 - **Alerts:** verified nodes on different chains, no block for 2 hours,
   reorganizations 3 or more blocks deep, one miner holding most of
-  the last week's blocks, blocks slow to reach the network, no verified node
-  online, and a new client release that nodes have not caught up with
+  the last week's blocks, blocks slow to reach the network, and a new
+  client release that nodes have not caught up with
 - **New blocks:** a toast with who mined each block, how long it took, its
   transactions and fees, and an optional chime (with its own sound for
   deep reorganizations)
@@ -333,8 +333,8 @@ Tells the caller whether they can report under a node name: `available`,
   are an ordinary block race.
 - **Incidents** are the alerts' conditions, recorded by the server with
   when each started and ended, and saved with the rest of the state for 90
-  days: a mining majority, slow propagation, a chain split, a possible
-  stall and no verified node online, each from when it first applied, once
+  days: a mining majority, slow propagation, a chain split and a possible
+  stall, each from when it first applied, once
   it has held for 10 minutes (a stall at once), until it has been gone for
   as long; and deep reorganizations, as moments. The page shows the last 30
   days. When recording begins, past stalls and majorities are rebuilt from
