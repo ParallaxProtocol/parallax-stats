@@ -609,10 +609,12 @@ export class History {
    * nodePropagation returns how late node `id` was to each of the last
    * HISTORY_BINS heights, oldest first: its propagation delay where it
    * reported the height, and otherwise how long it took to report a
-   * later one (or how long ago the height arrived), or -1 outside the
-   * history.
+   * later one (or how long ago the height arrived). A height is -1 when
+   * there is nothing to measure: outside the history, arrived before the
+   * node's connection `since` (ms), or after its next report, as a height
+   * filled in from history does.
    */
-  nodePropagation(id: string): number[] {
+  nodePropagation(id: string, since = 0): number[] {
     const propagation = new Array<number>(HISTORY_BINS).fill(-1);
     const best = this.bestBlockNumber();
     let lastArrival = Date.now();
@@ -627,8 +629,8 @@ export class History {
       if (own) {
         propagation[index] = own.propagation;
         lastArrival = item.block.arrived;
-      } else {
-        propagation[index] = Math.max(0, lastArrival - item.block.arrived);
+      } else if (item.block.arrived >= since && item.block.arrived <= lastArrival) {
+        propagation[index] = lastArrival - item.block.arrived;
       }
     }
 

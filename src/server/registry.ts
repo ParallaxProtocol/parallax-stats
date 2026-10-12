@@ -210,7 +210,7 @@ export class Registry {
       time: 0,
     };
 
-    return node.setBlock(block, this.history.nodePropagation(id)) ? node : null;
+    return node.setBlock(block, this.history.nodePropagation(id, node.connectedAt)) ? node : null;
   }
 
   /**

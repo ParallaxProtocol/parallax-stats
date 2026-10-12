@@ -884,3 +884,39 @@ test("a node whose syncing flag is reversed is syncing when well behind the best
   assert.equal(nodes.get("old")!.stats.syncing, false);
   assert.equal(nodes.get("odd")!.stats.syncing, true);
 });
+
+test("a node's propagation history leaves out heights from before it connected", () => {
+  const nodes = new Registry(settings);
+  const start = Date.now() - 10 * 600_000;
+  const arrival = (n: number) => start + n * 600_000;
+
+  login(nodes, "old", "1.1.1.1", true);
+
+  for (let n = 1; n <= 8; n++) {
+    nodes.addBlock("old", block(n));
+    nodes.history.search(n)!.block.arrived = arrival(n);
+  }
+
+  // Connects between blocks 5 and 6, reports 6, misses 7, reports 8
+  login(nodes, "new", "2.2.2.2", true);
+  nodes.get("new")!.connectedAt = arrival(5.5);
+  nodes.addBlock("new", block(6));
+  nodes.addBlock("new", block(8));
+
+  const node = nodes.get("new")!;
+  const measured = node.history.filter((ms) => ms >= 0);
+
+  // Before it connected: no data, rather than the 10 minutes and more until its first report
+  assert.deepEqual(node.history.slice(-8, -3), [-1, -1, -1, -1, -1]);
+  // A height it missed while connected is as late as its next report
+  assert.equal(node.history.at(-2), 600_000);
+  assert.equal(measured.length, 3);
+  assert.equal(node.stats.propagationAvg, Math.round(measured.reduce((a, b) => a + b, 0) / measured.length));
+  // Uptime counts from its first login, not from the first block
+  assert.equal(node.stats.uptime, 100);
+
+  // A height filled in from history after the node's next report has nothing to measure either
+  nodes.history.search(7)!.block.arrived = arrival(8) + 1000;
+  nodes.addBlock("new", block(8));
+  assert.equal(nodes.get("new")!.history.at(-2), -1);
+});
