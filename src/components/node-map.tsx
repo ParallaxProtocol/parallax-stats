@@ -118,7 +118,9 @@ export function NodeMap({
   const dots = nodes.flatMap((node) => {
     const point = node.geo && projection([node.geo.ll[1], node.geo.ll[0]]);
 
-    return point ? [{ node, x: point[0], y: point[1], grade: nodeGrade(node, bestBlock) }] : [];
+    // To a hundredth of a pixel: the server and the browser work the projection out a few
+    // ulps apart, and the page would not match the server's when it takes over
+    return point ? [{ node, x: Math.round(point[0] * 100) / 100, y: Math.round(point[1] * 100) / 100, grade: nodeGrade(node, bestBlock) }] : [];
   });
   // Draw offline nodes first so live ones sit on top
   dots.sort((a, b) => Number(a.node.stats.active) - Number(b.node.stats.active));
