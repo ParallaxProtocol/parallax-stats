@@ -307,6 +307,7 @@ function nodeRow(node: PublicNode) {
     client: info.node,
     version: parseVersion(info.node).label,
     active: stats.active,
+    offlineSince: node.offlineSince,
     syncing: stats.syncing,
     mining: stats.mining,
     hashesPerSecond: stats.hashrate,

@@ -53,6 +53,8 @@ export interface NodeState {
   stats: NodeStats;
   history: number[];
   uptime: NodeRecord["uptime"];
+  /** Missing from state saved before it was kept. */
+  offlineSince?: number | null;
 }
 
 export class NodeRecord {
@@ -83,6 +85,8 @@ export class NodeRecord {
   uptime = { started: 0, up: 0, down: 0, lastStatus: false, lastUpdate: 0 };
   /** When the current connection logged in: a node's first blocks after (re)connecting are catch-up, not propagation. */
   connectedAt = 0;
+  /** When the node was last known connected; null while it is. */
+  offlineSince: number | null = null;
   /** Until when a restored node may reconnect without the wait counting as downtime. */
   private graceUntil = 0;
 
@@ -98,9 +102,9 @@ export class NodeRecord {
   }
 
   toState(): NodeState {
-    const { id, trusted, ip, info, geo, stats, history, uptime } = this;
+    const { id, trusted, ip, info, geo, stats, history, uptime, offlineSince } = this;
 
-    return { id, trusted, ip, info, geo, stats, history, uptime };
+    return { id, trusted, ip, info, geo, stats, history, uptime, offlineSince };
   }
 
   /**
@@ -125,6 +129,8 @@ export class NodeRecord {
 
     node.setState(false, Math.max(now, node.uptime.lastUpdate));
     node.graceUntil = now + RECONNECT_GRACE_MS;
+    // One connected when the dashboard stopped was last known connected then
+    node.offlineSince = state.offlineSince ?? now - downtime;
 
     return node;
   }
@@ -160,6 +166,7 @@ export class NodeRecord {
       stats: { ...this.stats },
       history: this.history,
       geo: this.geo,
+      offlineSince: this.offlineSince,
     };
   }
 
@@ -250,6 +257,8 @@ export class NodeRecord {
     }
 
     this.graceUntil = 0;
+    if (active) this.offlineSince = null;
+    else this.offlineSince ??= now;
     this.stats.active = active;
     u.lastStatus = active;
     u.lastUpdate = now;

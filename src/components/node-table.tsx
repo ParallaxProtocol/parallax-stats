@@ -70,31 +70,45 @@ const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: "base"
 
 /**
  * sortNodes keeps pinned nodes first, in name order and out of any sort, so
- * they stay where the viewer put them. Verified nodes follow, then the rest,
- * each group with connected nodes above offline ones and ordered by the
- * chosen column; without one, verified nodes are in name order and the rest
- * by block.
+ * they stay where the viewer put them. Connected verified nodes follow, then
+ * the rest connected, then the offline ones the same way, below a divider:
+ * each group ordered by the chosen column, or without one, verified nodes in
+ * name order and the rest by block.
  */
 function sortNodes(nodes: PublicNode[], sort: Sort | null, pins: string[]): PublicNode[] {
   // A sort saved by an older version may name a column that no longer exists
   const value = sort ? SORT_VALUE[sort.key] : undefined;
-  const rank = (node: PublicNode) => (pins.includes(node.id) ? 0 : node.trusted ? 1 : 2);
   const byNodeName = (a: PublicNode, b: PublicNode) => byName.compare(a.info.name, b.info.name) || a.id.localeCompare(b.id);
 
   return [...nodes].sort((a, b) => {
-    const group = rank(a) - rank(b);
+    const group = rank(a, pins) - rank(b, pins);
 
     if (group !== 0) return group;
-    if (rank(a) === 0) return byNodeName(a, b);
-
-    const order = Number(b.stats.active) - Number(a.stats.active);
-
-    if (order !== 0) return order;
+    if (rank(a, pins) === 0) return byNodeName(a, b);
     if (sort && value) return compare(value(a), value(b)) * (sort.desc ? -1 : 1) || byNodeName(a, b);
-    if (rank(a) < 2) return byNodeName(a, b);
+    if (a.trusted) return byNodeName(a, b);
 
     return b.stats.block.number - a.stats.block.number || a.stats.block.propagation - b.stats.block.propagation || byNodeName(a, b);
   });
+}
+
+/** rank is a node's group in the table: pinned, then connected verified and the rest, then offline ones the same way. */
+function rank(node: PublicNode, pins: string[]): number {
+  if (pins.includes(node.id)) return 0;
+
+  return (node.stats.active ? 0 : 2) + (node.trusted ? 1 : 2);
+}
+
+/** OFFLINE_RANK is the first group below the offline divider. */
+const OFFLINE_RANK = 3;
+
+/** offlineFor says how long ago a node was last known connected: 12 min. */
+function offlineFor(offlineSince: number | null, now: number): string | null {
+  if (offlineSince === null) return null;
+
+  const ms = Math.max(0, now - offlineSince);
+
+  return ms < 60_000 ? "< 1 min" : formatMs(ms);
 }
 
 interface Column {
@@ -137,11 +151,11 @@ function fewPeersHint(active: boolean, peers: number): string | undefined {
 }
 
 /** MiningStatus is a pickaxe for a mining node, with its hashrate on hover, and a dash otherwise. */
-function MiningStatus({ mining, hashrate }: { mining: boolean; hashrate: number }) {
+function MiningStatus({ mining, hashrate, className = "" }: { mining: boolean; hashrate: number; className?: string }) {
   const label = mining ? `Mining at ${formatHashrate(hashrate)}` : "Not mining";
 
   return (
-    <td className="px-3 py-3">
+    <td className={`px-3 py-3 ${className}`}>
       <span role="img" aria-label={label} title={label} className="flex size-5 items-center justify-center">
         {mining ? (
           // Pickaxe, after Lucide (ISC license)
@@ -191,18 +205,28 @@ function VerifiedIcon() {
   );
 }
 
-/** SyncStatus is a check when synced, a spinner while syncing, and a dash when offline. */
-function SyncStatus({ active, syncing }: { active: boolean; syncing: boolean }) {
-  const label = !active ? "Offline" : syncing ? "Syncing" : "Synced";
+/** SyncStatus is a check when synced, a spinner while syncing, and says how long a node has been offline. */
+function SyncStatus({ active, syncing, offline }: { active: boolean; syncing: boolean; offline: string | null }) {
+  if (!active) {
+    return (
+      <td className="px-3 py-3 whitespace-nowrap">
+        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-warn" title={offline ? `Offline for ${offline}` : "Offline"}>
+          <svg viewBox="0 0 16 16" className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden>
+            <circle cx="8" cy="8" r="6" />
+            <path d="M4 12 12 4" />
+          </svg>
+          Offline{offline && <span className="font-normal">· {offline}</span>}
+        </span>
+      </td>
+    );
+  }
+
+  const label = syncing ? "Syncing" : "Synced";
 
   return (
     <td className="px-3 py-3">
       <span role="img" aria-label={label} title={label} className="flex size-5 items-center justify-center">
-        {!active ? (
-          <svg viewBox="0 0 16 16" className="size-4 text-muted-foreground" aria-hidden>
-            <path d="M4 8h8" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-          </svg>
-        ) : syncing ? (
+        {syncing ? (
           <svg viewBox="0 0 16 16" className="size-4 animate-spin text-warn motion-reduce:animate-none" aria-hidden>
             <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
             <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
@@ -229,7 +253,7 @@ function SyncStatus({ active, syncing }: { active: boolean; syncing: boolean }) 
  * columns, oldest first and ending at the best block. Hovering or dragging
  * along it shows the block and its delay.
  */
-function PropagationStrip({ history, bestBlock }: { history: number[]; bestBlock: number }) {
+function PropagationStrip({ history, bestBlock, offline }: { history: number[]; bestBlock: number; offline: boolean }) {
   // Full height at the top of the amber band: a bar's height and color say the same
   const ceiling = PROPAGATION_BANDS[1];
   const h = 18;
@@ -252,7 +276,7 @@ function PropagationStrip({ history, bestBlock }: { history: number[]; bestBlock
       <svg
         width={HISTORY_BINS * 3}
         height={h}
-        className="block touch-pan-y select-none [-webkit-touch-callout:none]"
+        className={`block touch-pan-y select-none [-webkit-touch-callout:none] ${offline ? "grayscale" : ""}`}
         aria-hidden
         onPointerDown={point}
         onPointerMove={point}
@@ -412,13 +436,21 @@ function Details({
                 />
                 <DetailSection
                   title="Activity"
-                  rows={[
-                    ["Peers", formatInt(stats.peers), fewPeersHint(node.stats.active, stats.peers)],
-                    ["Latency to peers", stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"],
-                    ["Mempool size", formatInt(stats.pending)],
-                    ["Mining", stats.mining ? formatHashrate(stats.hashrate) : "no"],
-                    ["Gas price", formatGasPrice(stats.gasPrice)],
-                  ]}
+                  rows={
+                    stats.active
+                      ? [
+                          ["Peers", formatInt(stats.peers), fewPeersHint(stats.active, stats.peers)],
+                          ["Latency to peers", stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"],
+                          ["Mempool size", formatInt(stats.pending)],
+                          ["Mining", stats.mining ? formatHashrate(stats.hashrate) : "no"],
+                          ["Gas price", formatGasPrice(stats.gasPrice)],
+                        ]
+                      : [
+                          ["Status", "offline"],
+                          ["Last connected", node.offlineSince ? formatAgo(node.offlineSince, now) : "unknown"],
+                          ["Uptime", `${stats.uptime}%`],
+                        ]
+                  }
                 />
               </div>
             </div>
@@ -454,6 +486,7 @@ export function NodeTable({
     setOpen(open === id ? null : id);
   }
   const sorted = sortNodes(nodes, sort, pins);
+  const offlineCount = sorted.filter((node) => rank(node, pins) >= OFFLINE_RANK).length;
   const colSpan = COLUMNS.length + 1;
 
   /** sortBy cycles a column through its first direction, the reverse, and back to the default order. */
@@ -518,9 +551,12 @@ export function NodeTable({
               </tr>
             </thead>
             <tbody className="tabular-nums">
-              {sorted.map((node) => {
+              {sorted.map((node, i) => {
                 const { stats } = node;
                 const active = stats.active;
+                // Offline rows fade, all but the name and status, until hovered or opened
+                const fade = active || open === node.id ? "" : "opacity-50 transition-opacity group-hover:opacity-100";
+                const divider = rank(node, pins) >= OFFLINE_RANK && (i === 0 || rank(sorted[i - 1], pins) < OFFLINE_RANK);
                 const behind = bestBlock - stats.block.number;
                 const pinned = pins.includes(node.id);
                 const expanded = open === node.id;
@@ -529,9 +565,16 @@ export function NodeTable({
 
                 return (
                   <Fragment key={node.id}>
+                    {divider && i > 0 && (
+                      <tr className="border-b border-border/50 bg-background/30">
+                        <th colSpan={colSpan} scope="rowgroup" className="px-4 py-1.5 text-left text-xs font-medium text-muted-foreground uppercase">
+                          Offline · {offlineCount}
+                        </th>
+                      </tr>
+                    )}
                     <tr
                       onClick={() => toggle(node.id)}
-                      className={`cursor-pointer border-b border-border/50 transition-colors hover:bg-background/40 ${expanded ? "bg-background/50" : ""} ${active ? "" : "text-muted-foreground"}`}
+                      className={`group cursor-pointer border-b border-border/50 transition-colors hover:bg-background/40 ${expanded ? "bg-background/50" : ""}`}
                     >
                       <td className="py-3 pr-1 pl-4">
                         <button
@@ -579,27 +622,29 @@ export function NodeTable({
                         </button>
                         {node.trusted && <VerifiedIcon />}
                       </td>
-                      <Cell className="font-mono text-xs text-muted-foreground">
+                      <Cell className={`font-mono text-xs text-muted-foreground ${fade}`}>
                         <span title={version || undefined} className="max-w-28 truncate">{version ? shortVersion(version, releaseCommits) : "unknown"}</span>
                       </Cell>
-                      <SyncStatus active={active} syncing={stats.syncing} />
-                      <Cell grade={active ? gradePeers(stats.peers) : undefined} title={fewPeersHint(active, stats.peers)}>
-                        {stats.peers}
+                      <SyncStatus active={active} syncing={stats.syncing} offline={offlineFor(node.offlineSince, now)} />
+                      <Cell grade={active ? gradePeers(stats.peers) : undefined} title={fewPeersHint(active, stats.peers)} className={fade}>
+                        {active ? stats.peers : "—"}
                       </Cell>
-                      <Cell grade={active ? gradePeerLatency(stats.peerLatency) : undefined}>
-                        {stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"}
+                      <Cell grade={active ? gradePeerLatency(stats.peerLatency) : undefined} className={fade}>
+                        {!active ? "—" : stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"}
                       </Cell>
-                      <Cell grade={active ? gradeBehind(behind) : undefined}>
+                      <Cell grade={active ? gradeBehind(behind) : undefined} className={fade}>
                         #{formatInt(stats.block.number)}
-                        {active && behind !== 0 && (
-                          <span className="text-xs text-muted-foreground">{behind > 0 ? `${formatInt(behind)} behind` : "ahead"}</span>
+                        {!active ? (
+                          <span className="text-xs text-muted-foreground">last seen</span>
+                        ) : (
+                          behind !== 0 && <span className="text-xs text-muted-foreground">{behind > 0 ? `${formatInt(behind)} behind` : "ahead"}</span>
                         )}
                       </Cell>
-                      <MiningStatus mining={active && stats.mining} hashrate={stats.hashrate} />
-                      <Cell grade={active && atHead ? gradePropagation(stats.block.propagation) : undefined}>
-                        {atHead ? (stats.block.propagation ? `+${formatMs(stats.block.propagation)}` : "first") : "n/a"}
+                      <MiningStatus mining={active && stats.mining} hashrate={stats.hashrate} className={fade} />
+                      <Cell grade={active && atHead ? gradePropagation(stats.block.propagation) : undefined} className={fade}>
+                        {!active ? "—" : atHead ? (stats.block.propagation ? `+${formatMs(stats.block.propagation)}` : "first") : "n/a"}
                       </Cell>
-                      <td className="px-3 py-3">
+                      <td className={`px-3 py-3 ${fade}`}>
                         {nodes.length < 2 ? (
                           // With no other node, every block reaches this one first: nothing to compare
                           <span className="text-muted-foreground" title="No other node to compare with">
@@ -607,15 +652,17 @@ export function NodeTable({
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-2">
-                            <PropagationStrip history={node.history} bestBlock={bestBlock} />
+                            <PropagationStrip history={node.history} bestBlock={bestBlock} offline={!active} />
                             <span className="text-xs whitespace-nowrap text-muted-foreground">
                               {behind > HISTORY_BINS ? "n/a" : `avg ${formatMs(stats.propagationAvg)}`}
                             </span>
                           </span>
                         )}
                       </td>
-                      <Cell>{formatInt(stats.pending)}</Cell>
-                      <Cell grade={active ? gradeUptime(stats.uptime) : undefined}>{stats.uptime}%</Cell>
+                      <Cell className={fade}>{active ? formatInt(stats.pending) : "—"}</Cell>
+                      <Cell grade={active ? gradeUptime(stats.uptime) : undefined} className={fade}>
+                        {stats.uptime}%
+                      </Cell>
                     </tr>
                     {(expanded || closing === node.id) && (
                       <Details node={node} colSpan={colSpan} open={expanded} now={now} onClosed={onClosed} />

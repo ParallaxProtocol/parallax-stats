@@ -83,6 +83,11 @@ test("state survives a restart through the store", () => {
     assert.equal(seed.stats.block.number, 30);
     assert.deepEqual(seed.geo, { country: "US", city: "Boston", ll: [42.36, -71.06] });
 
+    // Offline since it went down, or for one connected when the dashboard stopped, since then
+    assert.equal(home.offlineSince, start + 3_600_000);
+    assert.equal(seed.offlineSince, savedAt);
+    assert.equal(seed.toPublic().offlineSince, savedAt);
+
     // Pseudonyms stay the same
     assert.equal(home.publicId, before.get("home-node")!.publicId);
 
@@ -98,6 +103,7 @@ test("state survives a restart through the store", () => {
     // Reconnecting soon after the restart costs no uptime for the wait
     seed.setState(true, now + 60_000);
     assert.equal(seed.stats.active, true);
+    assert.equal(seed.offlineSince, null);
     assert.equal(seed.stats.uptime, 100);
     assert.equal(home.stats.uptime, 50);
 

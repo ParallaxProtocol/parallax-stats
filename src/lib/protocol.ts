@@ -138,6 +138,8 @@ export interface PublicNode {
   /** Propagation delay of the last HISTORY_BINS heights, ms; -1 for none. */
   history: number[];
   geo: Geo | null;
+  /** Server time the node was last known connected, ms; null while it is. */
+  offlineSince: number | null;
 }
 
 /**
