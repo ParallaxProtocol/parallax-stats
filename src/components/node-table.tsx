@@ -189,10 +189,10 @@ function MiningStatus({ mining, hashrate, className = "" }: { mining: boolean; h
   );
 }
 
-/** VerifiedIcon marks a node run by the dashboard operator. */
+/** VerifiedIcon marks a node run by the Parallax team or a known operator. */
 function VerifiedIcon() {
   return (
-    <Tooltip content="Verified: run by the dashboard operator. The best block follows verified nodes.">
+    <Tooltip content="Verified: run by the Parallax team or a known operator, such as a bootnode, pool or exchange. The best block follows verified nodes.">
       <svg viewBox="0 0 24 24" className="ml-1.5 inline-block size-4 -translate-y-px align-middle" role="img" aria-label="Verified">
         <path
           d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
