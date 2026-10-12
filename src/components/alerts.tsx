@@ -90,7 +90,8 @@ const ICON = {
   majority: (
     <>
       <circle cx="12" cy="12" r="8.25" />
-      <path d="M12 3.75V12l6.3 5.3" strokeLinecap="round" strokeLinejoin="round" />
+      {/* Most of the pie filled, from the top round to about 300°, so it never reads as a clock */}
+      <path d="M12 12V3.75A8.25 8.25 0 1 1 4.86 7.88Z" fill="currentColor" fillOpacity="0.35" strokeLinejoin="round" />
     </>
   ),
   // An eye with a slash: nothing verified is watching
