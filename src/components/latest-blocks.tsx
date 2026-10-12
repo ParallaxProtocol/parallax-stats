@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { formatAgo, formatBlockTime, formatInt } from "@/lib/format";
+import { formatAgo, formatBlockTime, formatInt, formatPercent } from "@/lib/format";
 import { WEI_PER_LAX } from "@/lib/emission";
 import type { Charts, MiningPool } from "@/lib/protocol";
 import { formatSmallLax, Waiting } from "./charts";
@@ -160,7 +160,7 @@ export function LatestBlocks({
                         formatInt(c.transactions[i])
                       )}
                     </td>
-                    <td className={`${CELL} text-right`}>{limit > 0 ? `${Math.round((c.gasSpending[i] / limit) * 100)}%` : "—"}</td>
+                    <td className={`${CELL} text-right`}>{limit > 0 ? formatPercent(c.gasSpending[i] / limit) : "—"}</td>
                     <td className={`${CELL} text-right`}>
                       {fees === null ? <span className="text-muted-foreground">—</span> : formatSmallLax(Number(BigInt(fees)) / Number(WEI_PER_LAX))}
                     </td>

@@ -8,7 +8,7 @@ import {
   formatGasPrice,
   formatInt,
   formatPoolDifficulty,
-  formatPressure,
+  formatPercent,
   formatHashrate,
   gradePeerLatency,
   gradePressure,
@@ -257,12 +257,12 @@ export function figures({
     },
     mempool: {
       label: "Mempool pressure",
-      value: pressure !== null ? formatPressure(pressure) : "n/a",
+      value: pressure !== null ? formatPercent(pressure) : "n/a",
       unit: "of a block",
       grade: pressure !== null ? gradePressure(pressure) : "off",
       gradeNote:
         pressure !== null
-          ? `Waiting transactions would fill ${formatPressure(pressure)} of a block. Under half a block is healthy; over 2 blocks is a backlog.`
+          ? `Waiting transactions would fill ${formatPercent(pressure)} of a block. Under half a block is healthy; over 2 blocks is a backlog.`
           : undefined,
       note:
         pressure === null
@@ -274,7 +274,7 @@ export function figures({
               }`,
       // Each slice's mean waiting count, at today's room per transaction. A server from before the mempool readings sends none
       trend: (trends.pending ?? []).map((pending) => (pending === null ? null : pressureOf(pending, charts))),
-      format: formatPressure,
+      format: formatPercent,
       detail: () => "mean",
       waiting: "Collecting readings",
       link: explorer ? { href: `${explorer}/txs?tab=pending`, label: "pending" } : undefined,

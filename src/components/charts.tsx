@@ -2,7 +2,7 @@
 
 import { createContext, use, useEffect, useState, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { blockReward, WEI_PER_LAX } from "@/lib/emission";
-import { formatBlockTime, formatCompact, formatInt, formatMs, gradeAvgBlockTime, shortHash } from "@/lib/format";
+import { formatBlockTime, formatCompact, formatInt, formatMs, formatPercent, gradeAvgBlockTime, shortHash } from "@/lib/format";
 import { HISTORY_BINS, TARGET_BLOCK_TIME, TREND_SLICE_S, type Charts, type MinerCount, type PropagationStats } from "@/lib/protocol";
 import { majorityLevel, spreadLevel, type Level } from "@/lib/alert-levels";
 import { DECENTRALIZATION_MIN_BLOCKS, gradeDecentralization, majorityHolders } from "@/lib/decentralization";
@@ -601,7 +601,7 @@ export function Transactions({ c, block }: { c: Charts; block: (i: number) => st
 export function Fullness({ c, block }: { c: Charts; block: (i: number) => string }) {
   const { view, choose, active, setActive } = usePeriod();
   const fullness = c.gasSpending.map((used, i) => (c.gasLimit[i] > 0 ? used / c.gasLimit[i] : 0));
-  const pct = formatSmallShare;
+  const pct = formatPercent;
   // A server from before the fullness trend sends none
   const trend = c.trends?.fullness ?? [];
   const start = c.trends?.start ?? [];

@@ -193,14 +193,14 @@ export function gradePressure(pressure: number): Grade {
   return "critical";
 }
 
-/** formatPressure renders a share of a block as a percentage, without rounding a little to nothing: 0.6%, 230%. */
-export function formatPressure(pressure: number): string {
-  const pct = pressure * 100;
+/** formatPercent renders a fraction as a percentage to two decimals, without rounding a little to nothing: 0.63%, 230.00%. */
+export function formatPercent(fraction: number): string {
+  const pct = fraction * 100;
 
   if (pct === 0) return "0%";
-  if (pct < 0.1) return "<0.1%";
+  if (pct < 0.01) return "<0.01%";
 
-  return `${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`;
+  return `${pct.toFixed(2)}%`;
 }
 
 export function gradeRatio(ratio: number): Grade {

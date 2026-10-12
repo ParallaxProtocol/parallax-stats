@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatPressure, gradePressure, hashpriceUnit, mempoolPressure, shortVersion } from "../src/lib/format.ts";
+import { formatPercent, gradePressure, hashpriceUnit, mempoolPressure, shortVersion } from "../src/lib/format.ts";
 import { parsePlatform } from "../src/lib/version.ts";
 
 const releases = { "v2.1.2": "1dea7a088142f54c80c41fd3ba3d617ca408bf18" };
@@ -33,10 +33,10 @@ test("mempool pressure is the room waiting transactions need, as a share of a bl
   assert.equal(mempoolPressure(10, 0, 210_000), 1);
   assert.equal(mempoolPressure(5, 21_000, 0), 0);
 
-  assert.equal(formatPressure(0.0063), "0.6%");
-  assert.equal(formatPressure(0.0004), "<0.1%");
-  assert.equal(formatPressure(2.3), "230%");
-  assert.equal(formatPressure(0), "0%");
+  assert.equal(formatPercent(0.0063), "0.63%");
+  assert.equal(formatPercent(0.00004), "<0.01%");
+  assert.equal(formatPercent(2.3), "230.00%");
+  assert.equal(formatPercent(0), "0%");
 
   assert.equal(gradePressure(0.2), "good");
   assert.equal(gradePressure(1.5), "warn");
