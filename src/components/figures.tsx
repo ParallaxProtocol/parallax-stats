@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Summary } from "@/lib/derive";
-import { blockReward, WEI_PER_LAX } from "@/lib/emission";
+import { blockPay, dailyPay, hashprice, latestPace, pressureOf, scheduledPay } from "@/lib/earnings";
 import {
   formatDifficulty,
   formatGasPrice,
@@ -15,10 +15,9 @@ import {
   gradeRatio,
   gradeUptime,
   hashpriceUnit,
-  mempoolPressure,
   type Grade,
 } from "@/lib/format";
-import { TARGET_BLOCK_TIME, TREND_SLICE_S, type Charts, type Price, type Trends } from "@/lib/protocol";
+import { TREND_SLICE_S, type Charts, type Price, type Trends } from "@/lib/protocol";
 import { sliceTime, Tile, TrendLine, Waiting } from "./charts";
 import { ExternalLink } from "./external-link";
 import { Indicator } from "./indicator";
@@ -136,12 +135,9 @@ export function figures({
   // A server from before the trends sends none
   const trends = charts?.trends ?? NO_TRENDS;
   const difficulty = mining ?? (bestStats ? BigInt(bestStats.block.difficulty) : null);
-  // What a block pays: its reward, and the fees of recent blocks on average. Each block takes `difficulty`
-  // hashes on average, so a hash earns that over the difficulty, whatever luck does to block times
-  const knownFees = (charts?.fees ?? []).filter((fees): fees is string => fees !== null);
-  const fees = knownFees.length > 0 ? knownFees.reduce((sum, f) => sum + Number(BigInt(f)), 0) / knownFees.length : 0;
-  const perBlock = (Number(blockReward(summary.bestBlock + 1)) + fees) / Number(WEI_PER_LAX);
-  const perHash = (d: number) => (d > 0 ? (86_400 * perBlock) / d : 0);
+  // What a block pays, and so what a hash earns at the difficulty
+  const pay = blockPay(summary.bestBlock, charts?.fees ?? []);
+  const perHash = (d: number) => hashprice(pay, d);
   const current = difficulty !== null && summary.bestBlock > 0 ? perHash(Number(difficulty)) : null;
   // In dollars at the current price; each trend slice at its own mean price, so a slice before
   // prices were read has none. Without a price, both stay in LAX
@@ -150,18 +146,14 @@ export function figures({
   // One unit for the figure and its trend, so the points compare
   const { scale, unit } = hashpriceUnit(currentValue ?? 0);
   const money = (v: number) => (usd !== null ? `$${significant.format(v)}` : `${significant.format(v)} LAX`);
-  // What miners earn in a day, at the pace of blocks over the 24 hours to a slice's end: what it would
-  // cost to rival them. The newest point of the block time trend gives today's pace
-  const daily = (blocktime: number) => (86_400 / blocktime) * perBlock;
-  const pace = [...trends.blocktime].reverse().find((t) => t !== null) ?? null;
+  // What miners earn in a day, at the pace of blocks over the 24 hours to a slice's end. The newest
+  // point of the block time trend gives today's pace
+  const daily = (blocktime: number) => dailyPay(pay, blocktime);
+  const pace = latestPace(trends.blocktime);
   const earned = pace !== null && summary.bestBlock > 0 ? daily(pace) : null;
-  const scheduled = (86_400 / TARGET_BLOCK_TIME) * perBlock;
+  const scheduled = scheduledPay(pay);
   const ahead = earned !== null ? earned / scheduled - 1 : 0;
-  // What a waiting transaction needs, by the recent blocks' transactions, against the newest block's limit
-  const recentTxs = (charts?.transactions ?? []).reduce((sum, n) => sum + n, 0);
-  const gasPerTx = recentTxs > 0 ? (charts?.gasSpending ?? []).reduce((sum, g) => sum + g, 0) / recentTxs : 0;
-  const gasLimit = charts?.gasLimit.at(-1) ?? 0;
-  const pressure = summary.pending !== null && gasLimit > 0 ? mempoolPressure(summary.pending, gasPerTx, gasLimit) : null;
+  const pressure = pressureOf(summary.pending, charts);
   // The CoinGecko credit its free API asks for, on each figure in dollars
   const priceLink = price ? { href: price.url, label: "CoinGecko" } : undefined;
 
@@ -269,7 +261,7 @@ export function figures({
                 pressure <= 1 ? "all fit in the next block" : `about ${Math.ceil(pressure)} blocks to clear`
               }`,
       // Each slice's mean waiting count, at today's room per transaction. A server from before the mempool readings sends none
-      trend: (trends.pending ?? []).map((pending) => (pending === null || gasLimit === 0 ? null : mempoolPressure(pending, gasPerTx, gasLimit))),
+      trend: (trends.pending ?? []).map((pending) => (pending === null ? null : pressureOf(pending, charts))),
       format: formatPressure,
       detail: () => "mean",
       waiting: "Collecting readings",

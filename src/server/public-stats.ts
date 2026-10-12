@@ -15,11 +15,15 @@ import {
   type Level,
 } from "../lib/alert-levels.ts";
 import { miningDifficulty } from "../lib/asert.ts";
+import { CONFIDENCE, confirmationsFor } from "../lib/confirmations.ts";
 import { DECENTRALIZATION_MIN_BLOCKS, gradeDecentralization, majorityHolders } from "../lib/decentralization.ts";
 import { onMainnet, summarize } from "../lib/derive.ts";
-import { HISTORY_BINS, TARGET_BLOCK_TIME, type Snapshot } from "../lib/protocol.ts";
+import { blockPay, dailyPay, hashprice, latestPace, pressureOf, scheduledPay } from "../lib/earnings.ts";
+import { blockReward, emissionAt, SUPPLY_CAP, toLax, WEI_PER_LAX } from "../lib/emission.ts";
+import { hashpriceUnit } from "../lib/format.ts";
+import { HISTORY_BINS, PROPAGATION_BANDS, TARGET_BLOCK_TIME, type Charts, type PublicNode, type Snapshot } from "../lib/protocol.ts";
 import type { Release } from "../lib/releases.ts";
-import { compareParts, parseVersion } from "../lib/version.ts";
+import { compareParts, parsePlatform, parseVersion } from "../lib/version.ts";
 
 const WEEK_S = 7 * 86_400;
 /** Gas a plain transfer uses. */
@@ -39,7 +43,7 @@ const mean = (values: number[]) => (values.length > 0 ? values.reduce((a, b) => 
 
 /** publicStats assembles the v2 response from the live snapshot. */
 export function publicStats(snapshot: Snapshot, latestRelease: Release | null, now = Date.now()) {
-  const { nodes, charts, gasPrice, pools } = snapshot;
+  const { nodes, charts, gasPrice, pools, incidents } = snapshot;
   const summary = summarize(nodes);
   const best = summary.bestStats?.block ?? null;
   const mainnet = onMainnet(nodes);
@@ -49,6 +53,12 @@ export function publicStats(snapshot: Snapshot, latestRelease: Release | null, n
   const fullWeek = (charts?.minerSpan ?? 0) >= WEEK_S - 3_600;
   const majorityCount = charts ? majorityHolders(charts.miners, minerBlocks) : null;
   const price = gasPrice ? Number(gasPrice) : null;
+  // What a block pays, and what that makes a hash, and all of them, earn in a day
+  const pay = blockPay(summary.bestBlock, charts?.fees ?? []);
+  const difficulty = next !== null ? Number(next) : best ? Number(best.difficulty) : null;
+  const perHash = difficulty !== null && summary.bestBlock > 0 ? hashprice(pay, difficulty) : null;
+  const pace = latestPace(charts?.trends.blocktime ?? []);
+  const pressure = pressureOf(summary.pending, charts);
 
   return {
     serverTime: snapshot.serverTime,
@@ -81,6 +91,36 @@ export function publicStats(snapshot: Snapshot, latestRelease: Release | null, n
     recommendedFee:
       price !== null ? { wei: gasPrice, gwei: price / 1e9, transferLax: (price * TRANSFER_GAS) / 1e18 } : null,
 
+    hashprice:
+      perHash !== null
+        ? {
+            laxPerHashPerSecondPerDay: perHash,
+            // The same figure per the unit the page shows it in, such as MH/s
+            ...(({ scale, unit }) => ({ unit, laxPerUnitPerDay: perHash * scale }))(hashpriceUnit(perHash)),
+            difficulty: next !== null ? "next" : "latest",
+            blockPayLax: pay,
+          }
+        : null,
+
+    securityBudget:
+      pace !== null && summary.bestBlock > 0
+        ? { laxPerDay: dailyPay(pay, pace), scheduledLaxPerDay: scheduledPay(pay), blockTimeSeconds: pace }
+        : null,
+
+    mempool: {
+      // The median of synced nodes
+      pending: summary.pending,
+      // The room the waiting transactions need, as a share of a block: 1 fills the next one
+      pressure,
+      blocksToClear: pressure !== null ? Math.ceil(pressure) : null,
+    },
+
+    confirmations: confirmations(charts),
+
+    latestBlocks: latestBlocks(charts, pools),
+
+    supply: supply(summary.bestBlock, now),
+
     uptime: { verifiedAveragePercent: summary.uptime },
 
     decentralization: {
@@ -108,6 +148,10 @@ export function publicStats(snapshot: Snapshot, latestRelease: Release | null, n
           reorgs: { count: health.reorgs, since: health.since },
           lastReorg: health.lastReorg,
           lastDeepReorg: health.lastDeepReorg ?? null,
+          // Every stale height and reorganization the fork graph draws, over the window's heights
+          heights: health.heights ?? null,
+          stale: health.stale ?? health.recentStale,
+          reorgEvents: health.reorgEvents ?? [],
           split: health.split,
           level: chainLevel(health, now),
         }
@@ -120,11 +164,183 @@ export function publicStats(snapshot: Snapshot, latestRelease: Release | null, n
           p90Ms: charts.propagation.p90,
           p99Ms: charts.propagation.p99,
           reach90: charts.propagation.spread ?? null,
+          // Reports by speed band: under 5 s, 5 to 15 s, 15 to 60 s, and 60 s or more
+          bands: charts.propagation.bands.map((reports, i) => ({ fromMs: i > 0 ? PROPAGATION_BANDS[i - 1] : 0, toMs: PROPAGATION_BANDS[i] ?? null, reports })),
           historyBlocks: HISTORY_BINS,
         }
       : null,
 
+    clientVersions: clientVersions(nodes, latestRelease),
+
+    nodeList: nodes.map(nodeRow),
+
     alerts: activeAlerts(snapshot, latestRelease, now),
+
+    incidents: incidents ? { since: incidents.since, rebuiltFrom: incidents.rebuiltFrom, list: incidents.list } : null,
+
+    // The figures over the last 7 days, oldest first, null where there was nothing to measure
+    trends: charts ? trends(charts, pay) : null,
+  };
+}
+
+/** confirmations is the wait the Confirmations tile recommends, against the largest miner of the last 7 days. */
+function confirmations(charts: Charts | null) {
+  const total = charts?.minerBlocks ?? 0;
+  const largest = charts?.miners[0] ?? null;
+
+  if (!largest || total === 0) return null;
+
+  const share = largest.blocks / total;
+
+  return {
+    largestMiner: { name: largest.pool?.name ?? null, address: largest.miner, share },
+    // Too few blocks to judge the share by: the page waits rather than recommend
+    judged: total >= DECENTRALIZATION_MIN_BLOCKS,
+    // While the largest miner holds a majority no wait is safe, and every count is null
+    majority: share >= 0.5,
+    // The fewest confirmations for each confidence; null when it takes more than 1,000
+    levels: CONFIDENCE.map((confidence) => {
+      const blocks = confirmationsFor(share, confidence);
+
+      return { confidence, blocks, waitSeconds: blocks !== null ? blocks * TARGET_BLOCK_TIME : null };
+    }),
+  };
+}
+
+/** latestBlocks lists the charted blocks, newest first, with what the Transactions, Block fullness and Fees tiles make of them. */
+function latestBlocks(charts: Charts | null, pools: Snapshot["pools"]) {
+  if (!charts || charts.height.length === 0) return null;
+
+  const { height, transactions, gasSpending, gasLimit, fees } = charts;
+  const count = height.length;
+  const fullness = gasSpending.map((used, i) => (gasLimit[i] > 0 ? used / gasLimit[i] : 0));
+  const reported = fees.flatMap((f, i) => (f === null ? [] : [i]));
+  const feesLax = reported.map((i) => Number(BigInt(fees[i]!)) / Number(WEI_PER_LAX));
+  const rewardLax = reported.map((i) => Number(blockReward(height[i])) / Number(WEI_PER_LAX));
+  const meanFees = mean(feesLax);
+  const meanReward = mean(rewardLax);
+
+  return {
+    blocks: count,
+    transactions: { total: transactions.reduce((a, b) => a + b, 0), perBlock: mean(transactions) },
+    averageFullness: mean(fullness),
+    fees: {
+      // Older parallaxd versions do not report fees
+      reportedBlocks: reported.length,
+      averageLax: meanFees,
+      shareOfReward: meanFees !== null && meanReward ? meanFees / meanReward : null,
+    },
+    list: height
+      .map((number, i) => {
+        const miner = charts.miner[i] ?? null;
+
+        return {
+          number,
+          timestamp: charts.timestamp[i] ? charts.timestamp[i] * 1000 : null,
+          miner,
+          pool: miner ? (pools[miner]?.name ?? null) : null,
+          transactions: transactions[i],
+          gasUsed: gasSpending[i],
+          gasLimit: gasLimit[i],
+          feesWei: fees[i],
+          // Null when the parent is not in the history
+          blockTimeSeconds: charts.blocktime[i] > 0 ? charts.blocktime[i] : null,
+        };
+      })
+      .reverse(),
+  };
+}
+
+/** supply is the Supply section's issuance and halving figures, from the height alone. */
+function supply(height: number, now: number) {
+  if (height === 0) return null;
+
+  const state = emissionAt(height);
+
+  return {
+    issuedLax: toLax(state.issued),
+    issuedShare: state.issuedShare,
+    capLax: toLax(SUPPLY_CAP),
+    leftToMineLax: toLax(SUPPLY_CAP - state.issued),
+    blockRewardLax: toLax(state.reward),
+    dailyIssuanceLax: toLax(state.dailyIssuance),
+    halving: {
+      era: state.era,
+      nextAt: state.nextHalving,
+      blocksToGo: state.blocksToHalving,
+      eraProgress: state.eraProgress,
+      leftThisEraLax: toLax(state.leftThisEra),
+      nextRewardLax: toLax(state.nextReward),
+      // At the target block time, which ASERT holds
+      expected: now + state.blocksToHalving * TARGET_BLOCK_TIME * 1000,
+    },
+  };
+}
+
+/** clientVersions counts the online nodes by release and platform, as the Client versions panel does. */
+function clientVersions(nodes: PublicNode[], latestRelease: Release | null) {
+  const online = nodes.filter((node) => node.stats.active);
+  const latest = latestRelease ? parseVersion(`/${latestRelease.tag}`) : null;
+  const count = (key: (node: PublicNode) => string) =>
+    [...online.reduce((counts, node) => counts.set(key(node), (counts.get(key(node)) ?? 0) + 1), new Map<string, number>())].sort((a, b) => b[1] - a[1]);
+  const versions = online.map((node) => parseVersion(node.info.node));
+  const known = latest?.parts ? versions.filter((v) => v.parts !== null) : [];
+
+  return {
+    online: online.length,
+    latest: latest?.parts ? { version: latest.label, url: latestRelease!.url } : null,
+    // On the latest release or newer, and behind it; null while GitHub cannot be reached
+    upToDate: latest?.parts ? known.filter((v) => compareParts(v.parts, latest.parts) >= 0).length : null,
+    behind: latest?.parts ? known.filter((v) => compareParts(v.parts, latest.parts) < 0).length : null,
+    versions: count((node) => parseVersion(node.info.node).label).map(([version, n]) => ({ version, nodes: n })),
+    platforms: count((node) => parsePlatform(node.info.node)).map(([platform, n]) => ({ platform, nodes: n })),
+  };
+}
+
+/** nodeRow is a node as the node table shows it. */
+function nodeRow(node: PublicNode) {
+  const { info, stats, geo } = node;
+
+  return {
+    name: info.name,
+    verified: node.trusted,
+    client: info.node,
+    version: parseVersion(info.node).label,
+    active: stats.active,
+    syncing: stats.syncing,
+    mining: stats.mining,
+    hashesPerSecond: stats.hashrate,
+    peers: stats.peers,
+    peerLatencyMs: stats.peerLatency || null,
+    block: stats.block.number,
+    propagationMs: stats.block.propagation,
+    propagationAvgMs: stats.propagationAvg,
+    pending: stats.pending,
+    uptimePercent: stats.uptime,
+    country: geo?.country ?? null,
+    city: geo?.city ?? null,
+  };
+}
+
+/** trends gives each figure's 7 days, in 4 hour slices; prices are left out. */
+function trends(charts: Charts, pay: number) {
+  const t = charts.trends;
+
+  return {
+    start: t.start.map((s) => s * 1000),
+    blockTimeSeconds: t.blocktime,
+    hashesPerSecond: t.hashrate,
+    difficulty: t.difficulty,
+    // At today's block pay over the whole week
+    hashpriceLax: t.difficulty.map((d) => (d === null ? null : hashprice(pay, d))),
+    securityBudgetLax: t.blocktime.map((b) => (b === null ? null : dailyPay(pay, b))),
+    activeNodes: t.active,
+    syncedNodes: t.synced,
+    recommendedFeeWei: t.gasPrice,
+    latencyMs: t.peerLatency,
+    uptimePercent: t.uptime,
+    pending: t.pending,
+    mempoolPressure: t.pending.map((p) => (p === null ? null : pressureOf(p, charts))),
   };
 }
 

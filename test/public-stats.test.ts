@@ -47,6 +47,46 @@ test("the v2 stats carry the dashboard's figures and alerts", () => {
   assert.equal(stats.decentralization.majorityHolders, 1);
   assert.deepEqual(stats.decentralization.topMiners[0], { name: "Big Pool", website: "https://pool.example/", address: pool, blocks: 15, share: 0.75 });
 
+  // A majority makes no wait safe
+  assert.equal(stats.confirmations?.majority, true);
+  assert.deepEqual(
+    stats.confirmations?.levels.map((l) => l.blocks),
+    [null, null, null],
+  );
+
+  // What a hash earns at the latest difficulty, with no fees reported: 50 LAX a block
+  assert.equal(stats.hashprice?.blockPayLax, 50);
+  assert.equal(stats.hashprice?.unit, "MH/s");
+  assert.equal(stats.hashprice?.laxPerHashPerSecondPerDay, (86_400 * 50) / 4294967296000);
+
+  // The newest block first, and the supply from the height
+  assert.equal(stats.latestBlocks?.blocks, 20);
+  assert.deepEqual(stats.latestBlocks?.list[0], {
+    number: 20,
+    timestamp: 20 * 600 * 1000,
+    miner: solo,
+    pool: null,
+    transactions: 0,
+    gasUsed: 0,
+    gasLimit: 0,
+    feesWei: null,
+    blockTimeSeconds: 600,
+  });
+  assert.equal(stats.supply?.issuedLax, 1000);
+  assert.equal(stats.supply?.halving.blocksToGo, 209_980);
+
+  // The node behind the latest release, by version and platform
+  assert.deepEqual(stats.clientVersions, {
+    online: 1,
+    latest: { version: "v2.1.2", url: "https://example.org/v2.1.2" },
+    upToDate: 0,
+    behind: 1,
+    versions: [{ version: "v2.1.1", nodes: 1 }],
+    platforms: [{ platform: "Linux x64", nodes: 1 }],
+  });
+  assert.equal(stats.nodeList[0].name, "seed");
+  assert.equal(stats.nodeList[0].version, "v2.1.1");
+
   // The same alerts the page shows: the majority, and a release the node is behind on
   assert.deepEqual(
     stats.alerts.map((a) => [a.type, a.level]),

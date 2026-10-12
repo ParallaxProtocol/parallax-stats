@@ -229,11 +229,21 @@ numbers; shares are fractions from 0 to 1.
 | `hashrate` | `hashesPerSecond`, estimated from difficulty and block times |
 | `difficulty` | `latest` (the best block's), `next` (the block being mined, exact on mainnet), `nextPoolUnits` (÷2^32, as pools show it), `changeWeek` |
 | `recommendedFee` | `wei`, `gwei`, and `transferLax`: the fee of a plain 21,000 gas transfer |
+| `hashprice` | what a hash earns in a day, in LAX, fees included: `laxPerHashPerSecondPerDay`, the same per the page's `unit` (such as `MH/s`) as `laxPerUnitPerDay`, which `difficulty` it uses (`next` or `latest`), and `blockPayLax`: the next block's reward plus recent blocks' mean fees |
+| `securityBudget` | what miners earn in a day at the last 24 hours' pace of blocks: `laxPerDay`, `scheduledLaxPerDay` (at the 10 minute target), and that pace as `blockTimeSeconds` |
+| `mempool` | `pending` (the median of synced nodes), `pressure` (the room the waiting transactions need, as a share of a block) and `blocksToClear` |
+| `confirmations` | the wait to recommend against the largest miner of the last 7 days: `largestMiner` (`name`, `address`, `share`), `judged` (false with too few blocks to judge), `majority` (no wait is safe), and `levels`: `blocks` and `waitSeconds` for each `confidence` (0.99, 0.999, 0.9999), `null` past 1,000 blocks |
+| `latestBlocks` | the last 40 blocks: `transactions` (`total`, `perBlock`), `averageFullness`, `fees` (`reportedBlocks`, `averageLax`, `shareOfReward`), and `list`, newest first: `number`, `timestamp`, `miner`, `pool`, `transactions`, `gasUsed`, `gasLimit`, `feesWei`, `blockTimeSeconds` |
+| `supply` | `issuedLax`, `issuedShare`, `capLax`, `leftToMineLax`, `blockRewardLax`, `dailyIssuanceLax`, and `halving`: `era`, `nextAt`, `blocksToGo`, `eraProgress`, `leftThisEraLax`, `nextRewardLax`, and when it is `expected` at the target block time |
 | `uptime` | `verifiedAveragePercent`: verified nodes' average uptime |
 | `decentralization` | over the last 7 days of blocks: `grade` (`healthy`, `fair`, `concentrated`, `critical`), `majorityHolders` (the fewest miners holding a majority, `null` when more than are listed), `distinctMiners`, `topMiners` (`name` and `website` for known pools, `address`, `blocks`, `share`) |
-| `staleBlocks` | `window`, `count`, `recent` stale heights, `reorgs` (count and `since`), `lastReorg` and `lastDeepReorg` (`height`, `at`, `nodes`, `depth`), `split`, and the panel's warning `level` |
-| `propagation` | `reports`, `medianMs`, `p90Ms`, `p99Ms`, and `reach90`: how long recent blocks took to reach 90% of verified nodes, with any consistently slow miner |
+| `staleBlocks` | `window`, `count`, `recent` stale heights, `reorgs` (count and `since`), `lastReorg` and `lastDeepReorg` (`height`, `at`, `nodes`, `depth`), `split`, the panel's warning `level`, and what the fork graph draws: the window's `heights` (`from`, `to`), every `stale` height and every one of the `reorgEvents` |
+| `propagation` | `reports`, `medianMs`, `p90Ms`, `p99Ms`, `reach90`: how long recent blocks took to reach 90% of verified nodes, with any consistently slow miner, and `bands`: reports by speed (`fromMs`, `toMs`, `null` for no limit, `reports`) |
+| `clientVersions` | the online nodes: `online`, the `latest` release (`version`, `url`), how many are `upToDate` on it or newer and how many `behind` (`null` while GitHub cannot be reached), and counts by `versions` and `platforms` |
+| `nodeList` | every node the table lists: `name`, `verified`, `client`, `version`, `active`, `syncing`, `mining`, `hashesPerSecond`, `peers`, `peerLatencyMs`, `block`, `propagationMs`, `propagationAvgMs`, `pending`, `uptimePercent`, `country`, `city` |
 | `alerts` | the alerts showing on the page, most severe first: `type` (`split`, `stall`, `reorg`, `majority`, `propagation`, `slow-miner`, `release`), `level` (`critical`, `warn`, `info`), `since` where it applies, and `details` |
+| `incidents` | the network status card's record: `since` (when recording began), `rebuiltFrom`, and `list`, the last 90 days newest first: `kind` (`majority`, `spread`, `split`, `stall`, `reorg`), `level`, `start`, `startKnown`, `end` (`null` while it lasts) and `detail` |
+| `trends` | each figure over the last 7 days, in 4 hour slices, oldest first, `null` where there was nothing to measure: `start`, `blockTimeSeconds`, `hashesPerSecond`, `difficulty`, `hashpriceLax` and `securityBudgetLax` (at today's block pay), `activeNodes`, `syncedNodes`, `recommendedFeeWei`, `latencyMs`, `uptimePercent`, `pending`, `mempoolPressure` |
 
 The figures cover the nodes reporting to this dashboard, not the whole
 network: see the page's About dialog.
