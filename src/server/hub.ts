@@ -374,6 +374,8 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
             log.ok("BLK", "Block:", block.number, "from:", id);
           }
 
+          if (registry.updateSyncing(id)) broadcast({ type: "stats", id: node.viewId, stats: node.basicStats() });
+
           scheduleCharts();
           break;
         }

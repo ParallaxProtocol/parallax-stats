@@ -224,9 +224,33 @@ export class Registry {
 
     if (!node) return null;
 
-    const syncing = reportsSyncing(node.info.node) ? stats.syncing : this.history.bestBlockNumber() - node.stats.block.number >= SYNCING_LAG;
+    const syncing = reportsSyncing(node.info.node) ? stats.syncing : this.isBehind(node);
 
     return node.setStats({ ...stats, syncing }) ? node : null;
+  }
+
+  /**
+   * updateSyncing works out again, after a block report, whether a node
+   * whose flag cannot be believed is syncing, rather than waiting for its
+   * next stats; it returns the node when that changed.
+   */
+  updateSyncing(id: string): NodeRecord | null {
+    const node = this.nodes.get(id);
+
+    if (!node || reportsSyncing(node.info.node)) return null;
+
+    const syncing = this.isBehind(node);
+
+    if (syncing === node.stats.syncing) return null;
+
+    node.stats.syncing = syncing;
+
+    return node;
+  }
+
+  /** isBehind tells whether a node's head is well behind the best block. */
+  private isBehind(node: NodeRecord): boolean {
+    return this.history.bestBlockNumber() - node.stats.block.number >= SYNCING_LAG;
   }
 
   /** addHistory fills the shared history, but only from the node it was requested from. */

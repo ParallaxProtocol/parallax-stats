@@ -883,6 +883,15 @@ test("a node whose syncing flag is reversed is syncing when well behind the best
   nodes.setStats("odd", { ...stats, syncing: false });
   assert.equal(nodes.get("old")!.stats.syncing, false);
   assert.equal(nodes.get("odd")!.stats.syncing, true);
+
+  // Catching up shows at its next block, not only at its next stats
+  nodes.addBlock("odd", block(100));
+  assert.ok(nodes.updateSyncing("odd"));
+  assert.equal(nodes.get("odd")!.stats.syncing, false);
+  assert.equal(nodes.updateSyncing("odd"), null);
+  // A release with the fix keeps its own flag
+  assert.equal(nodes.updateSyncing("new"), null);
+  assert.equal(nodes.get("new")!.stats.syncing, true);
 });
 
 test("a node's propagation history leaves out heights from before it connected", () => {
