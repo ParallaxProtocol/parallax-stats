@@ -327,6 +327,15 @@ Tells the caller whether they can report under a node name: `available`,
 - **Chain splits** are verified nodes on different chains, each at least two
   blocks past where they part. Chains that part only at the newest block
   are an ordinary block race.
+- **Incidents** are the alerts' conditions, recorded by the server with
+  when each started and ended, and saved with the rest of the state for 90
+  days: a mining majority, slow propagation, a chain split, a possible
+  stall and no verified node online, each from when it first applied, once
+  it has held for 10 minutes (a stall at once), until it has been gone for
+  as long; and deep reorganizations, as moments. The page shows the last 30
+  days. When recording begins, past stalls and majorities are rebuilt from
+  the saved blocks; a majority already holding then is shown as starting
+  before that.
 - **Possible stall** shows after 2 hours without a block. Block intervals
   vary with luck: an hour happens, two hours is a one-in-160,000 wait at
   steady hashrate.

@@ -3,8 +3,9 @@
 
 import { randomBytes } from "node:crypto";
 import { summarize } from "../lib/derive.ts";
-import { trendStarts, type Block, type Charts, type NameStatus, type PublicNode } from "../lib/protocol.ts";
+import { trendStarts, type Block, type Charts, type IncidentLog, type NameStatus, type PublicNode } from "../lib/protocol.ts";
 import { History, type Head, type HistoryRequest, type HistoryState } from "./history.ts";
+import { Incidents, observe, type IncidentsState } from "./incidents.ts";
 import { NodeRecord, type Login, type NodeState } from "./node.ts";
 import { Readings, type ReadingsState } from "./readings.ts";
 import { cleanId, type ReportedBlock } from "./sanitize.ts";
@@ -25,13 +26,20 @@ export interface RegistryState {
   history: HistoryState;
   /** Missing from state saved before readings were kept. */
   readings?: ReadingsState;
+  /** Missing from state saved before incidents were recorded. */
+  incidents?: IncidentsState;
 }
+
+/** How long to wait for the history to fill before rebuilding past incidents from what there is. */
+const REBUILD_WAIT_MS = 30 * 60_000;
 
 export class Registry {
   private readonly settings: Settings;
   private readonly nodes = new Map<string, NodeRecord>();
   readonly history: History;
   readonly readings = new Readings();
+  private readonly incidents = new Incidents();
+  private readonly startedAt = Date.now();
   // Pseudonyms are stable while the server runs, and across restarts
   // when state is saved, but cannot be reversed by trying candidate names.
   private pseudonymKey = randomBytes(32);
@@ -48,6 +56,7 @@ export class Registry {
       nodes: [...this.nodes.values()].map((node) => node.toState()),
       history: this.history.toState(),
       readings: this.readings.toState(),
+      incidents: this.incidents.toState(),
     };
   }
 
@@ -66,6 +75,7 @@ export class Registry {
 
     this.history.restore(state.history);
     this.readings.restore(state.readings);
+    this.incidents.restore(state.incidents);
     this.removeOldNodes(now);
   }
 
@@ -287,6 +297,39 @@ export class Registry {
   /** recordReading adds a reading of the node list's figures, the recommended fee and the LAX price, to the trends. */
   recordReading(gasPrice: string | null, now = Date.now(), usd: number | null = null): void {
     this.readings.record(summarize(this.all()), gasPrice, now, usd);
+  }
+
+  /**
+   * checkIncidents records what is going wrong at `now`, and reports whether
+   * the incident log changed. Past incidents are first rebuilt from saved
+   * blocks, once the history has filled.
+   */
+  checkIncidents(now = Date.now()): boolean {
+    let changed = false;
+
+    if (this.incidents.needsRebuild) {
+      // Full, or with nothing left to ask for: a full history always lacks the height just past its oldest
+      const filled = this.history.length > 1 && (!this.history.requiresUpdate() || this.history.historyRequest() === null);
+
+      if (!filled && now - this.startedAt < REBUILD_WAIT_MS) return false;
+
+      this.incidents.rebuild(this.history.timeline(), this.settings.miningPools);
+      changed = true;
+    }
+
+    // Charts first: working them out measures reorganizations again
+    const charts = this.charts(now);
+    const nodes = this.all();
+    const summary = summarize(nodes);
+    const foundAt = (summary.bestStats?.block.timestamp ?? 0) * 1000;
+
+    changed = this.incidents.reorgs(this.history.deepReorgs(), now) || changed;
+
+    return this.incidents.update(observe(charts, nodes, foundAt, summary.bestBlock, now), now) || changed;
+  }
+
+  incidentLog(): IncidentLog {
+    return this.incidents.log();
   }
 
   charts(now = Date.now()): Charts {

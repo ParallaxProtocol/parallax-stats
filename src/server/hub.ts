@@ -30,6 +30,9 @@ const CHARTS_MAX_WAIT_MS = 5000;
 const CLEANUP_MS = 5 * 60 * 1000;
 const VIEWER_MAX_PAYLOAD = 1024;
 const GAS_PRICE_POLL_MS = 60_000;
+/** How often incidents are checked for, and how long after starting: restored nodes are offline until they report again. */
+const INCIDENT_CHECK_MS = 60_000;
+const INCIDENT_GRACE_MS = 2 * 60_000;
 /** CoinGecko refreshes its prices every minute or so; every 5 minutes is plenty, and far inside its free limit. */
 const PRICE_POLL_MS = 5 * 60_000;
 /** How often the node list's figures are read for the trends. */
@@ -167,6 +170,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
       pools,
       explorer: settings.explorerUrl,
       price,
+      incidents: registry.incidentLog(),
     };
   }
 
@@ -206,6 +210,14 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
     // The readings' trends would otherwise wait for the next block to reach viewers
     scheduleCharts();
   }, READING_MS);
+
+  // What is going wrong, recorded as incidents for the timeline
+  const hubStarted = Date.now();
+  const incidentCheck = setInterval(() => {
+    if (Date.now() - hubStarted >= INCIDENT_GRACE_MS && registry.checkIncidents()) {
+      broadcast({ type: "incidents", incidents: registry.incidentLog() });
+    }
+  }, INCIDENT_CHECK_MS);
 
   viewers.on("connection", (ws: Socket, req: IncomingMessage) => {
     const ip = clientIP(settings, req);
@@ -551,6 +563,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
 
       if (gasPricePoll) clearInterval(gasPricePoll);
       if (pricePoll) clearInterval(pricePoll);
+      clearInterval(incidentCheck);
       clearInterval(reading);
       clearInterval(heartbeat);
       clearInterval(prune);

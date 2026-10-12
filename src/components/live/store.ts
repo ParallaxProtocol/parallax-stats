@@ -2,7 +2,16 @@
 // keeps the node list and charts current, with reconnects and clock
 // offset tracking. Components read it through useSyncExternalStore.
 
-import { VIEWER_PATH, type Charts, type MiningPool, type Price, type PublicNode, type ServerMessage, type Snapshot } from "@/lib/protocol";
+import {
+  VIEWER_PATH,
+  type Charts,
+  type IncidentLog,
+  type MiningPool,
+  type Price,
+  type PublicNode,
+  type ServerMessage,
+  type Snapshot,
+} from "@/lib/protocol";
 
 export type Connection = "connecting" | "live" | "offline";
 
@@ -17,6 +26,8 @@ export interface LiveState {
   explorer: string | null;
   /** The LAX price; null while unknown. */
   price: Price | null;
+  /** What went wrong and when; null from a server that records none. */
+  incidents: IncidentLog | null;
   connection: Connection;
   /** Round trip to the server, ms; null until measured. */
   latency: number | null;
@@ -45,6 +56,7 @@ export class LiveStore {
       pools: initial.pools ?? {},
       explorer: initial.explorer ?? null,
       price: initial.price ?? null,
+      incidents: initial.incidents ?? null,
       connection: "connecting",
       latency: null,
       clockOffset: 0,
@@ -136,6 +148,7 @@ export class LiveStore {
           pools: msg.pools ?? {},
           explorer: msg.explorer ?? null,
           price: msg.price ?? null,
+          incidents: msg.incidents ?? null,
           connection: "live",
           clockOffset: this.state.latency === null ? msg.serverTime - Date.now() : this.state.clockOffset,
         });
@@ -159,6 +172,10 @@ export class LiveStore {
 
       case "price":
         this.set({ price: msg.price });
+        break;
+
+      case "incidents":
+        this.set({ incidents: msg.incidents });
         break;
 
       case "node": {

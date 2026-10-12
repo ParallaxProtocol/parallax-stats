@@ -246,6 +246,34 @@ export interface Price {
   url: string;
 }
 
+/** The kinds of incident the dashboard records: what its alerts warn of, kept once they pass. */
+export type IncidentKind = "majority" | "spread" | "split" | "stall" | "reorg" | "unverified";
+
+/** Something that went wrong, from when it started to when it ended. */
+export interface Incident {
+  id: string;
+  kind: IncidentKind;
+  /** The worst it got. */
+  level: "info" | "warn" | "critical";
+  /** Server time it started, ms. */
+  start: number;
+  /** False when it was already under way when records begin, so it started before `start`. */
+  startKnown: boolean;
+  /** Server time it ended, ms; null while it lasts. A moment, such as a reorganization, ends as it starts. */
+  end: number | null;
+  /** What it was at its worst: rplant.xyz mined 87% of the week's blocks. */
+  detail: string;
+}
+
+export interface IncidentLog {
+  /** When the server began recording incidents, ms. */
+  since: number;
+  /** How far back incidents were rebuilt from saved blocks when recording began, ms; null when none were. */
+  rebuiltFrom: number | null;
+  /** The last 90 days of incidents, newest first. */
+  list: Incident[];
+}
+
 export interface Snapshot {
   serverTime: number;
   nodes: PublicNode[];
@@ -258,6 +286,8 @@ export interface Snapshot {
   explorer: string | null;
   /** The LAX price; null while unknown, or with COINGECKO_ID set empty. */
   price: Price | null;
+  /** What went wrong and when; null from a server that records none. */
+  incidents: IncidentLog | null;
 }
 
 export type ServerMessage =
@@ -270,6 +300,7 @@ export type ServerMessage =
   | { type: "charts"; charts: Charts }
   | { type: "fee"; gasPrice: string | null }
   | { type: "price"; price: Price | null }
+  | { type: "incidents"; incidents: IncidentLog }
   | { type: "pong"; t: number; serverTime: number };
 
 export type ClientMessage = { type: "ping"; t: number };

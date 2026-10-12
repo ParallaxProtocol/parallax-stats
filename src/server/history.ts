@@ -16,6 +16,7 @@ import {
 } from "../lib/protocol.ts";
 import { DEEP_REORG } from "../lib/alert-levels.ts";
 import { median } from "../lib/derive.ts";
+import type { TimelineBlock } from "./incidents.ts";
 import type { ReportedBlock } from "./sanitize.ts";
 
 const MAX_HISTORY = 2000;
@@ -913,6 +914,18 @@ export class History {
       health: this.health(heads),
       avgHashrate: this.avgHashrate(),
     };
+  }
+
+  /** deepReorgs lists the credible reorganizations DEEP_REORG blocks deep or more, as last measured. */
+  deepReorgs(): { height: number; at: number; nodes: number; depth: number }[] {
+    return this.reorgs
+      .filter((e) => e.depth >= DEEP_REORG && this.credible(e.nodes, e.trusted))
+      .map((e) => ({ height: e.height, at: e.at, nodes: e.nodes.size, depth: e.depth }));
+  }
+
+  /** timeline lists the history's blocks, for working out past incidents. */
+  timeline(): TimelineBlock[] {
+    return this.items.map((item) => ({ height: item.height, timestamp: item.block.timestamp, miner: item.block.miner }));
   }
 
   requiresUpdate(): boolean {

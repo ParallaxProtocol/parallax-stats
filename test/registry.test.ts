@@ -825,3 +825,34 @@ test("a later routine reorganization does not hide a deep one", () => {
   assert.equal(health.lastDeepReorg?.height, 11);
   assert.equal(health.lastDeepReorg?.depth, 3);
 });
+
+test("the first incident check rebuilds a majority from saved blocks, still going", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+
+  // 9 days of blocks every 10 minutes, every one by the same miner
+  for (let n = 1; n <= 9 * 144; n++) nodes.addBlock("a", block(n));
+
+  const now = (9 * 144 * 600 + 60) * 1000;
+
+  assert.equal(nodes.checkIncidents(now), true);
+
+  const held = nodes.incidentLog().list.find((i) => i.kind === "majority");
+
+  assert.equal(held?.end, null);
+  assert.equal(held?.startKnown, false);
+  assert.equal(nodes.incidentLog().rebuiltFrom, 600_000);
+});
+
+test("a full history is filled enough to rebuild incidents from", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+
+  // More blocks than the history keeps: it always lacks the height just past its oldest
+  for (let n = 1; n <= 2100; n++) nodes.addBlock("a", block(n));
+
+  assert.equal(nodes.checkIncidents((2100 * 600 + 60) * 1000), true);
+  assert.notEqual(nodes.incidentLog().rebuiltFrom, null);
+});
