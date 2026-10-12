@@ -332,7 +332,10 @@ Tells the caller whether they can report under a node name: `available`,
   block, less the node's own one-way latency to the dashboard. Only nodes
   that are synced and have been connected for 2 minutes count, so a node
   catching up after a restart or reconnect does not look like a slow
-  network. The alert uses how long recent blocks took to reach 90% of the
+  network. An unverified node that reports a block before any verified
+  node is held until a verified node reports that same block, then timed
+  from when it came: the node that really had it first shows as first.
+  The alert uses how long recent blocks took to reach 90% of the
   verified nodes: amber over 15 s, red over 60 s, or amber naming a miner
   whose blocks are consistently that slow while everyone else's spread in
   seconds.

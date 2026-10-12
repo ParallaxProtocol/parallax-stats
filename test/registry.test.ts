@@ -172,6 +172,70 @@ test("untrusted nodes cannot introduce heights while a trusted node is online", 
   assert.ok(nodes.history.search(100)!.propagTimes.some((p) => p.node === "liar"));
 });
 
+test("a public node that had a block before any verified node is first, and the verified node after it", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+
+  const nodes = new Registry(settings);
+
+  login(nodes, "seed", "1.1.1.1", true);
+  login(nodes, "early", "2.2.2.2");
+  login(nodes, "earlier", "3.3.3.3");
+  login(nodes, "late", "4.4.4.4");
+  nodes.addBlock("seed", block(100));
+
+  // Two public nodes hear of block 101 before the verified node: held, not recorded
+  nodes.addBlock("earlier", block(101));
+  t.mock.timers.tick(100);
+  nodes.addBlock("early", block(101));
+  t.mock.timers.tick(200);
+  nodes.addBlock("seed", block(101));
+  t.mock.timers.tick(200);
+  nodes.addBlock("late", block(101));
+
+  const propagation = (id: string) => nodes.get(id)!.stats.block.propagation;
+
+  assert.equal(propagation("earlier"), 0);
+  assert.equal(propagation("early"), 100);
+  assert.equal(propagation("seed"), 300);
+  assert.equal(propagation("late"), 500);
+  // The block arrived with the first report of it
+  assert.equal(nodes.history.search(101)!.block.arrived, 1_000_000);
+  // Both public nodes are sent out again, once
+  assert.deepEqual(
+    nodes.takeRetimed().map((node) => node.id),
+    ["earlier", "early"],
+  );
+  assert.deepEqual(nodes.takeRetimed(), []);
+});
+
+test("an early report counts only for the block a verified node reports, and only for a while", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+
+  const nodes = new Registry(settings);
+
+  login(nodes, "seed", "1.1.1.1", true);
+  login(nodes, "liar", "2.2.2.2");
+  login(nodes, "slow", "3.3.3.3");
+  nodes.addBlock("seed", block(100));
+
+  // A made-up block at the next height is never timed
+  nodes.addBlock("liar", block(101, "bad"));
+  t.mock.timers.tick(100);
+  nodes.addBlock("seed", block(101));
+
+  assert.equal(nodes.get("seed")!.stats.block.propagation, 0);
+  assert.ok(!nodes.history.search(101)!.propagTimes.some((p) => p.node === "liar"));
+  assert.deepEqual(nodes.takeRetimed(), []);
+
+  // A report left waiting too long for a verified node is dropped
+  nodes.addBlock("slow", block(102));
+  t.mock.timers.tick(11 * 60_000);
+  nodes.addBlock("seed", block(102));
+
+  assert.equal(nodes.get("seed")!.stats.block.propagation, 0);
+  assert.deepEqual(nodes.takeRetimed(), []);
+});
+
 test("without a trusted node, everyone can introduce heights", () => {
   const nodes = new Registry(settings);
 

@@ -374,6 +374,11 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
             log.ok("BLK", "Block:", block.number, "from:", id);
           }
 
+          // Public nodes that had this block first, timed now that a verified node reported it
+          for (const other of registry.takeRetimed()) {
+            broadcast({ type: "block", id: other.viewId, block: other.stats.block, propagationAvg: other.stats.propagationAvg, history: other.history });
+          }
+
           if (registry.updateSyncing(id)) broadcast({ type: "stats", id: node.viewId, stats: node.basicStats() });
 
           scheduleCharts();

@@ -47,6 +47,8 @@ export class Registry {
   // when state is saved, but cannot be reversed by trying candidate names.
   private pseudonymKey = randomBytes(32);
   private historyRequest: { id: string; at: number } | null = null;
+  /** Nodes whose head addBlock timed again, for the hub to send out. */
+  private retimed: NodeRecord[] = [];
 
   constructor(settings: Settings) {
     this.settings = settings;
@@ -213,7 +215,29 @@ export class Registry {
       time: 0,
     };
 
+    // Untrusted nodes that reported this block before it could be recorded now have their timing
+    for (const early of this.history.takeRetimed()) {
+      const other = this.nodes.get(early.id);
+
+      // Only while it is still on that block
+      if (!other || other.stats.block.number !== early.block.number || other.stats.block.hash !== early.block.hash) continue;
+
+      // The same block as its head, so setBlock would keep the stand-in it had: replace it outright
+      other.stats.block = early.block;
+      other.setBlock(early.block, this.history.nodePropagation(early.id, other.connectedAt));
+      this.retimed.push(other);
+    }
+
     return node.setBlock(block, this.history.nodePropagation(id, node.connectedAt)) ? node : null;
+  }
+
+  /** takeRetimed returns, once, the other nodes the last addBlock calls gave a new head timing. */
+  takeRetimed(): NodeRecord[] {
+    const retimed = this.retimed;
+
+    this.retimed = [];
+
+    return retimed;
   }
 
   /**

@@ -74,6 +74,21 @@ export interface Timing {
 }
 
 const UNCOUNTED: Timing = { counted: false, latency: 0 };
+
+/**
+ * An untrusted node's report of a height no trusted node has reported yet,
+ * held so that once one does, the report is timed from when it came: a
+ * public node that hears of a block first is first, and the trusted node
+ * after it is not. It can only count if a trusted node reports the very
+ * same block, so it cannot be used to make up blocks.
+ */
+interface EarlyReport extends Timing {
+  block: ReportedBlock;
+  received: number;
+}
+
+/** How long an early report waits for a trusted node to report its block. */
+const EARLY_MS = 10 * 60 * 1000;
 /** Blocks whose spread is judged, and the verified reports each needs. */
 const SPREAD_BLOCKS = 10;
 const SPREAD_MIN_REPORTERS = 3;
@@ -173,6 +188,10 @@ export class History {
   /** Blocks to ask nodes for after they switch chains, to measure how far back. */
   private reorgRequests = new Map<string, HistoryRequest>();
   private startedAt = Date.now();
+  /** Each untrusted node's latest early report, by node: bounded by the nodes. Not saved across restarts. */
+  private early = new Map<string, EarlyReport>();
+  /** Early reports timed by the last add, for the registry to update those nodes' heads. */
+  private retimed: { id: string; block: HistoryBlock }[] = [];
   /** Known pools by coinbase address. */
   private readonly pools: Map<string, MiningPool>;
 
@@ -238,7 +257,11 @@ export class History {
 
     const height = this.search(reported.number);
 
-    if (!trusted && this.trustedOnly && !height) return null;
+    if (!trusted && this.trustedOnly && !height) {
+      if (!addingHistory) this.holdEarly(id, { block: reported, received: Date.now(), counted, latency });
+
+      return null;
+    }
 
     if (!trusted && height && height.forks.length >= MAX_FORKS && findFork(height, reported) < 0) return null;
 
@@ -272,9 +295,24 @@ export class History {
       block.time = this.blockTime(block);
 
       if (accept) {
-        item.propagTimes.push({ node: id, trusted, fork: 0, received: now, propagation: 0, counted, latency });
+        // Nodes that reported this very block before it could be recorded came first
+        const early = this.takeEarly(id, block);
+        const first = Math.min(now, ...early.map((e) => e.received));
+
+        block.arrived = first;
+        block.received = first;
+
+        for (const e of early) {
+          item.forkReporters[0].ids.add(e.id);
+          item.propagTimes.push({ node: e.id, trusted: false, fork: 0, received: e.received, propagation: e.received - first, counted: e.counted, latency: e.latency });
+          this.retimed.push({ id: e.id, block: { ...block, received: e.received, propagation: e.received - first } });
+        }
+
+        item.propagTimes.push({ node: id, trusted, fork: 0, received: now, propagation: now - first, counted, latency });
         this.save(item);
         this.fillChildTimes(item.height);
+
+        if (early.length > 0) return { ...block, received: now, propagation: now - first };
       }
 
       return block;
@@ -335,6 +373,36 @@ export class History {
     block.fork = forkIndex;
 
     return block;
+  }
+
+  /** holdEarly keeps node `id`'s early report in place of any before it, and drops ones gone stale. */
+  private holdEarly(id: string, report: EarlyReport): void {
+    for (const [other, held] of this.early) if (report.received - held.received > EARLY_MS) this.early.delete(other);
+
+    this.early.set(id, report);
+  }
+
+  /** takeEarly removes and returns the early reports of `block`, from nodes other than `id`. */
+  private takeEarly(id: string, block: ReportedBlock): (EarlyReport & { id: string })[] {
+    const taken: (EarlyReport & { id: string })[] = [];
+
+    for (const [other, held] of this.early) {
+      if (other === id || held.block.number !== block.number || !sameBlock(held.block, block)) continue;
+
+      this.early.delete(other);
+      if (Date.now() - held.received <= EARLY_MS) taken.push({ ...held, id: other });
+    }
+
+    return taken;
+  }
+
+  /** takeRetimed returns, once, the early reports the last add timed, with the block each node now has. */
+  takeRetimed(): { id: string; block: HistoryBlock }[] {
+    const retimed = this.retimed;
+
+    this.retimed = [];
+
+    return retimed;
   }
 
   /**
