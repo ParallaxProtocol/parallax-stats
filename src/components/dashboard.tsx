@@ -99,9 +99,9 @@ function Live({
               <MiniClock bestBlock={summary.bestBlock} foundAt={foundAt} />
             </a>
             <AlertCount alerts={alerts} />
-            <About compact />
-            <SoundToggle compact />
             <ThemeToggle compact />
+            <SoundToggle compact />
+            <About compact />
           </>
         }
         asideAfter="best-block"

@@ -59,9 +59,9 @@ export default function Page() {
           <span className="font-sans text-base font-normal text-muted-foreground sm:text-lg">Network Status</span>
         </h1>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <About />
-          <SoundToggle />
           <ThemeToggle />
+          <SoundToggle />
+          <About />
         </div>
       </header>
 
