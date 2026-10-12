@@ -3,7 +3,7 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent } from "react";
 import { formatMs } from "@/lib/format";
 import type { Incident, IncidentKind, IncidentLog } from "@/lib/protocol";
-import { Alerts, type Alert } from "./alerts";
+import { Alerts, WARNING_DOT, type Alert } from "./alerts";
 import { Switch } from "./charts";
 import { useServerNow } from "./live/provider";
 import { Label, Plate } from "./plate";
@@ -112,6 +112,10 @@ function ticks(range: Range, from: number, to: number): { at: number; label: str
  * wrong before.
  */
 export function NetworkStatus({ log, alerts }: { log: IncidentLog | null; alerts: Alert[] }) {
+  // A dismissed alert still applies: it is never "all clear", only out of the way
+  const showing = alerts.filter((alert) => !alert.dismissed);
+  const dismissed = alerts.filter((alert) => alert.dismissed);
+
   return (
     <Plate as="section" id="incidents" aria-labelledby="status-title" className="flex min-w-0 scroll-mt-16 flex-col gap-5 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -119,12 +123,32 @@ export function NetworkStatus({ log, alerts }: { log: IncidentLog | null; alerts
           <span id="status-title">Network status</span>
         </Label>
         <span className="text-xs text-muted-foreground">
-          {alerts.length === 0 ? "All clear" : `${alerts.length} ${alerts.length === 1 ? "alert" : "alerts"} now`}
+          {showing.length > 0
+            ? `${showing.length} ${showing.length === 1 ? "alert" : "alerts"} now`
+            : dismissed.length > 0
+              ? `${dismissed.length} dismissed ${dismissed.length === 1 ? "alert" : "alerts"}`
+              : "All clear"}
         </span>
       </div>
-      {alerts.length > 0 ? (
-        <Alerts alerts={alerts} />
-      ) : (
+      {showing.length > 0 && <Alerts alerts={showing} />}
+      {/* Dismissed ones in a line each, still there to bring back */}
+      {dismissed.length > 0 && (
+        <ul className="flex flex-col gap-1.5">
+          {dismissed.map((alert) => (
+            <li key={alert.key} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm">
+              <span aria-hidden className={`size-2 shrink-0 rounded-full ${WARNING_DOT[alert.tone]}`} />
+              <span>{alert.title}</span>
+              <span className="text-xs text-muted-foreground">dismissed</span>
+              {alert.restore && (
+                <button type="button" onClick={alert.restore} className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
+                  Show
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {alerts.length === 0 && (
         <p className="flex items-center gap-2.5 text-sm">
           <span aria-hidden className="size-2 rounded-full bg-good" />
           All clear: nothing needs attention right now.

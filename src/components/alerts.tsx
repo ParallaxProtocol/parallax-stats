@@ -117,6 +117,10 @@ export interface Alert {
   action?: { href: string; label: string; external?: boolean };
   /** Present when the viewer may dismiss the alert. */
   dismiss?: () => void;
+  /** Set while the viewer has dismissed it: it still applies, but shows no banner. */
+  dismissed?: boolean;
+  /** Brings a dismissed alert's banner back. */
+  restore?: () => void;
 }
 
 /** Banner is one alert across the top of the page: what happened, why it matters and the facts behind it. */
@@ -281,6 +285,7 @@ export function useAlerts({
     window.setTimeout(() => reorgChime(veryDeep), REORG_SOUND_DELAY_MS);
   }, [deepAt, sound, veryDeep]);
   const dismissKey = (key: string, value: { until?: number; share?: number }) => setDismissed({ ...dismissed, [key]: value });
+  const restoreKey = (key: string) => setDismissed(Object.fromEntries(Object.entries(dismissed).filter(([k]) => k !== key)));
 
   // Verified nodes following different chains
   const split = health?.split ?? null;
@@ -340,22 +345,24 @@ export function useAlerts({
     const { miner: top, share, blocks: minerBlocks } = held;
     const key = `majority:${top.pool?.name ?? top.miner}`;
     const snoozed = dismissed[key];
+    // Dismissed, until the snooze runs out or the share grows: kept, so it still counts as going on
+    const hidden = !!snoozed && now <= (snoozed.until ?? 0) && share < (snoozed.share ?? 0) + MAJORITY_REGROWTH;
 
-    if (!snoozed || now > (snoozed.until ?? 0) || share >= (snoozed.share ?? 0) + MAJORITY_REGROWTH) {
-      alerts.push({
-        key,
-        tone: "critical",
-        icon: "majority",
-        // A known pool by name, anyone else by address
-        title: `${top.pool?.name ?? `Miner ${shortHash(top.miner)}`} found ${Math.round(share * 100)}% of the last week's blocks.`,
-        body: `With most of the hashrate, one ${top.pool ? "pool" : "miner"} could reverse payments or censor transactions.`,
-        // The only ones who can fix it: a majority shrinks as its miners move elsewhere
-        ask: { who: "If you mine LAX", what: "move some or all of your hashrate to a smaller pool." },
-        facts: [`${formatInt(top.blocks)} of ${formatInt(minerBlocks)} blocks`],
-        action: { href: MINING_POOL_STATS, label: "Find a smaller pool", external: true },
-        dismiss: () => dismissKey(key, { until: now + MAJORITY_SNOOZE_MS, share }),
-      });
-    }
+    alerts.push({
+      key,
+      tone: "critical",
+      icon: "majority",
+      // A known pool by name, anyone else by address
+      title: `${top.pool?.name ?? `Miner ${shortHash(top.miner)}`} found ${Math.round(share * 100)}% of the last week's blocks.`,
+      body: `With most of the hashrate, one ${top.pool ? "pool" : "miner"} could reverse payments or censor transactions.`,
+      // The only ones who can fix it: a majority shrinks as its miners move elsewhere
+      ask: { who: "If you mine LAX", what: "move some or all of your hashrate to a smaller pool." },
+      facts: [`${formatInt(top.blocks)} of ${formatInt(minerBlocks)} blocks`],
+      action: { href: MINING_POOL_STATS, label: "Find a smaller pool", external: true },
+      dismiss: () => dismissKey(key, { until: now + MAJORITY_SNOOZE_MS, share }),
+      dismissed: hidden,
+      restore: () => restoreKey(key),
+    });
   }
 
   // Blocks slow to reach the network: the chance a competing block is found meanwhile
@@ -392,7 +399,7 @@ export function useAlerts({
     return parts !== null && latest?.parts && compareParts(parts, latest.parts) < 0;
   });
 
-  if (hydrated && latestRelease && latest && behind.length > 0 && !dismissed[`release:${latestRelease.tag}`]) {
+  if (hydrated && latestRelease && latest && behind.length > 0) {
     const key = `release:${latestRelease.tag}`;
 
     alerts.push({
@@ -404,6 +411,8 @@ export function useAlerts({
       facts: [],
       action: { href: latestRelease.url, label: "Release notes", external: true },
       dismiss: () => dismissKey(key, {}),
+      dismissed: !!dismissed[key],
+      restore: () => restoreKey(key),
     });
   }
 
@@ -412,7 +421,9 @@ export function useAlerts({
 }
 
 /** Alerts calls out what needs attention at the top of the page, as banners. */
-export function Alerts({ alerts }: { alerts: Alert[] }) {
+export function Alerts({ alerts: all }: { alerts: Alert[] }) {
+  const alerts = all.filter((alert) => !alert.dismissed);
+
   if (alerts.length === 0) return null;
 
   return (
@@ -424,14 +435,16 @@ export function Alerts({ alerts }: { alerts: Alert[] }) {
   );
 }
 
-const WARNING_DOT: Record<Tone, string> = { critical: "bg-critical", warn: "bg-warn", info: "bg-info" };
+export const WARNING_DOT: Record<Tone, string> = { critical: "bg-critical", warn: "bg-warn", info: "bg-info" };
 
 /**
  * AlertCount is the section bar's button for the alerts: how many apply, in
  * the most severe one's colour. It opens them in a panel below it, in place,
  * closed again by a click elsewhere or Escape.
  */
-export function AlertCount({ alerts }: { alerts: Alert[] }) {
+export function AlertCount({ alerts: all }: { alerts: Alert[] }) {
+  // Dismissed alerts have had their say: the count is of the banners still showing
+  const alerts = all.filter((alert) => !alert.dismissed);
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const panel = useId();
