@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useState, type PointerEvent, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
   clientVersion,
   formatAgo,
@@ -19,6 +20,7 @@ import {
 } from "@/lib/format";
 import { HISTORY_BINS, PROPAGATION_BANDS, type PublicNode } from "@/lib/protocol";
 import { AddNode } from "./add-node";
+import { scrubIndex } from "./charts";
 import { CopyButton } from "./copy-button";
 import { GRADE_NAME, GRADE_TEXT } from "./indicator";
 import { Label } from "./plate";
@@ -217,27 +219,72 @@ function SyncStatus({ active, syncing }: { active: boolean; syncing: boolean }) 
   );
 }
 
-/** PropagationStrip draws a node's delay for each recent block as a row of tiny columns. */
-function PropagationStrip({ history }: { history: number[] }) {
+/**
+ * PropagationStrip draws a node's delay for each recent block as a row of tiny
+ * columns, oldest first and ending at the best block. Hovering or dragging
+ * along it shows the block and its delay.
+ */
+function PropagationStrip({ history, bestBlock }: { history: number[]; bestBlock: number }) {
   // Full height at the top of the amber band: a bar's height and color say the same
   const ceiling = PROPAGATION_BANDS[1];
   const h = 18;
+  const [hover, setHover] = useState<{ index: number; left: number; top: number } | null>(null);
+
+  function point(e: PointerEvent<SVGSVGElement>) {
+    const index = scrubIndex(e, history.length);
+
+    if (index === null) return setHover(null);
+
+    const rect = e.currentTarget.getBoundingClientRect();
+
+    setHover({ index, left: rect.left + (index + 0.5) * (rect.width / history.length), top: rect.top });
+  }
+
+  const delay = hover ? history[hover.index] : null;
 
   return (
-    <svg width={HISTORY_BINS * 3} height={h} className="block" aria-hidden>
-      {history.map((ms, i) =>
-        ms < 0 ? null : (
-          <rect
-            key={i}
-            x={i * 3}
-            y={h - Math.max(2, (Math.min(ms, ceiling) / ceiling) * h)}
-            width={2}
-            height={Math.max(2, (Math.min(ms, ceiling) / ceiling) * h)}
-            className={STRIP_FILL[gradePropagation(ms)]}
-          />
-        ),
-      )}
-    </svg>
+    <>
+      <svg
+        width={HISTORY_BINS * 3}
+        height={h}
+        className="block touch-pan-y select-none [-webkit-touch-callout:none]"
+        aria-hidden
+        onPointerDown={point}
+        onPointerMove={point}
+        onPointerLeave={() => setHover(null)}
+        onPointerCancel={() => setHover(null)}
+        // A tap reads the strip rather than opening the row
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* The whole strip takes the pointer, gaps and missing blocks included */}
+        <rect width={HISTORY_BINS * 3} height={h} fill="transparent" />
+        {history.map((ms, i) =>
+          ms < 0 ? null : (
+            <rect
+              key={i}
+              x={i * 3}
+              y={h - Math.max(2, (Math.min(ms, ceiling) / ceiling) * h)}
+              width={2}
+              height={Math.max(2, (Math.min(ms, ceiling) / ceiling) * h)}
+              className={`${STRIP_FILL[gradePropagation(ms)]} ${hover === null || hover.index === i ? "" : "opacity-35"}`}
+            />
+          ),
+        )}
+      </svg>
+      {hover &&
+        // On the body, so the table's sideways scroll never clips it
+        createPortal(
+          <span
+            role="tooltip"
+            className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-full border border-border bg-surface-elevated px-2 py-1 font-mono text-xs whitespace-nowrap shadow-sm"
+            style={{ left: hover.left, top: hover.top - 6 }}
+          >
+            <span className="text-muted-foreground">#{formatInt(bestBlock - (history.length - 1 - hover.index))}</span>{" "}
+            {delay === null || delay < 0 ? "no data" : delay === 0 ? "first" : `+${formatMs(delay)}`}
+          </span>,
+          document.body,
+        )}
+    </>
   );
 }
 
@@ -553,7 +600,7 @@ export function NodeTable({
                           </span>
                         ) : (
                           <span className="inline-flex items-center gap-2">
-                            <PropagationStrip history={node.history} />
+                            <PropagationStrip history={node.history} bestBlock={bestBlock} />
                             <span className="text-xs whitespace-nowrap text-muted-foreground">
                               {behind > HISTORY_BINS ? "n/a" : `avg ${formatMs(stats.propagationAvg)}`}
                             </span>
