@@ -7,6 +7,7 @@ import type { PublicNode } from "@/lib/protocol";
 import type { WorldMap } from "@/lib/world";
 import { Indicator } from "./indicator";
 import { Label, Plate } from "./plate";
+import { Tooltip } from "./tooltip";
 
 const FILL: Record<Grade, string> = {
   good: "fill-good",
@@ -166,17 +167,16 @@ export function NodeMap({
           </defs>
           <path d={world.path} fill="url(#land-dots)" />
           {dots.map(({ node, x, y, grade }) => (
-            <circle
-              key={node.id}
-              cx={x}
-              cy={y}
-              r={node.id === hovered ? 8 : 5.5}
-              className={`${FILL[grade]} stroke-surface-elevated`}
-              strokeWidth={2}
-              onPointerEnter={() => setHovered(node.id)}
-            >
-              <title>{`${node.info.name}, ${place(node)}`}</title>
-            </circle>
+            <Tooltip key={node.id} content={`${node.info.name}, ${place(node)}`}>
+              <circle
+                cx={x}
+                cy={y}
+                r={node.id === hovered ? 8 : 5.5}
+                className={`${FILL[grade]} stroke-surface-elevated`}
+                strokeWidth={2}
+                onPointerEnter={() => setHovered(node.id)}
+              />
+            </Tooltip>
           ))}
         </svg>
       </div>

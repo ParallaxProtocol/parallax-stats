@@ -9,6 +9,7 @@ import { formatBlockTime, formatInt, shortHash } from "@/lib/format";
 import type { Block, MiningPool } from "@/lib/protocol";
 import { audioUnlocked, chime, subscribeAudio, unlockAudio } from "./chime";
 import { usePersistent } from "./use-persistent";
+import { Tooltip } from "./tooltip";
 
 /** How long a toast stays up. */
 const SHOW_MS = 10_000;
@@ -184,30 +185,31 @@ export function SoundToggle({ compact = false }: { compact?: boolean }) {
   }
 
   return (
-    <button
-      type="button"
-      onClick={() => void onClick()}
-      className={`relative inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/50 ${compact ? "size-7" : "size-8 sm:size-9"}`}
-      aria-label={blocked ? "Allow the new block sound" : sound ? "Mute new block sound" : "Play a sound for new blocks"}
-      title={blocked ? "Your browser blocks sound until you interact with the page: click to allow it" : undefined}
-      aria-pressed={sound && unlocked}
-    >
-      <svg
-        viewBox="0 0 24 24"
-        className={`size-4 ${blocked ? "text-muted-foreground" : ""}`}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        aria-hidden
+    <Tooltip content={blocked ? "Your browser blocks sound until you interact with the page: click to allow it" : null}>
+      <button
+        type="button"
+        onClick={() => void onClick()}
+        className={`relative inline-flex items-center justify-center rounded-md border border-border hover:bg-accent/50 ${compact ? "size-7" : "size-8 sm:size-9"}`}
+        aria-label={blocked ? "Allow the new block sound" : sound ? "Mute new block sound" : "Play a sound for new blocks"}
+        aria-pressed={sound && unlocked}
       >
-        <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" strokeLinejoin="round" />
-        {sound && unlocked ? (
-          <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" strokeLinecap="round" />
-        ) : (
-          <path d="m16 9.5 5 5M21 9.5l-5 5" strokeLinecap="round" />
-        )}
-      </svg>
-      {blocked && <span aria-hidden className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-warn" />}
-    </button>
+        <svg
+          viewBox="0 0 24 24"
+          className={`size-4 ${blocked ? "text-muted-foreground" : ""}`}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden
+        >
+          <path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z" strokeLinejoin="round" />
+          {sound && unlocked ? (
+            <path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11" strokeLinecap="round" />
+          ) : (
+            <path d="m16 9.5 5 5M21 9.5l-5 5" strokeLinecap="round" />
+          )}
+        </svg>
+        {blocked && <span aria-hidden className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-warn" />}
+      </button>
+    </Tooltip>
   );
 }

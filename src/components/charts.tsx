@@ -8,6 +8,7 @@ import { majorityLevel, spreadLevel, type Level } from "@/lib/alert-levels";
 import { DECENTRALIZATION_MIN_BLOCKS, gradeDecentralization, majorityHolders } from "@/lib/decentralization";
 import { Indicator } from "./indicator";
 import { Label, Plate } from "./plate";
+import { Tooltip } from "./tooltip";
 import { useSize } from "./use-size";
 
 /** Smallest plot height; plots grow to fill their tile when the row is taller. */
@@ -454,6 +455,12 @@ export function BlockTime({ c, block }: { c: Charts; block: (i: number) => strin
   const knownTrend = trend.filter((v): v is number => v !== null);
   // A zero time means the block's parent was not recorded
   const recent = average(c.blocktime.filter((t) => t > 0));
+  // What the indicator grades: how far the 7 day mean is off the target, beyond 10% a warning
+  const off = c.avgBlocktime ? Math.round(((c.avgBlocktime - TARGET_BLOCK_TIME) / TARGET_BLOCK_TIME) * 100) : null;
+  const pace =
+    off === null || !c.minerBlocks
+      ? null
+      : `Mean of ${lastWeek(c)} is ${off === 0 ? "on" : `${Math.abs(off)}% ${off > 0 ? "slower" : "faster"} than`} the 10 min target. Within 10% is healthy.`;
 
   let value: string | undefined;
   let qualifier: string;
@@ -480,10 +487,12 @@ export function BlockTime({ c, block }: { c: Charts; block: (i: number) => strin
   return (
     <Tile
       title={
-        <span className="flex items-center gap-1.5">
-          {c.height.length > 0 && <Indicator grade={gradeAvgBlockTime(c.avgBlocktime)} />}
-          Block time
-        </span>
+        <Tooltip content={pace}>
+          <span className="flex items-center gap-1.5">
+            {c.height.length > 0 && <Indicator grade={gradeAvgBlockTime(c.avgBlocktime)} label={pace ?? undefined} />}
+            Block time
+          </span>
+        </Tooltip>
       }
       readout={<PeriodSwitch value={view} onChange={choose} />}
       value={value}
@@ -592,7 +601,7 @@ export function Transactions({ c, block }: { c: Charts; block: (i: number) => st
 export function Fullness({ c, block }: { c: Charts; block: (i: number) => string }) {
   const { view, choose, active, setActive } = usePeriod();
   const fullness = c.gasSpending.map((used, i) => (c.gasLimit[i] > 0 ? used / c.gasLimit[i] : 0));
-  const pct = (f: number) => `${(f * 100).toFixed(f < 0.1 ? 1 : 0)}%`;
+  const pct = formatSmallShare;
   // A server from before the fullness trend sends none
   const trend = c.trends?.fullness ?? [];
   const start = c.trends?.start ?? [];
@@ -700,16 +709,16 @@ export function Propagation({ stats }: { stats: PropagationStats }) {
           >
             {BANDS.map((band, i) =>
               bands[i] > 0 ? (
-                <div
-                  key={band.label}
-                  className={`${band.swatch} rounded-[3px] transition-[height,opacity] duration-150 ${active === i ? "h-3.5" : "h-2.5"} ${
-                    active === null || active === i ? "" : "opacity-35"
-                  }`}
-                  title={`${band.label}: ${formatInt(bands[i])} (${share(bands[i], samples)})`}
-                  style={{ flexGrow: bands[i], flexBasis: 0, minWidth }}
-                  onPointerEnter={() => setActive(i)}
-                  onPointerLeave={() => setActive(null)}
-                />
+                <Tooltip key={band.label} content={`${band.label}: ${formatInt(bands[i])} (${share(bands[i], samples)})`}>
+                  <div
+                    className={`${band.swatch} rounded-[3px] transition-[height,opacity] duration-150 ${active === i ? "h-3.5" : "h-2.5"} ${
+                      active === null || active === i ? "" : "opacity-35"
+                    }`}
+                    style={{ flexGrow: bands[i], flexBasis: 0, minWidth }}
+                    onPointerEnter={() => setActive(i)}
+                    onPointerLeave={() => setActive(null)}
+                  />
+                </Tooltip>
               ) : null,
             )}
           </div>
@@ -882,11 +891,13 @@ function MinerAddress({ address, muted }: { address: string; muted: boolean }) {
   const hex = address.startsWith("0x") ? address.slice(2) : address;
 
   return (
-    <span className={`flex min-w-0 font-mono ${muted ? "text-muted-foreground" : ""}`} title={address}>
-      <span className="whitespace-nowrap">
-        {hex.slice(0, 4)}…{hex.slice(-4)}
+    <Tooltip content={<span className="font-mono break-all">{address}</span>}>
+      <span className={`flex min-w-0 font-mono ${muted ? "text-muted-foreground" : ""}`}>
+        <span className="whitespace-nowrap">
+          {hex.slice(0, 4)}…{hex.slice(-4)}
+        </span>
       </span>
-    </span>
+    </Tooltip>
   );
 }
 
@@ -919,23 +930,22 @@ function Donut({ slices, total, active, onActive }: { slices: Slice[]; total: nu
         const length = (slice.blocks / total) * circumference;
 
         return (
-          <circle
-            key={slice.key}
-            cx="60"
-            cy="60"
-            r={radius}
-            fill="none"
-            stroke={slice.color}
-            strokeWidth={active === slice.key ? 20 : 16}
-            strokeDasharray={`${Math.max(0, length - gap)} ${circumference}`}
-            strokeDashoffset={-starts[i]}
-            className="transition-[stroke-width,opacity] duration-150"
-            opacity={active === null || active === slice.key ? 1 : 0.35}
-            onPointerEnter={() => onActive(slice.key)}
-            onPointerLeave={() => onActive(null)}
-          >
-            <title>{`${slice.label}: ${slice.blocks} of ${total} blocks`}</title>
-          </circle>
+          <Tooltip key={slice.key} content={`${slice.label}: ${slice.blocks} of ${total} blocks`}>
+            <circle
+              cx="60"
+              cy="60"
+              r={radius}
+              fill="none"
+              stroke={slice.color}
+              strokeWidth={active === slice.key ? 20 : 16}
+              strokeDasharray={`${Math.max(0, length - gap)} ${circumference}`}
+              strokeDashoffset={-starts[i]}
+              className="transition-[stroke-width,opacity] duration-150"
+              opacity={active === null || active === slice.key ? 1 : 0.35}
+              onPointerEnter={() => onActive(slice.key)}
+              onPointerLeave={() => onActive(null)}
+            />
+          </Tooltip>
         );
       })}
     </svg>
@@ -1041,29 +1051,29 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
                     aria-hidden
                   />
                   {slice.pool?.url ? (
-                    <a
-                      href={slice.pool.url}
-                      target="_blank"
-                      rel="noopener noreferrer nofollow"
-                      className="truncate underline decoration-border underline-offset-2 hover:decoration-foreground"
-                      title={`${slice.pool.name}, mining pool`}
-                    >
-                      {slice.label}
-                    </a>
+                    <Tooltip content={`${slice.pool.name}, mining pool`}>
+                      <a
+                        href={slice.pool.url}
+                        target="_blank"
+                        rel="noopener noreferrer nofollow"
+                        className="truncate underline decoration-border underline-offset-2 hover:decoration-foreground"
+                      >
+                        {slice.label}
+                      </a>
+                    </Tooltip>
                   ) : slice.miner ? (
                     <MinerAddress address={slice.miner} muted={active !== slice.key} />
                   ) : (
-                    <span
-                      className={`truncate ${active !== slice.key && !slice.pool ? "text-muted-foreground" : ""}`}
-                      title={slice.pool ? `${slice.pool.name}, mining pool` : undefined}
-                    >
-                      {slice.label}
-                    </span>
+                    <Tooltip content={slice.pool ? `${slice.pool.name}, mining pool` : null}>
+                      <span className={`truncate ${active !== slice.key && !slice.pool ? "text-muted-foreground" : ""}`}>{slice.label}</span>
+                    </Tooltip>
                   )}
-                  <span className="text-right tabular-nums" title={`${slice.blocks} of ${total} blocks`}>
-                    {active === slice.key && <span className="mr-2 text-muted-foreground">{slice.blocks} blocks</span>}
-                    {share(slice.blocks, total)}
-                  </span>
+                  <Tooltip content={`${slice.blocks} of ${total} blocks`}>
+                    <span className="text-right tabular-nums">
+                      {active === slice.key && <span className="mr-2 text-muted-foreground">{slice.blocks} blocks</span>}
+                      {share(slice.blocks, total)}
+                    </span>
+                  </Tooltip>
                 </li>
               ))}
             </ol>

@@ -16,6 +16,7 @@ import { useServerNow } from "./live/provider";
 import { Label, Plate } from "./plate";
 import { scrubIndex } from "./charts";
 import { useSize } from "./use-size";
+import { Tooltip } from "./tooltip";
 
 /** Halvings drawn on the supply curve; by the 8th, over 99% is issued. */
 const CURVE_ERAS = 8;
@@ -50,9 +51,9 @@ function ordinal(n: number): string {
 function Stat({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
     <div className="flex flex-col gap-1">
-      <dt className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase" title={hint}>
-        {label}
-      </dt>
+      <Tooltip content={hint}>
+        <dt className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">{label}</dt>
+      </Tooltip>
       <dd className="font-mono text-sm tabular-nums">{value}</dd>
     </div>
   );

@@ -24,6 +24,7 @@ import { NodeMap } from "./node-map";
 import { NodeTable } from "./node-table";
 import { sectionNumber, SectionNav, STATUS_DOT, type SectionLink } from "./section-nav";
 import { ThemeToggle } from "./theme-toggle";
+import { Tooltip } from "./tooltip";
 
 export function Dashboard({
   initial,
@@ -103,9 +104,11 @@ function Live({
         sections={sections}
         aside={
           <>
-            <a href="#best-block" title="Back to the block clock" className="mr-2">
-              <MiniClock bestBlock={summary.bestBlock} foundAt={foundAt} />
-            </a>
+            <Tooltip content="Back to the block clock">
+              <a href="#best-block" className="mr-2">
+                <MiniClock bestBlock={summary.bestBlock} foundAt={foundAt} />
+              </a>
+            </Tooltip>
             <AlertCount alerts={alerts} />
             <ThemeToggle compact />
             <SoundToggle compact />

@@ -2,6 +2,7 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Level } from "@/lib/alert-levels";
+import { Tooltip } from "./tooltip";
 
 export interface SectionLink {
   id: string;
@@ -163,12 +164,9 @@ export function SectionNav({ sections, aside, asideAfter }: { sections: SectionL
                   </span>
                   {section.title}
                   {section.status && (
-                    <span
-                      role="img"
-                      aria-label={section.status.label}
-                      title={section.status.label}
-                      className={`size-1.5 rounded-full ${STATUS_DOT[section.status.level]}`}
-                    />
+                    <Tooltip content={section.status.label}>
+                      <span role="img" aria-label={section.status.label} className={`size-1.5 rounded-full ${STATUS_DOT[section.status.level]}`} />
+                    </Tooltip>
                   )}
                 </a>
               </li>

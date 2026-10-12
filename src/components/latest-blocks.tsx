@@ -9,6 +9,7 @@ import { ExternalLink } from "./external-link";
 import { Heading } from "./health";
 import { useServerNow } from "./live/provider";
 import { Plate } from "./plate";
+import { Tooltip } from "./tooltip";
 
 /** Underlined, so a linked block or miner reads as a link inside the table. */
 const LINK = "underline decoration-border underline-offset-2 hover:decoration-foreground";
@@ -102,9 +103,9 @@ export function LatestBlocks({
                 <th className={`${HEAD} text-right`}>Transactions</th>
                 <th className={`${HEAD} text-right`}>Full</th>
                 <th className={`${HEAD} text-right`}>Fees, LAX</th>
-                <th className={`${HEAD} text-right`} title="Time since the parent block">
-                  Took
-                </th>
+                <Tooltip content="Time since the parent block">
+                  <th className={`${HEAD} text-right`}>Took</th>
+                </Tooltip>
               </tr>
             </thead>
             <tbody>
@@ -130,37 +131,31 @@ export function LatestBlocks({
                       {!miner ? (
                         "—"
                       ) : explorer ? (
-                        <a
-                          href={`${explorer}/address/${miner}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={pool ? `${pool.name}, mining pool: ${miner}` : miner}
-                          className={`flex min-w-0 ${LINK}`}
-                        >
-                          {pool ? <span className="truncate">{pool.name}</span> : <FullAddress address={miner} />}
-                        </a>
+                        <Tooltip content={<MinerTip miner={miner} pool={pool?.name} />}>
+                          <a href={`${explorer}/address/${miner}`} target="_blank" rel="noopener noreferrer" className={`flex min-w-0 ${LINK}`}>
+                            {pool ? <span className="truncate">{pool.name}</span> : <FullAddress address={miner} />}
+                          </a>
+                        </Tooltip>
                       ) : pool ? (
-                        <span title={miner} className="block truncate">
-                          {pool.name}
-                        </span>
+                        <Tooltip content={<MinerTip miner={miner} pool={pool.name} />}>
+                          <span className="block truncate">{pool.name}</span>
+                        </Tooltip>
                       ) : (
-                        <span title={miner} className="flex min-w-0">
-                          <FullAddress address={miner} />
-                        </span>
+                        <Tooltip content={<MinerTip miner={miner} />}>
+                          <span className="flex min-w-0">
+                            <FullAddress address={miner} />
+                          </span>
+                        </Tooltip>
                       )}
                     </MinerCell>
                     <td className={`${CELL} text-right`}>
                       {/* An empty block has no list to show */}
                       {explorer && c.transactions[i] > 0 ? (
-                        <a
-                          href={`${explorer}/block/${height}?tab=txs`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          title={`Transactions in block #${formatInt(height)}`}
-                          className={LINK}
-                        >
-                          {formatInt(c.transactions[i])}
-                        </a>
+                        <Tooltip content={`Transactions in block #${formatInt(height)}`}>
+                          <a href={`${explorer}/block/${height}?tab=txs`} target="_blank" rel="noopener noreferrer" className={LINK}>
+                            {formatInt(c.transactions[i])}
+                          </a>
+                        </Tooltip>
                       ) : (
                         formatInt(c.transactions[i])
                       )}
@@ -181,5 +176,15 @@ export function LatestBlocks({
         </div>
       )}
     </Plate>
+  );
+}
+
+/** MinerTip names a block's miner in full: its pool, if known, over its address. */
+function MinerTip({ miner, pool }: { miner: string; pool?: string }) {
+  return (
+    <span className="flex flex-col gap-0.5">
+      {pool && <span>{pool}, mining pool</span>}
+      <span className="font-mono break-all text-muted-foreground">{miner}</span>
+    </span>
   );
 }

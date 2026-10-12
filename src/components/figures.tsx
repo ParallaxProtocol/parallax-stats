@@ -21,6 +21,7 @@ import { TREND_SLICE_S, type Charts, type Price, type Trends } from "@/lib/proto
 import { sliceTime, Tile, TrendLine, Waiting } from "./charts";
 import { ExternalLink } from "./external-link";
 import { Indicator } from "./indicator";
+import { Tooltip } from "./tooltip";
 
 export interface Figure {
   label: string;
@@ -28,6 +29,8 @@ export interface Figure {
   /** Says what the value counts, on its line in smaller type: per GH/s per day. Hovered slices keep it. */
   unit?: string;
   grade?: Grade;
+  /** What the grade says, on hovering the title: the reading, then what counts as healthy. */
+  gradeNote?: string;
   note?: string;
   /** The figure over the last 7 days, one value per trend slice. */
   trend: (number | null)[];
@@ -61,10 +64,12 @@ export function FigureTile({ figure, start, className = "" }: { figure: Figure; 
     <Tile
       className={className}
       title={
-        <span className="flex items-center gap-1.5">
-          {figure.grade && <Indicator grade={figure.grade} />}
-          {figure.label}
-        </span>
+        <Tooltip content={figure.grade && figure.grade !== "off" ? figure.gradeNote : null}>
+          <span className="flex items-center gap-1.5">
+            {figure.grade && <Indicator grade={figure.grade} label={figure.grade !== "off" ? figure.gradeNote : undefined} />}
+            {figure.label}
+          </span>
+        </Tooltip>
       }
       readout={
         figure.link ? (
@@ -232,6 +237,9 @@ export function figures({
       label: "Active nodes",
       value: `${summary.synced} of ${summary.active}`,
       grade: summary.active ? gradeRatio(summary.synced / summary.active) : "off",
+      gradeNote: summary.active
+        ? `${Math.round((summary.synced / summary.active) * 100)}% of active nodes are in sync. 90% or more is healthy.`
+        : undefined,
       note: "in sync",
       trend: trends.active,
       format: (v) => significant.format(v),
@@ -252,6 +260,10 @@ export function figures({
       value: pressure !== null ? formatPressure(pressure) : "n/a",
       unit: "of a block",
       grade: pressure !== null ? gradePressure(pressure) : "off",
+      gradeNote:
+        pressure !== null
+          ? `Waiting transactions would fill ${formatPressure(pressure)} of a block. Under half a block is healthy; over 2 blocks is a backlog.`
+          : undefined,
       note:
         pressure === null
           ? undefined
@@ -271,6 +283,9 @@ export function figures({
       label: "Latency",
       value: summary.peerLatency ? `${summary.peerLatency} ms` : "n/a",
       grade: gradePeerLatency(summary.peerLatency),
+      gradeNote: summary.peerLatency
+        ? `Nodes reach their peers in ${summary.peerLatency} ms, the median. Under 1 s is healthy: relaying a block takes only a few round trips.`
+        : undefined,
       note: "median to peers",
       trend: trends.peerLatency,
       format: (v) => `${Math.round(v)} ms`,
@@ -282,6 +297,7 @@ export function figures({
       // Verified nodes only: anyone can run an unverified node for an hour
       value: summary.uptime !== null ? `${Math.round(summary.uptime)}%` : "n/a",
       grade: summary.uptime !== null ? gradeUptime(summary.uptime) : "off",
+      gradeNote: summary.uptime !== null ? `Verified nodes have been up ${Math.round(summary.uptime)}% of the time, on average. 90% or more is healthy.` : undefined,
       note: "verified nodes",
       trend: trends.uptime,
       format: (v) => `${v.toFixed(1)}%`,

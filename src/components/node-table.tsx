@@ -26,6 +26,7 @@ import { GRADE_NAME, GRADE_TEXT } from "./indicator";
 import { Label } from "./plate";
 import { useServerNow } from "./live/provider";
 import { usePersistent } from "./use-persistent";
+import { Tooltip } from "./tooltip";
 
 type SortKey =
   | "name"
@@ -136,12 +137,14 @@ const COLUMNS: Column[] = [
 /** Cell shows a value in its grade's color; screen readers hear the grade after the value. */
 function Cell({ grade, title, children, className = "" }: { grade?: Grade; title?: string; children: ReactNode; className?: string }) {
   return (
-    <td className={`px-3 py-3 whitespace-nowrap ${grade ? GRADE_TEXT[grade] : ""} ${className}`} title={title}>
-      <span className="inline-flex items-center gap-1.5">
-        {children}
-        {grade && <span className="sr-only">({GRADE_NAME[grade]})</span>}
-      </span>
-    </td>
+    <Tooltip content={title}>
+      <td className={`px-3 py-3 whitespace-nowrap ${grade ? GRADE_TEXT[grade] : ""} ${className}`}>
+        <span className="inline-flex items-center gap-1.5">
+          {children}
+          {grade && <span className="sr-only">({GRADE_NAME[grade]})</span>}
+        </span>
+      </td>
+    </Tooltip>
   );
 }
 
@@ -156,30 +159,32 @@ function MiningStatus({ mining, hashrate, className = "" }: { mining: boolean; h
 
   return (
     <td className={`px-3 py-3 ${className}`}>
-      <span role="img" aria-label={label} title={label} className="flex size-5 items-center justify-center">
-        {mining ? (
-          // Pickaxe, after Lucide (ISC license)
-          <svg
-            viewBox="0 0 24 24"
-            className="size-4 text-brand"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.75"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden
-          >
-            <path d="M14.531 12.469 6.619 20.38a1 1 0 1 1-3-3l7.912-7.912" />
-            <path d="M15.686 4.314A12.5 12.5 0 0 0 5.461 2.958 1 1 0 0 0 5.58 4.71a22 22 0 0 1 6.318 3.393" />
-            <path d="M17.7 3.7a1 1 0 0 0-1.4 0l-4.6 4.6a1 1 0 0 0 0 1.4l2.6 2.6a1 1 0 0 0 1.4 0l4.6-4.6a1 1 0 0 0 0-1.4z" />
-            <path d="M19.686 8.314a12.501 12.501 0 0 1 1.356 10.225 1 1 0 0 1-1.751-.119 22 22 0 0 0-3.393-6.319" />
-          </svg>
-        ) : (
-          <svg viewBox="0 0 16 16" className="size-4 text-muted-foreground/60" aria-hidden>
-            <path d="M5 8h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-          </svg>
-        )}
-      </span>
+      <Tooltip content={label}>
+        <span role="img" aria-label={label} className="flex size-5 items-center justify-center">
+          {mining ? (
+            // Pickaxe, after Lucide (ISC license)
+            <svg
+              viewBox="0 0 24 24"
+              className="size-4 text-brand"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
+              <path d="M14.531 12.469 6.619 20.38a1 1 0 1 1-3-3l7.912-7.912" />
+              <path d="M15.686 4.314A12.5 12.5 0 0 0 5.461 2.958 1 1 0 0 0 5.58 4.71a22 22 0 0 1 6.318 3.393" />
+              <path d="M17.7 3.7a1 1 0 0 0-1.4 0l-4.6 4.6a1 1 0 0 0 0 1.4l2.6 2.6a1 1 0 0 0 1.4 0l4.6-4.6a1 1 0 0 0 0-1.4z" />
+              <path d="M19.686 8.314a12.501 12.501 0 0 1 1.356 10.225 1 1 0 0 1-1.751-.119 22 22 0 0 0-3.393-6.319" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 16 16" className="size-4 text-muted-foreground/60" aria-hidden>
+              <path d="M5 8h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+            </svg>
+          )}
+        </span>
+      </Tooltip>
     </td>
   );
 }
@@ -187,21 +192,22 @@ function MiningStatus({ mining, hashrate, className = "" }: { mining: boolean; h
 /** VerifiedIcon marks a node run by the dashboard operator. */
 function VerifiedIcon() {
   return (
-    <svg viewBox="0 0 24 24" className="ml-1.5 inline-block size-4 -translate-y-px align-middle" role="img" aria-label="Verified">
-      <title>Verified: run by the dashboard operator. The best block follows verified nodes.</title>
-      <path
-        d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
-        className="fill-brand-mark"
-      />
-      <path
-        d="m8.5 12 2.5 2.5 4.5-5"
-        fill="none"
-        className="stroke-background"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <Tooltip content="Verified: run by the dashboard operator. The best block follows verified nodes.">
+      <svg viewBox="0 0 24 24" className="ml-1.5 inline-block size-4 -translate-y-px align-middle" role="img" aria-label="Verified">
+        <path
+          d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"
+          className="fill-brand-mark"
+        />
+        <path
+          d="m8.5 12 2.5 2.5 4.5-5"
+          fill="none"
+          className="stroke-background"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </Tooltip>
   );
 }
 
@@ -210,13 +216,15 @@ function SyncStatus({ active, syncing, offline }: { active: boolean; syncing: bo
   if (!active) {
     return (
       <td className="px-3 py-3 whitespace-nowrap">
-        <span className="inline-flex items-center gap-1.5 text-xs font-medium text-warn" title={offline ? `Offline for ${offline}` : "Offline"}>
-          <svg viewBox="0 0 16 16" className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden>
-            <circle cx="8" cy="8" r="6" />
-            <path d="M4 12 12 4" />
-          </svg>
-          Offline{offline && <span className="font-normal">· {offline}</span>}
-        </span>
+        <Tooltip content={offline ? `Offline for ${offline}` : "Offline"}>
+          <span className="inline-flex items-center gap-1.5 text-xs font-medium text-warn">
+            <svg viewBox="0 0 16 16" className="size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" aria-hidden>
+              <circle cx="8" cy="8" r="6" />
+              <path d="M4 12 12 4" />
+            </svg>
+            Offline{offline && <span className="font-normal">· {offline}</span>}
+          </span>
+        </Tooltip>
       </td>
     );
   }
@@ -225,25 +233,27 @@ function SyncStatus({ active, syncing, offline }: { active: boolean; syncing: bo
 
   return (
     <td className="px-3 py-3">
-      <span role="img" aria-label={label} title={label} className="flex size-5 items-center justify-center">
-        {syncing ? (
-          <svg viewBox="0 0 16 16" className="size-4 animate-spin text-warn motion-reduce:animate-none" aria-hidden>
-            <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
-            <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-          </svg>
-        ) : (
-          <svg viewBox="0 0 16 16" className="size-4 text-good" aria-hidden>
-            <path
-              d="m3.5 8.5 3 3 6-7"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.75"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        )}
-      </span>
+      <Tooltip content={label}>
+        <span role="img" aria-label={label} className="flex size-5 items-center justify-center">
+          {syncing ? (
+            <svg viewBox="0 0 16 16" className="size-4 animate-spin text-warn motion-reduce:animate-none" aria-hidden>
+              <circle cx="8" cy="8" r="6" fill="none" stroke="currentColor" strokeOpacity="0.25" strokeWidth="2" />
+              <path d="M8 2a6 6 0 0 1 6 6" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 16 16" className="size-4 text-good" aria-hidden>
+              <path
+                d="m3.5 8.5 3 3 6-7"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.75"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              />
+            </svg>
+          )}
+        </span>
+      </Tooltip>
     </td>
   );
 }
@@ -305,7 +315,7 @@ function PropagationStrip({ history, bestBlock, offline }: { history: number[]; 
         createPortal(
           <span
             role="tooltip"
-            className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-full border border-border bg-surface-elevated px-2 py-1 font-mono text-xs whitespace-nowrap shadow-sm"
+            className="pointer-events-none fixed z-50 -translate-x-1/2 -translate-y-full border border-border bg-surface-elevated px-2.5 py-1.5 font-mono text-xs whitespace-nowrap text-foreground shadow-lg"
             style={{ left: hover.left, top: hover.top - 6 }}
           >
             <span className="text-muted-foreground">#{formatInt(bestBlock - (history.length - 1 - hover.index))}</span>{" "}
@@ -336,9 +346,9 @@ function DetailSection({ title, rows }: { title: string; rows: [string, ReactNod
         {rows.map(([label, value, hint]) => (
           <div key={label} className="flex min-w-0 items-baseline justify-between gap-4 py-1.5 text-xs">
             <dt className="shrink-0 text-muted-foreground">{label}</dt>
-            <dd className="flex min-w-0 items-baseline gap-1 text-right font-mono" title={hint}>
-              {value}
-            </dd>
+            <Tooltip content={hint}>
+              <dd className="flex min-w-0 items-baseline gap-1 text-right font-mono">{value}</dd>
+            </Tooltip>
           </div>
         ))}
       </dl>
@@ -535,17 +545,18 @@ export function NodeTable({
                     className="px-3 py-3 font-mono text-xs font-normal tracking-wider whitespace-nowrap uppercase"
                     aria-sort={sort?.key === column.key ? (sort.desc ? "descending" : "ascending") : undefined}
                   >
-                    <button
-                      type="button"
-                      className={`inline-flex items-center gap-1 uppercase hover:text-foreground ${sort?.key === column.key ? "text-foreground" : ""}`}
-                      title={`${column.title}. Click to sort, again to reverse, a third time for the default order.`}
-                      onClick={() => sortBy(column)}
-                    >
-                      {column.label}
-                      <span aria-hidden className={sort?.key === column.key ? "text-brand" : "invisible"}>
-                        {sort?.desc ? "↓" : "↑"}
-                      </span>
-                    </button>
+                    <Tooltip content={`${column.title}. Click to sort, again to reverse, a third time for the default order.`}>
+                      <button
+                        type="button"
+                        className={`inline-flex items-center gap-1 uppercase hover:text-foreground ${sort?.key === column.key ? "text-foreground" : ""}`}
+                        onClick={() => sortBy(column)}
+                      >
+                        {column.label}
+                        <span aria-hidden className={sort?.key === column.key ? "text-brand" : "invisible"}>
+                          {sort?.desc ? "↓" : "↑"}
+                        </span>
+                      </button>
+                    </Tooltip>
                   </th>
                 ))}
               </tr>
@@ -623,7 +634,9 @@ export function NodeTable({
                         {node.trusted && <VerifiedIcon />}
                       </td>
                       <Cell className={`font-mono text-xs text-muted-foreground ${fade}`}>
-                        <span title={version || undefined} className="max-w-28 truncate">{version ? shortVersion(version, releaseCommits) : "unknown"}</span>
+                        <Tooltip content={version}>
+                          <span className="max-w-28 truncate">{version ? shortVersion(version, releaseCommits) : "unknown"}</span>
+                        </Tooltip>
                       </Cell>
                       <SyncStatus active={active} syncing={stats.syncing} offline={offlineFor(node.offlineSince, now)} />
                       <Cell grade={active ? gradePeers(stats.peers) : undefined} title={fewPeersHint(active, stats.peers)} className={fade}>
@@ -647,9 +660,9 @@ export function NodeTable({
                       <td className={`px-3 py-3 ${fade}`}>
                         {nodes.length < 2 ? (
                           // With no other node, every block reaches this one first: nothing to compare
-                          <span className="text-muted-foreground" title="No other node to compare with">
-                            —
-                          </span>
+                          <Tooltip content="No other node to compare with">
+                            <span className="text-muted-foreground">—</span>
+                          </Tooltip>
                         ) : (
                           <span className="inline-flex items-center gap-2">
                             <PropagationStrip history={node.history} bestBlock={bestBlock} offline={!active} />
