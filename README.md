@@ -289,8 +289,12 @@ Tells the caller whether they can report under a node name: `available`,
   1%, 0.1% or 0.01% chance of replacing a payment by mining in secret: the
   calculation in section 11 of the Bitcoin paper. A pool counts as one
   miner. With a majority, no number is safe.
-- **Mempool** is the median of synced nodes' pending transactions; syncing
-  nodes lag the network's, so they are left out.
+- **Mempool pressure** is the room the transactions waiting in the
+  mempool need, as a share of a block: the median of synced nodes' pending
+  transactions (syncing nodes lag the network's, so they are left out),
+  each taken to need what recent blocks' transactions did on average, over
+  the newest block's gas limit. Under half a block is green, up to two
+  blocks amber, and a backlog beyond that red.
 - **Hashprice** is what a unit of hashrate earns in a day: a block pays its
   reward and, on average, the fees of recent blocks, and takes `difficulty`
   hashes, so a hash earns that over the difficulty. Block timing does not

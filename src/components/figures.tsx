@@ -8,11 +8,14 @@ import {
   formatGasPrice,
   formatInt,
   formatPoolDifficulty,
+  formatPressure,
   formatHashrate,
   gradePeerLatency,
+  gradePressure,
   gradeRatio,
   gradeUptime,
   hashpriceUnit,
+  mempoolPressure,
   type Grade,
 } from "@/lib/format";
 import { TARGET_BLOCK_TIME, TREND_SLICE_S, type Charts, type Price, type Trends } from "@/lib/protocol";
@@ -67,7 +70,8 @@ export function FigureTile({ figure, start, className = "" }: { figure: Figure; 
       readout={
         figure.link ? (
           <>
-            {known.length > 0 && "last 7 days · "}
+            {/* Short beside a link, so both fit beside a long title */}
+            {known.length > 0 && "7 days · "}
             <ExternalLink href={figure.link.href}>{figure.link.label}</ExternalLink>
           </>
         ) : known.length > 0 ? (
@@ -153,6 +157,11 @@ export function figures({
   const earned = pace !== null && summary.bestBlock > 0 ? daily(pace) : null;
   const scheduled = (86_400 / TARGET_BLOCK_TIME) * perBlock;
   const ahead = earned !== null ? earned / scheduled - 1 : 0;
+  // What a waiting transaction needs, by the recent blocks' transactions, against the newest block's limit
+  const recentTxs = (charts?.transactions ?? []).reduce((sum, n) => sum + n, 0);
+  const gasPerTx = recentTxs > 0 ? (charts?.gasSpending ?? []).reduce((sum, g) => sum + g, 0) / recentTxs : 0;
+  const gasLimit = charts?.gasLimit.at(-1) ?? 0;
+  const pressure = summary.pending !== null && gasLimit > 0 ? mempoolPressure(summary.pending, gasPerTx, gasLimit) : null;
   // The CoinGecko credit its free API asks for, on each figure in dollars
   const priceLink = price ? { href: price.url, label: "CoinGecko" } : undefined;
 
@@ -247,13 +256,22 @@ export function figures({
       waiting: "Collecting readings",
     },
     mempool: {
-      label: "Mempool",
-      value: summary.pending !== null ? formatInt(summary.pending) : "n/a",
-      note: "transactions waiting, median of synced nodes",
-      // A server from before the mempool readings sends none
-      trend: trends.pending ?? [],
-      format: (v) => significant.format(v),
-      detail: () => "mean, median of synced nodes",
+      label: "Mempool pressure",
+      value: pressure !== null ? formatPressure(pressure) : "n/a",
+      unit: "of a block",
+      grade: pressure !== null ? gradePressure(pressure) : "off",
+      note:
+        pressure === null
+          ? undefined
+          : summary.pending === 0
+            ? "Nothing waiting"
+            : `${formatInt(summary.pending!)} ${summary.pending === 1 ? "transaction" : "transactions"} waiting, ${
+                pressure <= 1 ? "all fit in the next block" : `about ${Math.ceil(pressure)} blocks to clear`
+              }`,
+      // Each slice's mean waiting count, at today's room per transaction. A server from before the mempool readings sends none
+      trend: (trends.pending ?? []).map((pending) => (pending === null || gasLimit === 0 ? null : mempoolPressure(pending, gasPerTx, gasLimit))),
+      format: formatPressure,
+      detail: () => "mean",
       waiting: "Collecting readings",
       link: explorer ? { href: `${explorer}/txs?tab=pending`, label: "pending" } : undefined,
     },

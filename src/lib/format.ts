@@ -172,6 +172,37 @@ export function gradeAvgBlockTime(seconds: number): Grade {
   return "critical";
 }
 
+/** Gas a plain transfer uses: what a waiting transaction is taken to need when recent blocks carried none. */
+export const TRANSFER_GAS = 21_000;
+
+/**
+ * mempoolPressure is the room waiting transactions need, as a share of a
+ * block: 1 fills the next block, 3 takes three to clear. Only their number
+ * is reported, so each is taken to need what recent blocks' transactions
+ * did on average.
+ */
+export function mempoolPressure(pending: number, gasPerTx: number, gasLimit: number): number {
+  return gasLimit > 0 ? (pending * (gasPerTx > 0 ? gasPerTx : TRANSFER_GAS)) / gasLimit : 0;
+}
+
+/** gradePressure: room to spare under half a block, a queue up to two blocks, a backlog beyond. */
+export function gradePressure(pressure: number): Grade {
+  if (pressure < 0.5) return "good";
+  if (pressure <= 2) return "warn";
+
+  return "critical";
+}
+
+/** formatPressure renders a share of a block as a percentage, without rounding a little to nothing: 0.6%, 230%. */
+export function formatPressure(pressure: number): string {
+  const pct = pressure * 100;
+
+  if (pct === 0) return "0%";
+  if (pct < 0.1) return "<0.1%";
+
+  return `${pct < 10 ? pct.toFixed(1) : Math.round(pct)}%`;
+}
+
 export function gradeRatio(ratio: number): Grade {
   if (!Number.isFinite(ratio)) return "off";
   if (ratio >= 0.9) return "good";
