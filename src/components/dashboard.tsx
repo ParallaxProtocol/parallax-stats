@@ -9,12 +9,13 @@ import type { Snapshot } from "@/lib/protocol";
 import type { Release, ReleaseCommits } from "@/lib/releases";
 import type { WorldMap } from "@/lib/world";
 import { About } from "./about";
-import { AlertCount, Alerts, useAlerts } from "./alerts";
+import { AlertCount, useAlerts } from "./alerts";
 import { BlockClock, ClockPlate, MiniClock } from "./block-clock";
 import { BlockToasts, SoundToggle } from "./block-toast";
 import { BestBlock, BlockTime, Decentralization, EMPTY_CHARTS, Fees, Fullness, Propagation, Transactions } from "./charts";
 import { Confirmations } from "./confirmations";
 import { FigureTile, figures } from "./figures";
+import { NetworkStatus } from "./incidents";
 import { ClientVersions, StaleBlocks } from "./health";
 import { LatestBlocks } from "./latest-blocks";
 import { LiveProvider, useLive } from "./live/provider";
@@ -55,7 +56,7 @@ function Live({
   latestRelease: Release | null;
   releaseCommits: ReleaseCommits;
 }) {
-  const { nodes, charts, gasPrice, pools, explorer, price, connection, latency } = useLive();
+  const { nodes, charts, gasPrice, pools, explorer, price, incidents, connection, latency } = useLive();
   const summary = useMemo(() => summarize(nodes), [nodes]);
   const mainnet = useMemo(() => onMainnet(nodes), [nodes]);
   const best = summary.bestStats?.block ?? null;
@@ -87,7 +88,8 @@ function Live({
 
   return (
     <BestBlock value={summary.bestBlock}>
-      <Alerts alerts={alerts} />
+      {/* What visitors most often come for: whether something is wrong now, and what went wrong before */}
+      <NetworkStatus log={incidents} alerts={alerts} />
       <ClockPlate id="best-block" foundAt={foundAt} className="flex flex-col gap-6 p-6 sm:p-8">
         <BlockClock bestBlock={summary.bestBlock} foundAt={foundAt} />
         <ConnectionStatus connection={connection} latency={latency} />

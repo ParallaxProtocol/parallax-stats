@@ -55,8 +55,8 @@ export default function Page() {
             <Image src="/logo.svg" width={200} height={200} alt="" priority className="size-7 w-auto sm:size-8 md:size-10" />
             <span className="font-sans text-base font-semibold sm:text-lg">Parallax</span>
           </a>
-          <span aria-hidden className="h-5 w-px bg-border" />
-          <span className="font-sans text-base font-normal text-muted-foreground sm:text-lg">Network Status</span>
+          {/* Shown by the Network status card below; still the page's heading for screen readers */}
+          <span className="sr-only">Network Status</span>
         </h1>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
           <ThemeToggle />

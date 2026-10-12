@@ -533,6 +533,10 @@ export function AlertCount({ alerts }: { alerts: Alert[] }) {
               </div>
             </section>
           ))}
+          {/* What came before: closes the panel on the way, so it does not cover the timeline */}
+          <a href="#incidents" onClick={() => setOpen(false)} className="px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+            See past incidents
+          </a>
         </div>
       )}
     </div>
