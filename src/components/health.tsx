@@ -176,7 +176,9 @@ function ForkGraph({ from, to, list }: { from: number; to: number; list: Fork[] 
   // Less the margin at the start and the room past the newest block
   const fit = (room.width - 12 - 40) / (blocks + gaps * (MAX_GAP / MAX_STEP));
   const STEP = Math.max(MIN_STEP, Math.min(MAX_STEP, fit));
-  const GAP = Math.max(MIN_GAP, STEP * (MAX_GAP / MAX_STEP));
+  // Room to spare goes to the folds, so the chain always spans the card, however few forks there are
+  const spare = room.width - 12 - 40 - blocks * STEP;
+  const GAP = gaps > 0 ? Math.max(MIN_GAP, STEP * (MAX_GAP / MAX_STEP), spare / gaps) : MAX_GAP;
   const xOf = new Map<number, number>();
   let x = 12;
 
