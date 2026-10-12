@@ -397,18 +397,14 @@ function TimelineBody({ log }: { log: IncidentLog }) {
     );
   }, [recent, from, now, span, range, picked, recordedFrom, point, leave, byKind, setByKind, kindRows]);
 
-  // What is over, under the range it ended in: what is going on has its banner above, and its bar
+  // What is over, under the range it ended in: what is going on has its banner above, and its bar.
+  // With nothing over, the empty rows already say so: no list at all.
   const past = useMemo(() => recent.filter((incident) => incident.end !== null && incident.end >= from), [recent, from]);
-  const ongoing = recent.length > past.length;
 
   const list = useMemo(() => {
     const shown = all ? past : past.slice(0, SHOWN);
 
-    return past.length === 0 ? (
-      <p className="border-t border-border pt-4 text-sm text-muted-foreground">
-        {ongoing ? "Nothing else" : "No incidents"} in the {heading.toLowerCase()}.
-      </p>
-    ) : (
+    return past.length === 0 ? null : (
       <div className="flex flex-col gap-1 border-t border-border pt-3">
         <Label as="h4" className="text-[10px]">
           Earlier
@@ -442,7 +438,7 @@ function TimelineBody({ log }: { log: IncidentLog }) {
         )}
       </div>
     );
-  }, [past, ongoing, all, chosen, heading, now]);
+  }, [past, all, chosen, now]);
 
   return (
     <div className="flex min-w-0 flex-col gap-5">
