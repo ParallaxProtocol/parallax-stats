@@ -373,7 +373,7 @@ export function sliceTime(start: number): string {
 }
 
 /** Switch picks one of a few views of a tile, in the tile's header. */
-function Switch<T extends string>({ options, value, onChange, label }: { options: [T, string][]; value: T; onChange: (value: T) => void; label: string }) {
+export function Switch<T extends string>({ options, value, onChange, label }: { options: [T, string][]; value: T; onChange: (value: T) => void; label: string }) {
   return (
     <span role="group" aria-label={label} className="-my-1 inline-flex shrink-0 border border-border">
       {options.map(([key, text]) => (
