@@ -119,6 +119,8 @@ export interface Alert {
   icon: keyof typeof ICON;
   title: string;
   body: ReactNode;
+  /** Who can act on the alert and what they should do, on its own line in the alert's colour. */
+  ask?: { who: string; what: string };
   facts: string[];
   action?: { href: string; label: string; external?: boolean };
   /** Present when the viewer may dismiss the alert. */
@@ -127,7 +129,7 @@ export interface Alert {
 
 /** Banner is one alert across the top of the page: what happened, why it matters and the facts behind it. */
 function Banner({ alert, index }: { alert: Alert; index: number }) {
-  const { tone, icon, title, body, facts, action, dismiss } = alert;
+  const { tone, icon, title, body, ask, facts, action, dismiss } = alert;
   const [leaving, setLeaving] = useState(false);
   // Banners there when the page loads simply appear; ones that come up later slide in
   const [enter] = useState(() => settled);
@@ -164,6 +166,11 @@ function Banner({ alert, index }: { alert: Alert; index: number }) {
             </p>
             <p className="text-sm leading-5 font-semibold">{title}</p>
             <p className="text-sm leading-5 text-muted-foreground">{body}</p>
+            {ask && (
+              <p className="text-sm leading-5">
+                <span className={`font-semibold ${TONE[tone].ink}`}>{ask.who}:</span> {ask.what}
+              </p>
+            )}
           </div>
         </div>
 
@@ -349,9 +356,11 @@ export function useAlerts({
         icon: "majority",
         // A known pool by name, anyone else by address
         title: `${top.pool?.name ?? `Miner ${shortHash(top.miner)}`} found ${Math.round(share * 100)}% of the last week's blocks.`,
-        body: "With most of the hashrate, one miner could rewrite recent blocks or censor transactions. Miners: spread your hashrate across more pools.",
+        body: `With most of the hashrate, one ${top.pool ? "pool" : "miner"} could reverse payments or censor transactions.`,
+        // The only ones who can fix it: a majority shrinks as its miners move elsewhere
+        ask: { who: "If you mine LAX", what: "move some or all of your hashrate to a smaller pool." },
         facts: [`${formatInt(top.blocks)} of ${formatInt(minerBlocks)} blocks`],
-        action: { href: MINING_POOL_STATS, label: "Compare pools", external: true },
+        action: { href: MINING_POOL_STATS, label: "Find a smaller pool", external: true },
         dismiss: () => dismissKey(key, { until: now + MAJORITY_SNOOZE_MS, share }),
       });
     }
@@ -506,6 +515,11 @@ export function AlertCount({ alerts }: { alerts: Alert[] }) {
                 </p>
                 <p className="font-semibold">{alert.title}</p>
                 <p className="text-muted-foreground">{alert.body}</p>
+                {alert.ask && (
+                  <p>
+                    <span className={`font-semibold ${TONE[alert.tone].ink}`}>{alert.ask.who}:</span> {alert.ask.what}
+                  </p>
+                )}
                 {(alert.facts.length > 0 || alert.action) && (
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-2">
                     {alert.facts.map((fact) => (

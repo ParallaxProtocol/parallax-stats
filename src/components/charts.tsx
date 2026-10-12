@@ -929,7 +929,11 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
           <div className="mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
             {/* The banner above says why; here it is a reminder, in the warning's color */}
             {judged && majority !== null && majority <= 2 ? (
-              <span className={NOTE_TONE[tone ?? "warn"]}>Miners: spread your hashrate across more pools.</span>
+              // Worded as the alert's ask: who can act, in the warning's color, then what to do
+              <span>
+                <span className={`font-semibold ${NOTE_TONE[tone ?? "warn"]}`}>If you mine LAX:</span>{" "}
+                <span className="text-foreground">move some or all of your hashrate to a smaller pool.</span>
+              </span>
             ) : (
               <span>Healthy when at least 4 miners are needed for a majority.</span>
             )}
@@ -939,7 +943,7 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1 hover:text-foreground"
             >
-              Compare pools on MiningPoolStats
+              Find a smaller pool
               <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
                 <path d="M6 3.5h6.5V10M12.5 3.5 4 12" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
