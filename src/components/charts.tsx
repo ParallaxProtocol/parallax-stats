@@ -239,15 +239,22 @@ export function TrendLine({
   onActive,
   label,
   format,
+  partial = false,
 }: Omit<PlotProps, "values"> & {
   values: (number | null)[];
   /** Labels the scale's highest and lowest values at the plot's edge. */
   format?: (value: number) => string;
+  /** The last value is still being counted: the line into it is dashed, and it is left out of the labelled range. */
+  partial?: boolean;
 }) {
   const known = values.filter((v): v is number => v !== null);
-  const min = Math.min(...known);
-  const max = Math.max(...known);
-  const pad = (max - min) * 0.15 || Math.abs(max) * 0.01 || 1;
+  const counted = (partial ? values.slice(0, -1) : values).filter((v): v is number => v !== null);
+  // The labelled range leaves out a partial value; the scale still fits it
+  const max = counted.length > 0 ? Math.max(...counted) : Math.max(...known);
+  const min = counted.length > 0 ? Math.min(...counted) : Math.min(...known);
+  const top = Math.max(max, ...known);
+  const bottom = Math.min(min, ...known);
+  const pad = (top - bottom) * 0.15 || Math.abs(top) * 0.01 || 1;
   // A single reading makes no line yet: it is drawn level, dashed, until a second arrives
   const sparse = known.length < 2;
   // Runs of consecutive known values, each drawn as its own line
@@ -266,7 +273,7 @@ export function TrendLine({
       <Plot values={values} onActive={onActive} label={label}>
         {({ width, height }, slot) => {
           const x = (i: number) => i * slot + slot / 2;
-          const y = (v: number) => 6 + (1 - (v - (min - pad)) / (max + pad - (min - pad))) * (height - 12);
+          const y = (v: number) => 6 + (1 - (v - (bottom - pad)) / (top + pad - (bottom - pad))) * (height - 12);
           const focus = active !== null && values[active] !== null ? active : active === null ? latest : null;
           // While scrubbing, the range steps back unless the point under the pointer is that extreme
           const faded = (v: number) => active !== null && values[active] !== v;
@@ -305,13 +312,17 @@ export function TrendLine({
               )}
               {!sparse &&
                 runs.map((run) => {
-                  const points = run.map((i) => `${x(i)},${y(values[i]!)}`).join(" ");
+                  const point = (i: number) => `${x(i)},${y(values[i]!)}`;
+                  const points = run.map(point).join(" ");
+                  // The segment into a value still being counted is drawn dashed
+                  const open = partial && run.length > 1 && run.at(-1) === values.length - 1;
+                  const solid = open ? run.slice(0, -1) : run;
 
                   return (
                     <g key={run[0]}>
                       <polygon points={`${x(run[0])},${height} ${points} ${x(run.at(-1)!)},${height}`} className="fill-brand-mark opacity-10" />
                       <polyline
-                        points={points}
+                        points={solid.map(point).join(" ")}
                         fill="none"
                         className="stroke-brand-mark"
                         strokeWidth={2}
@@ -319,6 +330,17 @@ export function TrendLine({
                         strokeLinecap="round"
                         vectorEffect="non-scaling-stroke"
                       />
+                      {open && (
+                        <polyline
+                          points={run.slice(-2).map(point).join(" ")}
+                          fill="none"
+                          className="stroke-brand-mark"
+                          strokeWidth={2}
+                          strokeDasharray="3 4"
+                          strokeLinecap="round"
+                          vectorEffect="non-scaling-stroke"
+                        />
+                      )}
                     </g>
                   );
                 })}
@@ -386,24 +408,52 @@ export function Switch<T extends string>({ options, value, onChange, label }: { 
   );
 }
 
+type Period = "week" | "blocks";
+
+/** usePeriod is a tile's choice between its 7 day trend and its last blocks, and the point hovered in it. */
+function usePeriod() {
+  const [view, setView] = useState<Period>("week");
+  const [active, setActive] = useState<number | null>(null);
+  const choose = (next: Period) => {
+    setActive(null);
+    setView(next);
+  };
+
+  return { view, choose, active, setActive };
+}
+
+function PeriodSwitch({ value, onChange }: { value: Period; onChange: (value: Period) => void }) {
+  return (
+    <Switch
+      label="Period"
+      options={[
+        ["week", "7 days"],
+        ["blocks", `${HISTORY_BINS} blocks`],
+      ]}
+      value={value}
+      onChange={onChange}
+    />
+  );
+}
+
+/** lastWeek names the blocks the 7 day figures cover: the last 7 days, or all of them while the history is shorter. */
+function lastWeek(c: Charts): string {
+  return c.minerSpan >= 7 * 86_400 - 3_600 ? "the last 7 days" : `the last ${formatInt(c.minerBlocks)} blocks`;
+}
+
 /**
  * BlockTime leads with the mean time between blocks over the last 7 days,
  * and shows either its 7 day trend or each of the last 40 blocks against
  * the target.
  */
 export function BlockTime({ c, block }: { c: Charts; block: (i: number) => string }) {
-  const [view, setView] = useState<"week" | "blocks">("week");
-  const [active, setActive] = useState<number | null>(null);
+  const { view, choose, active, setActive } = usePeriod();
   // A server from before the trends sends none
   const trend = c.trends?.blocktime ?? [];
   const start = c.trends?.start ?? [];
   const knownTrend = trend.filter((v): v is number => v !== null);
   // A zero time means the block's parent was not recorded
   const recent = average(c.blocktime.filter((t) => t > 0));
-  const choose = (next: "week" | "blocks") => {
-    setActive(null);
-    setView(next);
-  };
 
   let value: string | undefined;
   let qualifier: string;
@@ -417,9 +467,7 @@ export function BlockTime({ c, block }: { c: Charts; block: (i: number) => strin
         ? `${sliceTime(start[active])}, ${hovered === null ? "no data" : "mean over the 24 hours to its end"}`
         : !c.minerBlocks
           ? "target 10 min"
-          : c.minerSpan >= 7 * 86_400 - 3_600
-            ? "mean of the last 7 days, target 10 min"
-            : `mean of the last ${formatInt(c.minerBlocks)} blocks, target 10 min`;
+          : `mean of ${lastWeek(c)}, target 10 min`;
   } else {
     value =
       active !== null ? (c.blocktime[active] ? formatBlockTime(c.blocktime[active]) : "unknown") : c.height.length ? formatBlockTime(recent) : undefined;
@@ -437,17 +485,7 @@ export function BlockTime({ c, block }: { c: Charts; block: (i: number) => strin
           Block time
         </span>
       }
-      readout={
-        <Switch
-          label="Period"
-          options={[
-            ["week", "7 days"],
-            ["blocks", `${HISTORY_BINS} blocks`],
-          ]}
-          value={view}
-          onChange={choose}
-        />
-      }
+      readout={<PeriodSwitch value={view} onChange={choose} />}
       value={value}
       qualifier={qualifier}
     >
@@ -478,18 +516,62 @@ export function BlockTime({ c, block }: { c: Charts; block: (i: number) => strin
   );
 }
 
+/**
+ * Transactions leads with how many the last 7 days of blocks held, and
+ * shows either each 4 hour slice of them, the one in progress dashed, or
+ * each of the last 40 blocks.
+ */
 export function Transactions({ c, block }: { c: Charts; block: (i: number) => string }) {
-  const [active, setActive] = useState<number | null>(null);
-  const total = c.transactions.reduce((a, b) => a + b, 0);
+  const { view, choose, active, setActive } = usePeriod();
+  // A server from before the transaction trend sends none
+  const trend = c.trends?.transactions ?? [];
+  const start = c.trends?.start ?? [];
+  const knownTrend = trend.filter((v): v is number => v !== null);
+  const noun = (n: number) => (n === 1 ? "transaction" : "transactions");
+
+  let value: string | undefined;
+  let qualifier: string;
+
+  if (view === "week") {
+    const hovered = active !== null ? trend[active] : null;
+    const total = c.weekTransactions ?? 0;
+
+    value = active !== null ? (hovered === null ? "n/a" : formatInt(hovered)) : c.minerBlocks ? formatInt(total) : undefined;
+    qualifier =
+      active !== null && start[active] !== undefined
+        ? hovered === null
+          ? `${sliceTime(start[active])}, no data`
+          : `${noun(hovered)}, ${sliceTime(start[active])}${active === trend.length - 1 ? " so far" : ""}`
+        : `${noun(total)} in ${lastWeek(c)}`;
+  } else {
+    const total = c.transactions.reduce((a, b) => a + b, 0);
+
+    value = active !== null ? formatInt(c.transactions[active]) : c.height.length ? formatInt(total) : undefined;
+    qualifier =
+      active !== null ? `${noun(c.transactions[active])} in block ${block(active)}` : `${noun(total)} in the last ${c.height.length} blocks`;
+  }
 
   return (
     <Tile
       title="Transactions"
-      readout={`${formatInt(total)} in last ${c.height.length} blocks`}
-      value={active !== null ? formatInt(c.transactions[active]) : c.height.length ? average(c.transactions).toFixed(1) : undefined}
-      qualifier={active !== null ? `in block ${block(active)}` : "per block"}
+      readout={<PeriodSwitch value={view} onChange={choose} />}
+      value={value}
+      qualifier={qualifier}
     >
-      {c.height.length === 0 ? (
+      {view === "week" ? (
+        knownTrend.length === 0 ? (
+          <Waiting />
+        ) : (
+          <TrendLine
+            values={trend}
+            active={active}
+            onActive={setActive}
+            format={formatInt}
+            partial
+            label={`Transactions in each ${TREND_SLICE_S / 3600} hour slice of the last 7 days, the last still in progress, from ${formatInt(Math.min(...knownTrend))} to ${formatInt(Math.max(...knownTrend))}`}
+          />
+        )
+      ) : c.height.length === 0 ? (
         <Waiting />
       ) : (
         <Bars
@@ -503,23 +585,53 @@ export function Transactions({ c, block }: { c: Charts; block: (i: number) => st
   );
 }
 
+/**
+ * Fullness shows how much of the gas limit blocks used, on average over the
+ * last 7 days, and either its 7 day trend or each of the last 40 blocks.
+ */
 export function Fullness({ c, block }: { c: Charts; block: (i: number) => string }) {
-  const [active, setActive] = useState<number | null>(null);
+  const { view, choose, active, setActive } = usePeriod();
   const fullness = c.gasSpending.map((used, i) => (c.gasLimit[i] > 0 ? used / c.gasLimit[i] : 0));
   const pct = (f: number) => `${(f * 100).toFixed(f < 0.1 ? 1 : 0)}%`;
+  // A server from before the fullness trend sends none
+  const trend = c.trends?.fullness ?? [];
+  const start = c.trends?.start ?? [];
+  const knownTrend = trend.filter((v): v is number => v !== null);
+
+  let value: string | undefined;
+  let qualifier: string;
+
+  if (view === "week") {
+    const hovered = active !== null ? trend[active] : null;
+
+    value = active !== null ? (hovered === null ? "n/a" : pct(hovered)) : c.minerBlocks ? pct(c.weekFullness ?? 0) : undefined;
+    qualifier =
+      active !== null && start[active] !== undefined
+        ? `${sliceTime(start[active])}, ${hovered === null ? "no data" : "full on average"}`
+        : `full on average over ${lastWeek(c)}`;
+  } else {
+    value = active !== null ? pct(fullness[active]) : c.height.length ? pct(average(fullness)) : undefined;
+    qualifier =
+      active !== null
+        ? `block ${block(active)}, ${formatCompact(c.gasSpending[active])} of ${formatCompact(c.gasLimit[active])} gas`
+        : `full on average over the last ${c.height.length} blocks`;
+  }
 
   return (
-    <Tile
-      title="Block fullness"
-      readout="gas used of the limit"
-      value={active !== null ? pct(fullness[active]) : c.height.length ? pct(average(fullness)) : undefined}
-      qualifier={
-        active !== null
-          ? `block ${block(active)}, ${formatCompact(c.gasSpending[active])} of ${formatCompact(c.gasLimit[active])} gas`
-          : "full on average"
-      }
-    >
-      {c.height.length === 0 ? (
+    <Tile title="Block fullness" readout={<PeriodSwitch value={view} onChange={choose} />} value={value} qualifier={qualifier}>
+      {view === "week" ? (
+        knownTrend.length === 0 ? (
+          <Waiting />
+        ) : (
+          <TrendLine
+            values={trend}
+            active={active}
+            onActive={setActive}
+            format={pct}
+            label={`Mean share of the gas limit used by the blocks of each ${TREND_SLICE_S / 3600} hour slice of the last 7 days, from ${pct(Math.min(...knownTrend))} to ${pct(Math.max(...knownTrend))}`}
+          />
+        )
+      ) : c.height.length === 0 ? (
         <Waiting />
       ) : (
         <Bars
@@ -667,38 +779,74 @@ function formatSmallShare(fraction: number): string {
 
 /**
  * Fees shows the transaction fees each block paid its miner, and how they
- * compare with the block reward, which shrinks with every halving. Blocks
- * reported by parallaxd versions that do not send fees show as unknown,
- * never as zero.
+ * compare with the block reward, which shrinks with every halving: on
+ * average over the last 7 days, and either its 7 day trend or each of the
+ * last 40 blocks. Blocks reported by parallaxd versions that do not send
+ * fees show as unknown, never as zero.
  */
 export function Fees({ c, block }: { c: Charts; block: (i: number) => string }) {
-  const [active, setActive] = useState<number | null>(null);
+  const { view, choose, active, setActive } = usePeriod();
+  const toLax = (wei: number) => wei / Number(WEI_PER_LAX);
   const lax = c.fees.map((fees) => (fees === null ? null : Number(BigInt(fees)) / Number(WEI_PER_LAX)));
   const known = lax.flatMap((fees, i) => (fees === null ? [] : [i]));
-  const avg = average(known.map((i) => lax[i]!));
-  const avgReward = average(known.map((i) => Number(blockReward(c.height[i])) / Number(WEI_PER_LAX)));
+  // A server from before the fee trend sends none
+  const trend = (c.trends?.fees ?? []).map((wei) => (wei === null ? null : toLax(wei)));
+  const start = c.trends?.start ?? [];
+  const knownTrend = trend.filter((v): v is number => v !== null);
+  const ofReward = (fees: number, reward: number) => `${formatSmallShare(reward > 0 ? fees / reward : 0)} of the block reward`;
+
+  let value: string | undefined;
+  let qualifier: string | undefined;
+  let waiting = false;
+
+  if (view === "week") {
+    const hovered = active !== null ? trend[active] : null;
+    const weekFees = c.weekFees ?? null;
+    const reported = c.weekFeeBlocks ?? 0;
+    // The reward at the best block: a halving falls inside a week only every four years
+    const reward = c.height.length ? Number(blockReward(c.height.at(-1)!)) / Number(WEI_PER_LAX) : 0;
+
+    waiting = knownTrend.length === 0;
+    value = active !== null ? (hovered === null ? "n/a" : formatSmallLax(hovered)) : weekFees !== null ? formatSmallLax(toLax(weekFees)) : undefined;
+    qualifier =
+      active !== null && start[active] !== undefined
+        ? hovered === null
+          ? `${sliceTime(start[active])}, not reported`
+          : `LAX per block, ${sliceTime(start[active])}`
+        : weekFees !== null
+          ? `LAX per block over ${lastWeek(c)}, ${ofReward(toLax(weekFees), reward)}${
+              reported < c.minerBlocks ? `, ${formatInt(reported)} of ${formatInt(c.minerBlocks)} blocks reported` : ""
+            }`
+          : undefined;
+  } else {
+    const avg = average(known.map((i) => lax[i]!));
+    const avgReward = average(known.map((i) => Number(blockReward(c.height[i])) / Number(WEI_PER_LAX)));
+
+    waiting = known.length === 0;
+    value =
+      active !== null ? (lax[active] === null ? "not reported" : formatSmallLax(lax[active]!)) : known.length ? formatSmallLax(avg) : undefined;
+    qualifier =
+      active !== null
+        ? lax[active] === null
+          ? `block ${block(active)}`
+          : `LAX in block ${block(active)}, ${formatInt(c.transactions[active])} transactions`
+        : known.length
+          ? `LAX per block, ${ofReward(avg, avgReward)}${known.length < c.height.length ? `, ${known.length} of ${c.height.length} blocks reported` : ""}`
+          : undefined;
+  }
 
   return (
-    <Tile
-      title="Fees"
-      readout={
-        known.length < c.height.length && known.length > 0 ? `${known.length} of ${c.height.length} blocks reported` : "paid to miners per block"
-      }
-      value={
-        active !== null ? (lax[active] === null ? "not reported" : formatSmallLax(lax[active]!)) : known.length ? formatSmallLax(avg) : undefined
-      }
-      qualifier={
-        active !== null
-          ? lax[active] === null
-            ? `block ${block(active)}`
-            : `LAX in block ${block(active)}, ${formatInt(c.transactions[active])} transactions`
-          : known.length
-            ? `LAX per block, ${formatSmallShare(avgReward > 0 ? avg / avgReward : 0)} of the block reward`
-            : undefined
-      }
-    >
-      {known.length === 0 ? (
+    <Tile title="Fees" readout={<PeriodSwitch value={view} onChange={choose} />} value={value} qualifier={qualifier}>
+      {waiting ? (
         <Waiting>Fees appear once nodes run a parallaxd version that reports them</Waiting>
+      ) : view === "week" ? (
+        <TrendLine
+          values={trend}
+          active={active}
+          onActive={setActive}
+          format={formatSmallLax}
+          label={`Mean transaction fees per block paid to miners in each ${TREND_SLICE_S / 3600} hour slice of the last 7 days, from ${formatSmallLax(Math.min(...knownTrend))} to ${formatSmallLax(Math.max(...knownTrend))} LAX`}
+        />
       ) : (
         <Bars
           values={lax.map((fees) => fees ?? 0)}
@@ -959,6 +1107,10 @@ export const EMPTY_CHARTS: Charts = {
   difficulty: [],
   difficultyWeek: null,
   transactions: [],
+  weekTransactions: 0,
+  weekFullness: 0,
+  weekFees: null,
+  weekFeeBlocks: 0,
   gasSpending: [],
   gasLimit: [],
   fees: [],
@@ -969,5 +1121,5 @@ export const EMPTY_CHARTS: Charts = {
   propagation: { samples: 0, avg: 0, p50: 0, p90: 0, p99: 0, bands: [0, 0, 0, 0] },
   health: { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null, lastDeepReorg: null, split: null },
   avgHashrate: 0,
-  trends: { start: [], blocktime: [], hashrate: [], difficulty: [], active: [], synced: [], gasPrice: [], peerLatency: [], uptime: [], pending: [], price: [] },
+  trends: { start: [], blocktime: [], hashrate: [], difficulty: [], transactions: [], fullness: [], fees: [], active: [], synced: [], gasPrice: [], peerLatency: [], uptime: [], pending: [], price: [] },
 };

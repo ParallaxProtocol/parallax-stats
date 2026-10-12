@@ -48,7 +48,7 @@ const TRANSFER_GAS = 21_000n;
 
 const significant = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 });
 
-const NO_TRENDS: Trends = { start: [], blocktime: [], hashrate: [], difficulty: [], active: [], synced: [], gasPrice: [], peerLatency: [], uptime: [], pending: [], price: [] };
+const NO_TRENDS: Trends = { start: [], blocktime: [], hashrate: [], difficulty: [], transactions: [], fullness: [], fees: [], active: [], synced: [], gasPrice: [], peerLatency: [], uptime: [], pending: [], price: [] };
 
 /** FigureTile is a headline figure over its last 7 days; hovering a slice puts its value in the figure's place. */
 export function FigureTile({ figure, start, className = "" }: { figure: Figure; start: number[]; className?: string }) {

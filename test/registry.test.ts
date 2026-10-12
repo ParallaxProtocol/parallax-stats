@@ -295,7 +295,7 @@ test("miners are counted over the last 7 days of blocks", () => {
   login(nodes, "a", "1.1.1.1", true);
 
   // One block an hour for 10 days: the first 3 days by one miner, the rest by another
-  for (let n = 1; n <= 240; n++) nodes.addBlock("a", { ...block(n), timestamp: n * 3600, miner: n <= 72 ? early : late });
+  for (let n = 1; n <= 240; n++) nodes.addBlock("a", { ...block(n), timestamp: n * 3600, miner: n <= 72 ? early : late, txCount: 2, gasUsed: n <= 72 ? 0 : 250, gasLimit: 1000, fees: n % 2 ? "3000" : null });
 
   const charts = nodes.charts();
 
@@ -304,6 +304,11 @@ test("miners are counted over the last 7 days of blocks", () => {
   assert.equal(charts.minerSpan, 167 * 3600);
   // The average block time covers the same week
   assert.equal(charts.avgBlocktime, 3600);
+  // And so do its transactions, fullness and fees, the fees of the blocks that reported them
+  assert.equal(charts.weekTransactions, 168 * 2);
+  assert.equal(charts.weekFullness, 0.25);
+  assert.equal(charts.weekFees, 3000);
+  assert.equal(charts.weekFeeBlocks, 84);
   assert.deepEqual(
     charts.miners.map((m) => [m.miner, m.blocks]),
     [[late, 168]],
@@ -319,7 +324,7 @@ test("the trends work out each 4 hour slice from its blocks, and the readings", 
   // A block every 10 minutes for 10 days, at twice the difficulty for the last 2 days
   const blocks = 10 * 144;
 
-  for (let n = 1; n <= blocks; n++) nodes.addBlock("a", { ...block(n), difficulty: n > blocks - 2 * 144 ? "2000" : "1000" });
+  for (let n = 1; n <= blocks; n++) nodes.addBlock("a", { ...block(n), difficulty: n > blocks - 2 * 144 ? "2000" : "1000", txCount: 3, gasUsed: n % 4 ? 100 : 500, gasLimit: 1000, fees: n % 2 ? "1000" : null });
 
   const now = (blocks * 600 + 60) * 1000;
 
@@ -332,6 +337,13 @@ test("the trends work out each 4 hour slice from its blocks, and the readings", 
   assert.equal(trends.hashrate[0], 1000 / 600);
   assert.equal(trends.hashrate.at(-1), 2000 / 600);
   assert.equal(trends.difficulty.at(-1), 2000);
+  // 24 blocks of 3 transactions a slice; the slice in progress has just its first block
+  assert.equal(trends.transactions[0], 72);
+  assert.equal(trends.transactions.at(-1), 3);
+  // Means of the slice's blocks: a quarter of them half full, the rest a tenth; fees only where reported
+  assert.equal(trends.fullness[0], (18 * 0.1 + 6 * 0.5) / 24);
+  assert.equal(trends.fees[0], 1000);
+  assert.equal(trends.fees.at(-1), null);
   // One reading, in the slice in progress
   assert.equal(trends.active.at(-1), 1);
   assert.equal(trends.gasPrice.at(-1), 2e9);

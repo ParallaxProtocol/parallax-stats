@@ -36,6 +36,12 @@ export interface Trends {
   hashrate: (number | null)[];
   /** Mean difficulty of the slice's blocks. */
   difficulty: (number | null)[];
+  /** Transactions in the slice's blocks; the last slice is still in progress. */
+  transactions: (number | null)[];
+  /** Mean share of the gas limit the slice's blocks used, 0..1. */
+  fullness: (number | null)[];
+  /** Mean fees paid to the miner by the slice's blocks that reported them, wei. */
+  fees: (number | null)[];
   /** Means of the readings the server takes every few minutes. */
   active: (number | null)[];
   synced: (number | null)[];
@@ -227,6 +233,14 @@ export interface Charts {
   /** Change in difficulty over the last 7 days, as a fraction; null when the history is shorter. */
   difficultyWeek: number | null;
   transactions: number[];
+  /** Transactions in the same blocks as minerBlocks: the last 7 days of them. */
+  weekTransactions: number;
+  /** Mean share of the gas limit the same blocks used, 0..1. */
+  weekFullness: number;
+  /** Mean fees per block of those of the same blocks that reported them, wei; null when none did. */
+  weekFees: number | null;
+  /** How many of the same blocks reported their fees. */
+  weekFeeBlocks: number;
   gasSpending: number[];
   gasLimit: number[];
   /** Fees paid to the miner per block, wei as decimal strings; null where unknown. */

@@ -158,6 +158,13 @@ function findFork(height: Height, block: ReportedBlock): number {
   return height.forks.findIndex((fork) => sameBlock(fork, block));
 }
 
+/** weekFullness is the mean share of the gas limit the blocks used, of those with a limit. */
+function weekFullness(window: Height[]): number {
+  const limited = window.filter((item) => item.block.gasLimit > 0);
+
+  return limited.length > 0 ? limited.reduce((sum, item) => sum + item.block.gasUsed / item.block.gasLimit, 0) / limited.length : 0;
+}
+
 export class History {
   /** Sorted by height, highest first. */
   private items: Height[] = [];
@@ -810,13 +817,26 @@ export class History {
    * their timestamps. The block time and the hashrate pool the blocks of the
    * POOLED_S up to each slice's end: the mean time to their parents, and
    * their work over that time, as avgHashrate estimates it. The difficulty
-   * is the slice's own blocks' mean. Only blocks whose parent is known count
+   * is the slice's own blocks' mean, and the transactions their total; the
+   * fullness and the fees are means of the slice's blocks too, the fees of
+   * those that reported them. Only blocks whose parent is known count
    * towards the time.
    */
-  blockTrends(starts: number[]): Pick<Trends, "blocktime" | "hashrate" | "difficulty"> {
+  blockTrends(starts: number[]): Pick<Trends, "blocktime" | "hashrate" | "difficulty" | "transactions" | "fullness" | "fees"> {
     // The slices before the first that its pooled figures reach back over
     const lead = POOLED_SLICES - 1;
-    const slices = Array.from({ length: lead + starts.length }, () => ({ work: 0, time: 0, timed: 0, difficulty: 0, blocks: 0 }));
+    const slices = Array.from({ length: lead + starts.length }, () => ({
+      work: 0,
+      time: 0,
+      timed: 0,
+      difficulty: 0,
+      transactions: 0,
+      fullness: 0,
+      limited: 0,
+      fees: 0,
+      feeBlocks: 0,
+      blocks: 0,
+    }));
     const first = (starts[0] ?? 0) - lead * TREND_SLICE_S;
 
     for (let i = 0; i < this.items.length; i++) {
@@ -831,7 +851,18 @@ export class History {
       const difficulty = Number(item.block.difficulty);
 
       slice.difficulty += difficulty;
+      slice.transactions += item.block.txCount;
       slice.blocks++;
+
+      if (item.block.gasLimit > 0) {
+        slice.fullness += item.block.gasUsed / item.block.gasLimit;
+        slice.limited++;
+      }
+
+      if (item.block.fees !== null) {
+        slice.fees += Number(item.block.fees);
+        slice.feeBlocks++;
+      }
 
       if (parent?.height !== item.height - 1) continue;
 
@@ -857,6 +888,9 @@ export class History {
       blocktime: pooled.map((p) => (p.timed > 0 ? p.time / p.timed : null)),
       hashrate: pooled.map((p) => (p.time > 0 ? p.work / p.time : null)),
       difficulty: shown.map((s) => (s.blocks > 0 ? s.difficulty / s.blocks : null)),
+      transactions: shown.map((s) => (s.blocks > 0 ? s.transactions : null)),
+      fullness: shown.map((s) => (s.limited > 0 ? s.fullness / s.limited : null)),
+      fees: shown.map((s) => (s.feeBlocks > 0 ? s.fees / s.feeBlocks : null)),
     };
   }
 
@@ -902,6 +936,7 @@ export class History {
     const recent = this.latest(HISTORY_BINS).reverse();
     const minerWindow = this.minerWindow();
     const minerCounts = this.minerCounts(minerWindow);
+    const weekFees = minerWindow.flatMap((item) => (item.block.fees === null ? [] : [Number(item.block.fees)]));
 
     return {
       height: recent.map((item) => item.height),
@@ -912,6 +947,10 @@ export class History {
       difficulty: recent.map((item) => item.block.difficulty),
       difficultyWeek: this.difficultyChange(7 * 86_400),
       transactions: recent.map((item) => item.block.txCount),
+      weekTransactions: minerWindow.reduce((sum, item) => sum + item.block.txCount, 0),
+      weekFullness: weekFullness(minerWindow),
+      weekFees: weekFees.length > 0 ? weekFees.reduce((a, b) => a + b, 0) / weekFees.length : null,
+      weekFeeBlocks: weekFees.length,
       gasSpending: recent.map((item) => item.block.gasUsed),
       gasLimit: recent.map((item) => item.block.gasLimit),
       fees: recent.map((item) => item.block.fees),
