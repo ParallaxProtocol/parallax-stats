@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent } from "react";
+import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode } from "react";
 import { formatMs } from "@/lib/format";
 import type { Incident, IncidentKind, IncidentLog } from "@/lib/protocol";
 import { Alerts, WARNING_DOT, type Alert } from "./alerts";
@@ -18,6 +18,7 @@ const KINDS: { kind: IncidentKind; label: string }[] = [
   { kind: "reorg", label: "Deep reorg" },
 ];
 const LABEL = Object.fromEntries(KINDS.map(({ kind, label }) => [kind, label])) as Record<IncidentKind, string>;
+const ALL_KINDS = KINDS.map(({ kind }) => kind);
 
 const HOUR = 3_600_000;
 const DAY = 24 * HOUR;
@@ -39,6 +40,8 @@ const WEEK_MS = 7 * DAY;
 const MIN_BAR_PX = 3;
 
 const FILL: Record<Incident["level"], string> = { critical: "bg-critical", warn: "bg-warn" };
+/** Drawing order where kinds share a row: the critical over the warnings. */
+const DEPTH: Record<Incident["level"], number> = { warn: 0, critical: 1 };
 const LEVEL: Record<Incident["level"], string> = { critical: "critical", warn: "warning" };
 /** Hatching for time before recording began: neither clear nor troubled, just unknown. */
 const UNRECORDED = "repeating-linear-gradient(135deg, var(--border) 0 1px, transparent 1px 5px)";
@@ -185,6 +188,9 @@ function TimelineBody({ log }: { log: IncidentLog }) {
   const [range, setRange] = usePersistent<Range>("incident-range", "day");
   const [chosen, setChosen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
+  // One row for every kind until the viewer asks for a row each
+  const [byKind, setByKind] = usePersistent("incident-by-kind", false);
+  const kindRows = useId();
   // Hovering moves the cursor and rewrites the caption on the page directly, in the pointer's own
   // event: going through a render would put the cursor a frame or two behind a fast drag
   const area = useRef<HTMLDivElement>(null);
@@ -215,7 +221,7 @@ function TimelineBody({ log }: { log: IncidentLog }) {
   // The pointer's latest place on a row, drawn at most once a frame, just before the browser paints:
   // Firefox handles a stream of moves before painting, so drawing on each one held the cursor still
   // until the pointer stopped
-  const pointer = useRef<{ kind: IncidentKind; clientX: number } | null>(null);
+  const pointer = useRef<{ kinds: IncidentKind[]; clientX: number } | null>(null);
   const frame = useRef(0);
 
   const draw = useCallback(() => {
@@ -234,17 +240,26 @@ function TimelineBody({ log }: { log: IncidentLog }) {
 
     // A few pixels either way, so a thin bar can be found
     const tolerance = (MIN_BAR_PX / track.width) * span;
-    const under = recent.filter((i) => i.kind === at_.kind && overlaps(i, moment - tolerance, moment + tolerance, now));
-    const text = `${at(moment)} · ${LABEL[at_.kind]}: ${
-      moment < recordedFrom(at_.kind) ? "not on record" : under.length === 0 ? "nothing" : under.map((i) => i.detail).join("; ")
-    }`;
+    const under = recent.filter((i) => at_.kinds.includes(i.kind) && overlaps(i, moment - tolerance, moment + tolerance, now));
+    const unrecorded = at_.kinds.filter((kind) => moment < recordedFrom(kind)).length;
+    // The row of every kind names each incident's kind; a kind's own row names it once
+    const one = at_.kinds.length === 1 ? at_.kinds[0] : null;
+    const what =
+      under.length > 0
+        ? under.map((i) => (one ? i.detail : `${LABEL[i.kind]}: ${i.detail}`)).join("; ")
+        : unrecorded === at_.kinds.length
+          ? "not on record"
+          : unrecorded > 0
+            ? "nothing on record"
+            : "nothing";
+    const text = `${at(moment)} · ${one ? `${LABEL[one]}: ` : ""}${what}`;
 
     // To the minute, so most frames leave it as it is
     if (caption.current && caption.current.textContent !== text) caption.current.textContent = text;
   }, []);
 
   const point = useCallback(
-    (kind: IncidentKind, e: PointerEvent<HTMLDivElement>) => {
+    (kinds: IncidentKind[], e: PointerEvent<HTMLDivElement>) => {
       const track = e.currentTarget;
 
       if (measured.current?.track !== track) {
@@ -256,7 +271,7 @@ function TimelineBody({ log }: { log: IncidentLog }) {
       // Only on arriving: setting it again on every move, even unchanged, has the browser restyle every row
       if (!area.current?.hasAttribute("data-hover")) area.current?.setAttribute("data-hover", "");
 
-      pointer.current = { kind, clientX: e.clientX };
+      pointer.current = { kinds, clientX: e.clientX };
       frame.current ||= requestAnimationFrame(draw);
     },
     [draw],
@@ -276,50 +291,88 @@ function TimelineBody({ log }: { log: IncidentLog }) {
     const x = (t: number) => ((Math.min(Math.max(t, from), now) - from) / span) * 100;
     const marks = ticks(range, from, now);
 
+    // A row's timeline: every incident of its kinds over the range, hatched until all of them were on record
+    const row = (kinds: IncidentKind[], label: ReactNode, name: string) => {
+      const ofKinds = recent.filter((incident) => kinds.includes(incident.kind)).sort((a, b) => DEPTH[a.level] - DEPTH[b.level]);
+      const ongoing = ofKinds.filter((incident) => incident.end === null);
+      const since = Math.max(from, ...kinds.map(recordedFrom));
+
+      return (
+        <div className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 sm:grid-cols-[9rem_minmax(0,1fr)_10rem]">
+          {label}
+          <span className="text-right text-xs text-muted-foreground tabular-nums sm:order-last">
+            {ongoing.length > 1
+              ? `${ongoing.length} ongoing`
+              : ongoing.length === 1
+                ? `ongoing since ${ongoing[0].startKnown ? "" : "before "}${dayFormat.format(ongoing[0].start)}`
+                : ofKinds.length === 0
+                  ? "none"
+                  : `${ofKinds.length} ${ofKinds.length === 1 ? "incident" : "incidents"}`}
+          </span>
+          <div
+            className="relative col-span-2 h-5 touch-pan-y overflow-hidden rounded-[3px] select-none sm:col-span-1"
+            role="img"
+            aria-label={`${name}, ${RANGES[range].heading.toLowerCase()}: ${ofKinds.length === 0 ? "no incidents" : `${ofKinds.length} incidents`}`}
+            onPointerDown={(e) => point(kinds, e)}
+            onPointerMove={(e) => point(kinds, e)}
+            onPointerLeave={leave}
+          >
+            {/* Before records began: hatched, unknown rather than clear */}
+            {since > from && <div className="absolute inset-y-0 left-0" style={{ width: `${x(since)}%`, background: UNRECORDED }} />}
+            <div className="absolute inset-y-0 right-0 bg-foreground/[0.07]" style={{ left: `${x(since)}%` }} />
+            {marks.map((mark) => (
+              <div key={mark.at} aria-hidden className="absolute inset-y-0 w-px bg-card/70" style={{ left: `${x(mark.at)}%` }} />
+            ))}
+            {ofKinds.map((incident) => (
+              <div
+                key={incident.id}
+                className={`absolute inset-y-0 rounded-[2px] ${FILL[incident.level]} ${
+                  picked?.id === incident.id ? "ring-1 ring-foreground ring-offset-1 ring-offset-card" : ""
+                }`}
+                style={{ left: `${x(incident.start)}%`, width: `${x(incident.end ?? now) - x(incident.start)}%`, minWidth: MIN_BAR_PX }}
+              />
+            ))}
+          </div>
+        </div>
+      );
+    };
+
     return (
       <>
-        {KINDS.map(({ kind, label }) => {
-          const ofKind = recent.filter((incident) => incident.kind === kind);
-          const ongoing = ofKind.find((incident) => incident.end === null);
-          const since = Math.max(from, recordedFrom(kind));
+        {row(
+          ALL_KINDS,
+          <button
+            type="button"
+            onClick={() => {
+              setByKind(!byKind);
+              leave();
+            }}
+            aria-expanded={byKind}
+            aria-controls={kindRows}
+            className="inline-flex min-w-0 items-center gap-1.5 justify-self-start text-xs hover:text-foreground"
+          >
+            <svg
+              viewBox="0 0 16 16"
+              className={`size-3 shrink-0 text-muted-foreground transition-transform ${byKind ? "rotate-90" : ""}`}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.75"
+              aria-hidden
+            >
+              <path d="m6 3.5 4.5 4.5L6 12.5" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span className="truncate">All kinds</span>
+          </button>,
+          "All kinds",
+        )}
 
-          return (
-            <div key={kind} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 sm:grid-cols-[9rem_minmax(0,1fr)_10rem]">
-              <span className="truncate text-xs">{label}</span>
-              <span className="text-right text-xs text-muted-foreground tabular-nums sm:order-last">
-                {ongoing
-                  ? `ongoing since ${ongoing.startKnown ? "" : "before "}${dayFormat.format(ongoing.start)}`
-                  : ofKind.length === 0
-                    ? "none"
-                    : `${ofKind.length} ${ofKind.length === 1 ? "incident" : "incidents"}`}
-              </span>
-              <div
-                className="relative col-span-2 h-5 touch-pan-y overflow-hidden rounded-[3px] select-none sm:col-span-1"
-                role="img"
-                aria-label={`${label}, ${RANGES[range].heading.toLowerCase()}: ${ofKind.length === 0 ? "no incidents" : `${ofKind.length} incidents`}`}
-                onPointerDown={(e) => point(kind, e)}
-                onPointerMove={(e) => point(kind, e)}
-                onPointerLeave={leave}
-              >
-                {/* Before records began: hatched, unknown rather than clear */}
-                {since > from && <div className="absolute inset-y-0 left-0" style={{ width: `${x(since)}%`, background: UNRECORDED }} />}
-                <div className="absolute inset-y-0 right-0 bg-foreground/[0.07]" style={{ left: `${x(since)}%` }} />
-                {marks.map((mark) => (
-                  <div key={mark.at} aria-hidden className="absolute inset-y-0 w-px bg-card/70" style={{ left: `${x(mark.at)}%` }} />
-                ))}
-                {ofKind.map((incident) => (
-                  <div
-                    key={incident.id}
-                    className={`absolute inset-y-0 rounded-[2px] ${FILL[incident.level]} ${
-                      picked?.id === incident.id ? "ring-1 ring-foreground ring-offset-1 ring-offset-card" : ""
-                    }`}
-                    style={{ left: `${x(incident.start)}%`, width: `${x(incident.end ?? now) - x(incident.start)}%`, minWidth: MIN_BAR_PX }}
-                  />
-                ))}
-              </div>
-            </div>
-          );
-        })}
+        {/* Not positioned, so the cursor still measures each row against the whole area */}
+        <div id={kindRows} hidden={!byKind} className="flex flex-col gap-3">
+          {byKind &&
+            KINDS.map(({ kind, label }) => (
+              <div key={kind}>{row([kind], <span className="truncate text-xs sm:pl-[1.125rem]">{label}</span>, label)}</div>
+            ))}
+        </div>
 
         {/* The axis, under the rows' timelines */}
         <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)_10rem] sm:gap-x-4">
@@ -340,7 +393,7 @@ function TimelineBody({ log }: { log: IncidentLog }) {
         </div>
       </>
     );
-  }, [recent, from, now, span, range, picked, recordedFrom, point, leave]);
+  }, [recent, from, now, span, range, picked, recordedFrom, point, leave, byKind, setByKind, kindRows]);
 
   // What is over, under the range it ended in: what is going on has its banner above, and its bar
   const past = useMemo(() => recent.filter((incident) => incident.end !== null && incident.end >= from), [recent, from]);
