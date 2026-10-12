@@ -61,7 +61,8 @@ that follows mainnet's difficulty rules. Add `TRUSTED_PROXIES=127.0.0.1,::1`
 to the `.env` file too, so the simulated nodes get map locations and are
 not all counted as one address. By default one simulated miner finds 60% of
 blocks, so the mining majority alert shows; `SIM_MAJORITY=0` spreads blocks
-out, and `SIM_BLOCK_MS` sets the block interval (default 20 s).
+out, `SIM_SKEW=1` shares the rest evenly so decentralization grades healthy,
+and `SIM_BLOCK_MS` sets the block interval (default 20 s).
 
 ## Adding a node
 

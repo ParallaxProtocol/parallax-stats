@@ -9,7 +9,8 @@
 // TRUSTED_PROXIES=127.0.0.1,::1 for the server so the simulated addresses
 // count (locations on the map, and the per-address limits). SIM_BLOCK_MS
 // sets the average block interval (default 20 s; the real target is 10 min),
-// and SIM_MAJORITY the share of blocks the largest miner finds (default 0.6).
+// SIM_MAJORITY the share of blocks the largest miner finds (default 0.6),
+// and SIM_SKEW how unevenly the rest share theirs (default 2.5; 1 is even).
 
 import nextEnv from "@next/env";
 import { WebSocket } from "ws";
@@ -53,12 +54,14 @@ const VERIFIED_VERSIONS = VERSIONS.filter((v) => v.startsWith("v2.1.2"));
 
 // Fourteen miners. The first finds SIM_MAJORITY of blocks (default 0.6, so
 // the dashboard shows a critical mining majority; 0 spreads them out), and
-// a few of the rest find most of the others.
+// a few of the rest find most of the others, as SIM_SKEW says: at 1 they
+// share them evenly, so it takes several to hold a majority.
 const MINERS = Array.from({ length: 14 }, (_, i) => "0x" + (i + 1).toString(16).padStart(2, "0").repeat(20));
 const majority = Math.min(1, Math.max(0, Number(process.env.SIM_MAJORITY ?? 0.6) || 0));
+const skew = Math.max(1, Number(process.env.SIM_SKEW ?? 2.5) || 1);
 
 function pickMiner(): string {
-  return Math.random() < majority ? MINERS[0] : MINERS[1 + Math.floor(Math.random() ** 2.5 * (MINERS.length - 1))];
+  return Math.random() < majority ? MINERS[0] : MINERS[1 + Math.floor(Math.random() ** skew * (MINERS.length - 1))];
 }
 
 interface SimBlock {
