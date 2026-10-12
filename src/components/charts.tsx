@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, use, useEffect, useState, type ReactNode, type RefObject } from "react";
+import { createContext, use, useEffect, useState, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { blockReward, WEI_PER_LAX } from "@/lib/emission";
 import { formatBlockTime, formatCompact, formatInt, formatMs, gradeAvgBlockTime, shortHash } from "@/lib/format";
 import { HISTORY_BINS, TARGET_BLOCK_TIME, TREND_SLICE_S, type Charts, type MinerCount, type PropagationStats } from "@/lib/protocol";
@@ -107,6 +107,21 @@ export function useSeen(ref: RefObject<Element | null>): boolean {
   return seen;
 }
 
+/**
+ * scrubIndex maps a pointer's x position across an element to one of `count` slots.
+ * Touch pointers are captured by the element they first land on, so per-slot
+ * pointerenter targets never fire while a finger drags; reading the position does.
+ */
+export function scrubIndex(event: PointerEvent<Element>, count: number, centered = false): number | null {
+  if (count <= 0) return null;
+
+  const rect = event.currentTarget.getBoundingClientRect();
+  const fraction = rect.width > 0 ? (event.clientX - rect.left) / rect.width : 0;
+  const index = centered ? Math.round(fraction * (count - 1)) : Math.floor(fraction * count);
+
+  return Math.min(count - 1, Math.max(0, index));
+}
+
 /** Plot sizes an SVG to fill the space left in its tile and gives every slot a hover target. */
 function Plot({
   values,
@@ -127,23 +142,17 @@ function Plot({
       <svg
         viewBox={`0 0 ${size.width} ${size.height}`}
         preserveAspectRatio="none"
-        className={`absolute inset-0 block size-full overflow-visible ${seen ? "chart-reveal" : "chart-pending"}`}
+        className={`absolute inset-0 block size-full touch-pan-y overflow-visible select-none [-webkit-touch-callout:none] ${
+          seen ? "chart-reveal" : "chart-pending"
+        }`}
         role="img"
         aria-label={label}
+        onPointerDown={(e) => onActive(scrubIndex(e, values.length))}
+        onPointerMove={(e) => onActive(scrubIndex(e, values.length))}
         onPointerLeave={() => onActive(null)}
+        onPointerCancel={() => onActive(null)}
       >
         {children(size, slot)}
-        {values.map((_, i) => (
-          <rect
-            key={i}
-            x={i * slot}
-            y={0}
-            width={slot}
-            height={size.height}
-            fill="transparent"
-            onPointerEnter={() => onActive(i)}
-          />
-        ))}
       </svg>
     </div>
   );
@@ -259,6 +268,8 @@ export function TrendLine({
           const x = (i: number) => i * slot + slot / 2;
           const y = (v: number) => 6 + (1 - (v - (min - pad)) / (max + pad - (min - pad))) * (height - 12);
           const focus = active !== null && values[active] !== null ? active : active === null ? latest : null;
+          // While scrubbing, the range steps back unless the point under the pointer is that extreme
+          const faded = (v: number) => active !== null && values[active] !== v;
 
           return (
             <>
@@ -273,6 +284,24 @@ export function TrendLine({
                   strokeDasharray="3 5"
                   vectorEffect="non-scaling-stroke"
                 />
+              )}
+              {!sparse && format && max > min && (
+                // Guides from the range labels across to the points they name
+                <g aria-hidden className="pointer-events-none stroke-muted-foreground">
+                  {[max, min].map((v) => (
+                    <line
+                      key={v}
+                      className={`transition-opacity duration-150 ${faded(v) ? "opacity-20" : "opacity-50"}`}
+                      x1={0}
+                      x2={x(values.indexOf(v))}
+                      y1={y(v)}
+                      y2={y(v)}
+                      strokeWidth={1}
+                      strokeDasharray="2 3"
+                      vectorEffect="non-scaling-stroke"
+                    />
+                  ))}
+                </g>
               )}
               {!sparse &&
                 runs.map((run) => {
@@ -310,10 +339,10 @@ export function TrendLine({
               {!sparse && format && max > min && (
                 // The scale's range beside its highest and lowest points, so a small swing and a large one never look alike
                 <g aria-hidden className="pointer-events-none fill-muted-foreground font-mono text-[10px] tabular-nums">
-                  <text x={0} y={y(max)} dy={-6}>
+                  <text x={0} y={y(max)} dy={-6} className={`transition-opacity duration-150 ${faded(max) ? "opacity-40" : ""}`}>
                     {format(max)}
                   </text>
-                  <text x={0} y={y(min)} dy={13}>
+                  <text x={0} y={y(min)} dy={13} className={`transition-opacity duration-150 ${faded(min) ? "opacity-40" : ""}`}>
                     {format(min)}
                   </text>
                 </g>

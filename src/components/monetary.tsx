@@ -14,6 +14,7 @@ import { formatInt } from "@/lib/format";
 import { TARGET_BLOCK_TIME } from "@/lib/protocol";
 import { useServerNow } from "./live/provider";
 import { Label, Plate } from "./plate";
+import { scrubIndex } from "./charts";
 import { useSize } from "./use-size";
 
 /** Halvings drawn on the supply curve; by the 8th, over 99% is issued. */
@@ -181,10 +182,13 @@ function SupplyCurve({ height }: { height: number }) {
         <svg
           viewBox={`0 0 ${width} ${h}`}
           preserveAspectRatio="none"
-          className="absolute inset-0 size-full overflow-visible"
+          className="absolute inset-0 size-full touch-pan-y overflow-visible select-none [-webkit-touch-callout:none]"
           role="img"
           aria-label={`Supply curve: ${(nowShare * 100).toFixed(1)}% of the maximum supply is issued, half by the first halving and over 99% by the ${ordinal(CURVE_ERAS)}`}
+          onPointerDown={(e) => setActive(scrubIndex(e, curve.length, true))}
+          onPointerMove={(e) => setActive(scrubIndex(e, curve.length, true))}
           onPointerLeave={() => setActive(null)}
+          onPointerCancel={() => setActive(null)}
         >
           {[0.5, 1].map((share) => (
             <line
@@ -235,17 +239,6 @@ function SupplyCurve({ height }: { height: number }) {
             vectorEffect="non-scaling-stroke"
           />
           <circle cx={x(height)} cy={y(nowShare)} r={5} className="fill-foreground stroke-surface-elevated" strokeWidth={2} />
-          {curve.map((p, i) => (
-            <rect
-              key={p.height}
-              x={x(p.height) - width / CURVE_ERAS / 2}
-              y={0}
-              width={width / CURVE_ERAS}
-              height={h}
-              fill="transparent"
-              onPointerEnter={() => setActive(i)}
-            />
-          ))}
         </svg>
         <span className="pointer-events-none absolute top-0 left-2 bg-surface-elevated px-1 font-mono text-[10px] text-muted-foreground">100%</span>
         <span
