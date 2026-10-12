@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import { NAME_CHECK_PATH, type NameStatus } from "@/lib/protocol";
 import { CopyButton } from "./copy-button";
 
@@ -13,7 +13,7 @@ type Tab = "public" | "verified";
 
 const STATUS: Record<Exclude<NameStatus, "invalid">, { text: string; className: string }> = {
   available: { text: "Available", className: "text-good-ink" },
-  yours: { text: "In use from your address. Fine if it's your own node.", className: "text-muted-foreground" },
+  yours: { text: "Already in use from your address, which is fine if it's this node.", className: "text-muted-foreground" },
   taken: { text: "Taken by another node. Pick a different name.", className: "text-critical-ink" },
   reserved: { text: "Reserved for a verified node. Pick a different name.", className: "text-critical-ink" },
 };
@@ -51,6 +51,25 @@ function Code({ children, label }: { children: string; label: string }) {
       <pre className="min-w-0 py-0.5 font-mono text-xs leading-relaxed whitespace-pre-wrap [overflow-wrap:anywhere]">{children}</pre>
       <CopyButton value={children} label={label} />
     </div>
+  );
+}
+
+/** Step is one numbered stage of the instructions, its marker on a rule down to the next. */
+function Step({ n, title, last = false, children }: { n: number; title: string; last?: boolean; children: ReactNode }) {
+  return (
+    <li className="relative flex gap-4">
+      {!last && <span aria-hidden className="absolute top-7 bottom-0 left-[11px] w-px bg-border" />}
+      <span
+        aria-hidden
+        className="flex size-6 shrink-0 items-center justify-center rounded-full border border-brand/50 bg-brand-muted font-mono text-[11px] text-brand tabular-nums"
+      >
+        {n}
+      </span>
+      <div className={`flex min-w-0 flex-1 flex-col gap-2 ${last ? "" : "pb-6"}`}>
+        <h3 className="pt-0.5 text-sm font-medium">{title}</h3>
+        {children}
+      </div>
+    </li>
   );
 }
 
@@ -99,24 +118,29 @@ export function AddNode({ publicNodes }: { publicNodes: boolean }) {
         ref={dialog}
         aria-labelledby={`${id}-title`}
         onClose={() => setIsOpen(false)}
-        className="modal-dialog m-auto max-h-[90dvh] w-[min(36rem,calc(100vw-2rem))] overflow-y-auto border border-border bg-surface-elevated p-0 text-foreground shadow-[0_4px_10px_oklch(0_0_0/0.45),0_20px_48px_oklch(0_0_0/0.45)] backdrop:bg-black/60 backdrop:backdrop-blur-sm"
+        className="modal-dialog m-auto max-h-[90dvh] w-[min(36rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain border border-border bg-surface-elevated p-0 text-foreground shadow-[0_4px_10px_oklch(0_0_0/0.45),0_20px_48px_oklch(0_0_0/0.45)] backdrop:bg-black/60 backdrop:backdrop-blur-sm"
         onClick={(e) => {
           // A click on the backdrop lands on the dialog element itself
           if (e.target === e.currentTarget) dialog.current?.close();
         }}
       >
-        <div className="flex flex-col gap-6 p-6 sm:p-7">
-          <div className="flex items-start justify-between gap-4">
+        {/* The header and tabs stay in view while the steps scroll, under a hairline of the logo gradient */}
+        <header className="sticky top-0 z-10 border-b border-border bg-surface-elevated/90 backdrop-blur-md">
+          <div aria-hidden className="brand-gradient h-0.5" />
+          <div className="flex items-start justify-between gap-4 px-6 pt-5 pb-4 sm:px-7">
             <div className="flex flex-col gap-1.5">
+              <span className="font-mono text-[11px] tracking-[0.15em] text-brand uppercase">Parallax Network Status</span>
               <h2 id={`${id}-title`} className="text-2xl">
                 Add your node
               </h2>
-              <p className="text-sm text-muted-foreground">Start parallaxd with stats reporting. No open ports needed.</p>
+              <p className="text-sm text-muted-foreground">
+                Your node reports its stats to this page. It connects out, so no open ports are needed.
+              </p>
             </div>
             <button
               type="button"
               onClick={() => dialog.current?.close()}
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
+              className="-mr-2 inline-flex size-8 shrink-0 items-center justify-center rounded text-muted-foreground hover:bg-accent/50 hover:text-foreground"
               aria-label="Close"
             >
               <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
@@ -126,7 +150,7 @@ export function AddNode({ publicNodes }: { publicNodes: boolean }) {
           </div>
 
           {tabs.length > 1 && (
-            <div role="tablist" aria-label="Kind of node" className="flex gap-6 border-b border-border">
+            <div role="tablist" aria-label="Kind of node" className="flex gap-6 px-6 sm:px-7">
               {tabs.map((t) => (
                 <button
                   key={t.key}
@@ -143,12 +167,14 @@ export function AddNode({ publicNodes }: { publicNodes: boolean }) {
               ))}
             </div>
           )}
+        </header>
 
-          <div id={`${id}-panel`} role="tabpanel" aria-labelledby={`${id}-tab-${tab}`} className="flex flex-col gap-5">
-            {tab === "public" ? (
-              <>
-                <div className="flex flex-col gap-1.5">
-                  <label htmlFor={`${id}-name`} className="text-sm font-medium">
+        <div id={`${id}-panel`} role="tabpanel" aria-labelledby={tabs.length > 1 ? `${id}-tab-${tab}` : `${id}-title`}>
+          {tab === "public" ? (
+            <>
+              <ol className="flex flex-col px-6 pt-6 pb-6 sm:px-7">
+                <Step n={1} title="Name your node">
+                  <label htmlFor={`${id}-name`} className="sr-only">
                     Node name
                   </label>
                   <input
@@ -171,79 +197,94 @@ export function AddNode({ publicNodes }: { publicNodes: boolean }) {
                       ? "Start with a letter or number, and use only letters, numbers, spaces and . _ - ( ) [ ] # +"
                       : (statusLine?.text ?? "Letters, numbers, spaces and . _ - ( ) [ ] # +")}
                   </p>
-                </div>
+                </Step>
 
-                <div className="flex flex-col gap-2">
-                  <p className="text-sm font-medium">Start parallaxd with</p>
+                <Step n={2} title="Start parallaxd with stats reporting" last>
                   <Code label="command">{`parallaxd \\
   --prlstats "${url}"`}</Code>
-                  <p className="text-xs text-muted-foreground">
-                    Already running parallaxd with other flags? Add <code className="font-mono whitespace-nowrap text-foreground">--prlstats</code>{" "}
-                    to them and restart.
+                  <p className="text-xs leading-relaxed text-muted-foreground">
+                    Already running parallaxd? Add <code className="font-mono whitespace-nowrap text-foreground">--prlstats</code>{" "}
+                    to the flags you use and restart it.
                   </p>
-                </div>
 
-                <details className="group text-sm">
-                  <summary className="cursor-pointer list-none text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
-                    <span className="inline-flex items-center gap-1.5">
-                      <svg
-                        viewBox="0 0 16 16"
-                        className="size-3 transition-transform group-open:rotate-90"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.75"
-                        aria-hidden
-                      >
-                        <path d="m6 3.5 4.5 4.5L6 12.5" strokeLinecap="round" strokeLinejoin="round" />
+                  <details className="group mt-1 text-sm">
+                    <summary className="cursor-pointer list-none text-xs text-muted-foreground hover:text-foreground [&::-webkit-details-marker]:hidden">
+                      <span className="inline-flex items-center gap-1.5">
+                        <svg
+                          viewBox="0 0 16 16"
+                          className="size-3 transition-transform group-open:rotate-90"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.75"
+                          aria-hidden
+                        >
+                          <path d="m6 3.5 4.5 4.5L6 12.5" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        Using a config file instead?
+                      </span>
+                    </summary>
+                    <div className="mt-3 flex flex-col gap-2">
+                      <p className="text-xs text-muted-foreground">Add this section to it:</p>
+                      <Code label="config section">{`[ParallaxStats]\nURL = "${url}"`}</Code>
+                      <p className="text-xs text-muted-foreground">Then start parallaxd with it:</p>
+                      <Code label="command">{"parallaxd --config config.toml"}</Code>
+                    </div>
+                  </details>
+                </Step>
+              </ol>
+
+              <footer className="border-t border-border bg-card px-6 py-4 text-sm leading-relaxed text-muted-foreground sm:px-7">
+                Your node appears in the list within a minute, under a pseudonym such as{" "}
+                <span className="font-mono text-foreground">node-3f9a2c1b</span>. Only verified nodes are shown by name.
+              </footer>
+            </>
+          ) : (
+            <>
+              <div className="flex flex-col gap-6 px-6 pt-6 pb-6 sm:px-7">
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  For operators of bootnodes, mining pools, exchanges and public RPC endpoints. Verified nodes are shown
+                  by name, and the best block on this page follows them.
+                </p>
+
+                <ol className="flex flex-col">
+                  <Step n={1} title="Request a private secret">
+                    <a
+                      href={TELEGRAM}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex h-9 w-fit items-center gap-2 rounded border border-border px-4 font-mono text-[11px] font-semibold tracking-[0.15em] uppercase hover:bg-accent/50"
+                    >
+                      <svg viewBox="0 0 24 24" className="size-4" fill="currentColor" aria-hidden>
+                        <path d="M21.9 4.6 18.7 19.7c-.2 1.1-.9 1.3-1.8.8l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.3-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.2 13.4l-4.8-1.5c-1-.3-1.1-1 .2-1.5L20.5 3.1c.9-.3 1.6.2 1.4 1.5Z" />
                       </svg>
-                      Using a config file?
-                    </span>
-                  </summary>
-                  <div className="mt-3 flex flex-col gap-2">
-                    <p className="text-xs text-muted-foreground">Add this section to it:</p>
-                    <Code label="config section">{`[ParallaxStats]\nURL = "${url}"`}</Code>
-                    <p className="text-xs text-muted-foreground">and start parallaxd with it:</p>
-                    <Code label="command">{"parallaxd --config config.toml"}</Code>
-                  </div>
-                </details>
+                      Ask on Telegram
+                    </a>
+                  </Step>
 
-                <p className="border-t border-border pt-4 text-xs text-muted-foreground">
-                  Your node appears within a minute, under a pseudonym such as{" "}
-                  <span className="font-mono">node-3f9a2c1b</span>. Only verified nodes are listed by name.
-                </p>
-              </>
-            ) : (
-              <>
-                <p className="text-sm text-muted-foreground">
-                  For bootnodes, exchanges, mining pools and public RPC endpoints. Verified nodes are listed by name, and
-                  the network&apos;s best block follows them.
-                </p>
-                <a
-                  href={TELEGRAM}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex h-9 w-fit items-center gap-2 rounded border border-foreground px-4 font-mono text-[11px] font-semibold tracking-[0.15em] uppercase hover:bg-accent/50"
-                >
-                  <svg viewBox="0 0 24 24" className="size-4" fill="currentColor" aria-hidden>
-                    <path d="M21.9 4.6 18.7 19.7c-.2 1.1-.9 1.3-1.8.8l-4.9-3.6-2.4 2.3c-.3.3-.5.5-1 .5l.3-5 9.1-8.2c.4-.4-.1-.6-.6-.2L6.2 13.4l-4.8-1.5c-1-.3-1.1-1 .2-1.5L20.5 3.1c.9-.3 1.6.2 1.4 1.5Z" />
-                  </svg>
-                  Request a secret on Telegram
-                </a>
-                <div className="flex flex-col gap-2 border-t border-border pt-4">
-                  <p className="text-sm font-medium">Once you have it, start parallaxd with</p>
-                  <Code label="command">{`parallaxd \\
+                  <Step n={2} title="Start parallaxd with your secret" last>
+                    <Code label="command">{`parallaxd \\
   --prlstats "your-node:<private secret>@wss://${host}"`}</Code>
-                  <p className="text-xs text-muted-foreground">
-                    Keep the secret private. The <code className="font-mono text-foreground">wss://</code> keeps it
-                    encrypted on the way.
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Verified nodes must run parallaxd v2.1.2 or newer; older releases are refused.
-                  </p>
-                </div>
-              </>
-            )}
-          </div>
+                    <p className="text-xs leading-relaxed text-muted-foreground">
+                      Keep the secret private. Writing <code className="font-mono text-foreground">wss://</code> keeps
+                      it encrypted in transit, with no fallback to unencrypted{" "}
+                      <code className="font-mono text-foreground">ws://</code>.
+                    </p>
+                  </Step>
+                </ol>
+              </div>
+
+              <footer className="flex gap-3 border-t border-border bg-card px-6 py-4 text-sm leading-relaxed sm:px-7">
+                <svg viewBox="0 0 16 16" className="mt-0.5 size-4 shrink-0 text-info-ink" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+                  <circle cx="8" cy="8" r="6.25" />
+                  <path d="M8 7.2v4M8 4.9v.1" strokeLinecap="round" />
+                </svg>
+                <span className="text-muted-foreground">
+                  Verified nodes must run <span className="text-foreground">parallaxd v2.1.2 or newer</span>. Older
+                  releases are refused.
+                </span>
+              </footer>
+            </>
+          )}
         </div>
       </dialog>
     </>
