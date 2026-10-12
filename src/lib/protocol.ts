@@ -45,6 +45,10 @@ export interface Trends {
   peerLatency: (number | null)[];
   /** Mean uptime of verified nodes, 0..100. */
   uptime: (number | null)[];
+  /** Transactions waiting in the mempool, the median of synced nodes. */
+  pending: (number | null)[];
+  /** LAX price in US dollars, from CoinGecko. */
+  price: (number | null)[];
 }
 
 /** trendStarts gives the start of each trend slice at `now` (ms), oldest first. */
@@ -203,6 +207,10 @@ export interface MinerCount {
 
 export interface Charts {
   height: number[];
+  /** Each block's timestamp, unix seconds. */
+  timestamp: number[];
+  /** Each block's coinbase address. */
+  miner: string[];
   /** Seconds per block. */
   blocktime: number[];
   /** Mean seconds per block over the last 7 days (see minerBlocks and minerSpan). */
@@ -229,6 +237,15 @@ export interface Charts {
   trends: Trends;
 }
 
+/** The LAX price, as CoinGecko last reported it. */
+export interface Price {
+  usd: number;
+  /** When CoinGecko last updated it, ms. */
+  at: number;
+  /** The coin's page on CoinGecko, which its free API asks to be credited with a link. */
+  url: string;
+}
+
 export interface Snapshot {
   serverTime: number;
   nodes: PublicNode[];
@@ -237,6 +254,10 @@ export interface Snapshot {
   gasPrice: string | null;
   /** Known mining pools by coinbase address (lowercase), from MINING_POOLS. */
   pools: Record<string, MiningPool>;
+  /** The block explorer's address, from EXPLORER_URL, without a trailing slash; null when not set. */
+  explorer: string | null;
+  /** The LAX price; null while unknown, or with COINGECKO_ID set empty. */
+  price: Price | null;
 }
 
 export type ServerMessage =
@@ -248,6 +269,7 @@ export type ServerMessage =
   | { type: "latency"; id: string; latency: number }
   | { type: "charts"; charts: Charts }
   | { type: "fee"; gasPrice: string | null }
+  | { type: "price"; price: Price | null }
   | { type: "pong"; t: number; serverTime: number };
 
 export type ClientMessage = { type: "ping"; t: number };

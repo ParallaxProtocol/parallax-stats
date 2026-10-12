@@ -122,6 +122,8 @@ All settings come from the environment.
 | `SECRETS_FILE` | `DATA_DIR/secrets` | A file of further private secrets, one per line, applied while the server runs: see below |
 | `DATA_DIR` | | Directory to save state in, so restarts keep the node list, uptimes and block history. Without it, state lives in memory only. |
 | `MINING_POOLS` | | Known pools, shown by name under Decentralization: see below |
+| `COINGECKO_ID` | `parallax-2` | The coin on CoinGecko whose price, in US dollars, puts the hashprice in dollars. Read every 5 minutes from its free API, which needs no key. Set it empty to show no price. |
+| `EXPLORER_URL` | | Block explorer (Blockscout) to link blocks, miners and pending transactions to, such as `https://explorer.parallaxprotocol.org`. Without it, nothing links out. |
 
 Lists are separated by `|` or `,`. At least one of `WS_SECRET` and
 `PUBLIC_SECRET` must be set. With `PUBLIC_SECRET` set, the page's "Add
@@ -282,6 +284,25 @@ Tells the caller whether they can report under a node name: `available`,
   most of the last 7 days of blocks, which is how many would have to collude to
   rewrite the chain: 4 or more is healthy, 3 fair, 2 concentrated and 1
   critical.
+- **Confirmations to wait** is the fewest blocks after which the largest
+  miner of the last 7 days, at its share of their blocks, has less than a
+  1%, 0.1% or 0.01% chance of replacing a payment by mining in secret: the
+  calculation in section 11 of the Bitcoin paper. A pool counts as one
+  miner. With a majority, no number is safe.
+- **Mempool** is the median of synced nodes' pending transactions; syncing
+  nodes lag the network's, so they are left out.
+- **Hashprice** is what a unit of hashrate earns in a day: a block pays its
+  reward and, on average, the fees of recent blocks, and takes `difficulty`
+  hashes, so a hash earns that over the difficulty. Block timing does not
+  enter into it, so luck does not move it. It is in US dollars at the
+  CoinGecko price while one is known, and in LAX otherwise; its 7 day chart
+  takes each slice's mean difficulty and mean price, and the week at
+  today's block reward.
+- **Security budget** is what miners earn in a day, the rough cost of
+  renting enough hashrate to rival them: blocks a day at the pace of the
+  last 24 hours, times the reward and recent fees, in US dollars at the
+  CoinGecko price while one is known. It is compared with the 144 blocks a
+  day the schedule pays.
 - **Uptime** is the average of verified nodes' uptimes, the share of time
   each has been connected since the server first saw it. Unverified nodes
   come and go as people try things, so they would only add noise.

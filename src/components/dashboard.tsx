@@ -13,8 +13,10 @@ import { AlertCount, Alerts, useAlerts } from "./alerts";
 import { BlockClock, ClockPlate, MiniClock } from "./block-clock";
 import { BlockToasts, SoundToggle } from "./block-toast";
 import { BestBlock, BlockTime, Decentralization, EMPTY_CHARTS, Fees, Fullness, Propagation, Transactions } from "./charts";
+import { Confirmations } from "./confirmations";
 import { FigureTile, figures } from "./figures";
 import { ClientVersions, StaleBlocks } from "./health";
+import { LatestBlocks } from "./latest-blocks";
 import { LiveProvider, useLive } from "./live/provider";
 import { Supply } from "./monetary";
 import { NodeMap } from "./node-map";
@@ -53,7 +55,7 @@ function Live({
   latestRelease: Release | null;
   releaseCommits: ReleaseCommits;
 }) {
-  const { nodes, charts, gasPrice, pools, connection, latency } = useLive();
+  const { nodes, charts, gasPrice, pools, explorer, price, connection, latency } = useLive();
   const summary = useMemo(() => summarize(nodes), [nodes]);
   const mainnet = useMemo(() => onMainnet(nodes), [nodes]);
   const best = summary.bestStats?.block ?? null;
@@ -61,7 +63,7 @@ function Live({
   const mining = mainnetBest ? miningDifficulty(mainnetBest) : null;
   const c = charts ?? EMPTY_CHARTS;
   const block = (i: number) => `#${formatInt(c.height[i])}`;
-  const figure = figures({ summary, charts, mining, gasPrice });
+  const figure = figures({ summary, charts, mining, gasPrice, explorer, price });
   const start = c.trends?.start ?? [];
   const foundAt = (summary.bestStats?.block.timestamp ?? 0) * 1000;
   const alerts = useAlerts({ bestBlock: summary.bestBlock, foundAt, charts, nodes, latestRelease });
@@ -111,7 +113,12 @@ function Live({
           <FigureTile figure={figure.hashrate} start={start} />
           <FigureTile figure={figure.difficulty} start={start} />
           <BlockTime c={c} block={block} />
-          <Decentralization charts={charts} />
+          {/* Both rows on wide screens, so the miner list has room */}
+          <Decentralization charts={charts} className="xl:row-span-2" />
+          {/* What a hash earns, what all of them earn, and what that means for a payment */}
+          <FigureTile figure={figure.hashprice} start={start} />
+          <FigureTile figure={figure.security} start={start} />
+          <Confirmations charts={charts} className="sm:col-span-2 xl:col-span-1" />
         </div>
       </Section>
       <Section id="blocks" sections={sections}>
@@ -120,6 +127,9 @@ function Live({
           <Fullness c={c} block={block} />
           <Fees c={c} block={block} />
           <FigureTile figure={figure.fee} start={start} />
+          <LatestBlocks c={c} pools={pools} explorer={explorer} className="sm:col-span-2 xl:col-span-3" />
+          {/* Under the recommended fee, which it explains */}
+          <FigureTile figure={figure.mempool} start={start} className="sm:col-span-2 xl:col-span-1" />
         </div>
       </Section>
       <Section id="supply" sections={sections}>
@@ -148,8 +158,8 @@ const FOUR = "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4";
 
 /** The page's sections, in order: the bar under the block clock links to each. */
 const SECTIONS: SectionLink[] = [
-  { id: "mining", title: "Mining", description: "Hashrate, difficulty and who finds the blocks" },
-  { id: "blocks", title: "Blocks & fees", description: "What recent blocks carried, and what sending costs" },
+  { id: "mining", title: "Mining", description: "Hashrate, difficulty, who finds the blocks and how long to wait" },
+  { id: "blocks", title: "Blocks & fees", description: "What recent blocks carried, what is waiting, and what sending costs" },
   { id: "supply", title: "Supply", description: "Issuance, halvings and the 21 million cap" },
   { id: "nodes", title: "Nodes", description: "Where the network runs, and how well it keeps up" },
 ];

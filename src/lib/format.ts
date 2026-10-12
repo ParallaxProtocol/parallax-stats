@@ -39,6 +39,18 @@ export function formatHashrate(hashes: number): string {
   return `${value} ${prefix}H/s`;
 }
 
+/**
+ * hashpriceUnit picks the hashrate unit that puts a hashprice, LAX per H/s
+ * per day, at 0.1 or more: 1.2 LAX per MH/s rather than 0.0000012 per H/s.
+ */
+export function hashpriceUnit(perHash: number): { scale: number; unit: string } {
+  let i = 0;
+
+  while (perHash > 0 && perHash * 1000 ** i < 0.1 && i < SI.length - 1) i++;
+
+  return { scale: 1000 ** i, unit: `${SI[i]}H/s` };
+}
+
 /** Pools and miners count difficulty in units of 2^32 hashes, Bitcoin style. */
 const POOL_UNIT = 2 ** 32;
 

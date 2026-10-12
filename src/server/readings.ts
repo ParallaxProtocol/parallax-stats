@@ -1,6 +1,6 @@
 // Readings of the network figures that come from the node list rather
-// than from blocks: active and synced nodes, the recommended fee, latency
-// and uptime. The hub takes one every few minutes; each trend slice keeps
+// than from blocks: active and synced nodes, the recommended fee, latency,
+// uptime, the mempool and the LAX price. The hub takes one every few minutes; each trend slice keeps
 // the sums of its readings, so a slice shows their mean.
 
 import type { Summary } from "../lib/derive.ts";
@@ -17,9 +17,14 @@ interface Slice {
   gasPrice: Mean;
   peerLatency: Mean;
   uptime: Mean;
+  pending: Mean;
+  price: Mean;
 }
 
-const FIELDS = ["active", "synced", "gasPrice", "peerLatency", "uptime"] as const;
+const FIELDS = ["active", "synced", "gasPrice", "peerLatency", "uptime", "pending", "price"] as const;
+
+/** Fields added after readings were first saved: a slice saved before them gets an empty mean. */
+const LATER_FIELDS = ["pending", "price"] as const;
 
 export type ReadingFields = Pick<Trends, (typeof FIELDS)[number]>;
 
@@ -41,14 +46,14 @@ export class Readings {
 
   /**
    * record adds a reading to the slice in progress. Latency counts only
-   * when some node measured it, and the fee and uptime only when known.
+   * when some node measured it, and the fee, uptime and price only when known.
    */
-  record(summary: Summary, gasPrice: string | null, now = Date.now()): void {
+  record(summary: Summary, gasPrice: string | null, now = Date.now(), usd: number | null = null): void {
     const start = Math.floor(now / 1000 / TREND_SLICE_S) * TREND_SLICE_S;
     let slice = this.slices.at(-1);
 
     if (!slice || slice.start !== start) {
-      slice = { start, active: [0, 0], synced: [0, 0], gasPrice: [0, 0], peerLatency: [0, 0], uptime: [0, 0] };
+      slice = { start, active: [0, 0], synced: [0, 0], gasPrice: [0, 0], peerLatency: [0, 0], uptime: [0, 0], pending: [0, 0], price: [0, 0] };
       this.slices.push(slice);
       this.slices = this.slices.filter((s) => s.start > start - TREND_SLICES * TREND_SLICE_S);
     }
@@ -58,6 +63,8 @@ export class Readings {
     add(slice.gasPrice, gasPrice === null ? null : Number(gasPrice));
     add(slice.peerLatency, summary.peerLatency > 0 ? summary.peerLatency : null);
     add(slice.uptime, summary.uptime);
+    add(slice.pending, summary.pending);
+    add(slice.price, usd);
   }
 
   /** series gives each field's mean for the slices starting at `starts`, null where there was no reading. */
@@ -70,7 +77,15 @@ export class Readings {
         return count > 0 ? sum / count : null;
       });
 
-    return { active: mean("active"), synced: mean("synced"), gasPrice: mean("gasPrice"), peerLatency: mean("peerLatency"), uptime: mean("uptime") };
+    return {
+      active: mean("active"),
+      synced: mean("synced"),
+      gasPrice: mean("gasPrice"),
+      peerLatency: mean("peerLatency"),
+      uptime: mean("uptime"),
+      pending: mean("pending"),
+      price: mean("price"),
+    };
   }
 
   toState(): ReadingsState {
@@ -83,6 +98,10 @@ export class Readings {
       Array.isArray(mean) && mean.length === 2 && mean.every((n) => typeof n === "number" && Number.isFinite(n));
 
     this.slices = (state?.slices ?? [])
+      // Readings saved before a field was read have none of it: an empty mean, not a reason to drop the slice
+      .map((slice) =>
+        slice ? { ...slice, ...Object.fromEntries(LATER_FIELDS.filter((field) => slice[field] === undefined).map((field) => [field, [0, 0]])) } : slice,
+      )
       .filter((slice) => typeof slice?.start === "number" && FIELDS.every((field) => valid(slice[field])))
       .sort((a, b) => a.start - b.start)
       .slice(-TREND_SLICES);

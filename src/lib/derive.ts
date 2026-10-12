@@ -13,6 +13,8 @@ export interface Summary {
   peerLatency: number;
   /** Average uptime of verified nodes, connected or not, 0..100; null when there are none. */
   uptime: number | null;
+  /** Median of synced nodes' pending transactions; null when none is synced. */
+  pending: number | null;
 }
 
 function average(values: number[]): number | null {
@@ -30,6 +32,8 @@ export function median(values: number[]): number {
 
 export function summarize(nodes: PublicNode[]): Summary {
   const active = nodes.filter((node) => node.stats.active);
+  // A syncing node's mempool lags the network's, so only synced ones count
+  const synced = active.filter((node) => !node.stats.syncing);
 
   // While verified nodes are online the best block follows them only, so
   // an unverified node reporting a made-up height cannot make everyone
@@ -45,9 +49,10 @@ export function summarize(nodes: PublicNode[]): Summary {
     bestStats: best?.stats ?? null,
     total: nodes.length,
     active: active.length,
-    synced: active.filter((node) => !node.stats.syncing).length,
+    synced: synced.length,
     peerLatency: median(active.map((node) => node.stats.peerLatency).filter((latency) => latency > 0)),
     uptime: average(nodes.filter((node) => node.trusted).map((node) => node.stats.uptime)),
+    pending: synced.length > 0 ? median(synced.map((node) => node.stats.pending)) : null,
   };
 }
 

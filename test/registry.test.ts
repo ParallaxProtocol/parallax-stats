@@ -640,6 +640,19 @@ test("a head block's time ignores when it was reported", () => {
   assert.equal(nodes.charts().blocktime.at(-1), 450);
 });
 
+test("the charts carry each recent block's timestamp and miner, oldest first", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+
+  for (let n = 1; n <= 3; n++) nodes.addBlock("a", { ...block(n), miner: "0x" + String(n).repeat(40) });
+
+  const charts = nodes.charts();
+
+  assert.deepEqual(charts.timestamp, [600, 1200, 1800]);
+  assert.deepEqual(charts.miner, ["0x" + "1".repeat(40), "0x" + "2".repeat(40), "0x" + "3".repeat(40)]);
+});
+
 test("hashrate is the work of the newest unbroken run over its time span", () => {
   const nodes = new Registry(settings);
 

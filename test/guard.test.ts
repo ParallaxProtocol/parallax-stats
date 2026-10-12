@@ -205,3 +205,22 @@ test("mining pools are read with optional websites", () => {
   assert.deepEqual(pools.get(b.toLowerCase()), { name: "Pool Two", url: null });
   assert.equal(pools.size, 2);
 });
+
+test("the explorer address is an http(s) site, without its trailing slash", () => {
+  const explorer = (value?: string) => loadSettings({ WS_SECRET: "private-secret", EXPLORER_URL: value }).explorerUrl;
+
+  assert.equal(explorer("https://explorer.example/"), "https://explorer.example");
+  assert.equal(explorer(" https://explorer.example/parallax/ "), "https://explorer.example/parallax");
+  assert.equal(explorer("javascript:alert(1)"), null);
+  assert.equal(explorer(""), null);
+  assert.equal(explorer(undefined), null);
+});
+
+test("prices come from CoinGecko's Parallax by default, and an empty id turns them off", () => {
+  const id = (value?: string) => loadSettings({ WS_SECRET: "private-secret", COINGECKO_ID: value }).coingeckoId;
+
+  assert.equal(id(undefined), "parallax-2");
+  assert.equal(id(" Some-Coin "), "some-coin");
+  assert.equal(id(""), null);
+  assert.equal(id("../x?y"), null);
+});

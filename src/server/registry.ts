@@ -284,9 +284,9 @@ export class Registry {
     return [...this.nodes.values()].map((node) => node.toPublic());
   }
 
-  /** recordReading adds a reading of the node list's figures, and the recommended fee, to the trends. */
-  recordReading(gasPrice: string | null, now = Date.now()): void {
-    this.readings.record(summarize(this.all()), gasPrice, now);
+  /** recordReading adds a reading of the node list's figures, the recommended fee and the LAX price, to the trends. */
+  recordReading(gasPrice: string | null, now = Date.now(), usd: number | null = null): void {
+    this.readings.record(summarize(this.all()), gasPrice, now, usd);
   }
 
   charts(now = Date.now()): Charts {

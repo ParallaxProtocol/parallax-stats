@@ -46,6 +46,10 @@ export interface Settings {
   secretsFile: string | null;
   /** Known mining pools by coinbase address (lowercase). */
   miningPools: Map<string, MiningPool>;
+  /** The block explorer's address, without a trailing slash; null when not set. */
+  explorerUrl: string | null;
+  /** The coin's id on CoinGecko, for its price; null to show none. */
+  coingeckoId: string | null;
 }
 
 /** A private secret, and the node names it may verify: any when `names` is null. */
@@ -162,6 +166,15 @@ export function miningPools(value: string | undefined): Map<string, MiningPool> 
   return pools;
 }
 
+/** coingeckoId reads COINGECKO_ID: Parallax's id when unset, none when empty or malformed. */
+function coingeckoId(value: string | undefined): string | null {
+  if (value === undefined) return "parallax-2";
+
+  const id = value.trim().toLowerCase();
+
+  return /^[a-z0-9-]{1,64}$/.test(id) ? id : null;
+}
+
 /** inList reports whether an address matches, accepting either IP family. */
 export function inList(list: BlockList, address: string): boolean {
   if (isIPv4(address)) return list.check(address, "ipv4");
@@ -204,5 +217,8 @@ export function loadSettings(env: Env = process.env): Settings {
     // Beside the saved state by default, on the volume that survives redeploys
     secretsFile: env.SECRETS_FILE?.trim() || (env.DATA_DIR?.trim() ? join(env.DATA_DIR.trim(), "secrets") : null),
     miningPools: miningPools(env.MINING_POOLS),
+    explorerUrl: websiteURL(env.EXPLORER_URL?.trim() ?? "")?.replace(/\/+$/, "") ?? null,
+    // Parallax by default; set empty to show no price
+    coingeckoId: coingeckoId(env.COINGECKO_ID),
   };
 }

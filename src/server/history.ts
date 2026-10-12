@@ -895,6 +895,8 @@ export class History {
 
     return {
       height: recent.map((item) => item.height),
+      timestamp: recent.map((item) => item.block.timestamp),
+      miner: recent.map((item) => item.block.miner),
       blocktime: recent.map((item) => item.block.time / 1000),
       avgBlocktime: this.avgBlocktime(minerWindow),
       difficulty: recent.map((item) => item.block.difficulty),

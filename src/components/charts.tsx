@@ -653,7 +653,7 @@ export function Propagation({ stats }: { stats: PropagationStats }) {
 const significant = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 });
 
 /** formatSmallLax renders a fee-sized amount of LAX to three significant digits: 0.000441. */
-function formatSmallLax(lax: number): string {
+export function formatSmallLax(lax: number): string {
   if (lax === 0) return "0";
   if (lax >= 1) return lax.toFixed(lax >= 100 ? 0 : 2);
 
@@ -771,7 +771,7 @@ function Donut({ slices, total, active, onActive }: { slices: Slice[]; total: nu
   const starts = slices.map((_, i) => slices.slice(0, i).reduce((sum, s) => sum + (s.blocks / total) * circumference, 0));
 
   return (
-    <svg viewBox="0 0 120 120" className="size-32 shrink-0 -rotate-90 sm:size-36" role="img" aria-label="Share of recent blocks by miner">
+    <svg viewBox="0 0 120 120" className="size-32 shrink-0 -rotate-90 sm:size-36 xl:size-44" role="img" aria-label="Share of recent blocks by miner">
       {slices.map((slice, i) => {
         const length = (slice.blocks / total) * circumference;
 
@@ -804,7 +804,7 @@ function Donut({ slices, total, active, onActive }: { slices: Slice[]; total: nu
  * majority of recent blocks, each one's share in a donut, and the largest
  * miners by name. A known pool's addresses count as one miner.
  */
-export function Decentralization({ charts }: { charts: Charts | null }) {
+export function Decentralization({ charts, className = "" }: { charts: Charts | null; className?: string }) {
   const c = charts ?? EMPTY_CHARTS;
   // A server from before the weekly window sends no count: its miners cover the charted blocks
   const total = typeof c.minerBlocks === "number" ? c.minerBlocks : c.height.length;
@@ -842,6 +842,7 @@ export function Decentralization({ charts }: { charts: Charts | null }) {
 
   return (
     <Tile
+      className={className}
       tone={tone}
       title="Decentralization"
       readout={total ? (fullWeek ? "last 7 days" : `last ${formatInt(total)} blocks`) : undefined}
@@ -869,8 +870,9 @@ export function Decentralization({ charts }: { charts: Charts | null }) {
         <Waiting />
       ) : (
         <div className="flex flex-1 flex-col gap-4">
-          <div className="flex items-center gap-5">
-            <div className="relative">
+          {/* Beside the donut, and under it on wide screens, where the tile spans two rows */}
+          <div className="flex items-center gap-5 xl:flex-col xl:items-stretch xl:gap-6">
+            <div className="relative xl:self-center">
               <Donut slices={slices} total={total} active={active} onActive={setActive} />
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-2xl leading-none tabular-nums">{formatInt(c.minerCount)}</span>
@@ -951,6 +953,8 @@ export function Decentralization({ charts }: { charts: Charts | null }) {
 
 export const EMPTY_CHARTS: Charts = {
   height: [],
+  timestamp: [],
+  miner: [],
   blocktime: [],
   avgBlocktime: 0,
   difficulty: [],
@@ -966,5 +970,5 @@ export const EMPTY_CHARTS: Charts = {
   propagation: { samples: 0, avg: 0, p50: 0, p90: 0, p99: 0, bands: [0, 0, 0, 0] },
   health: { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null, lastDeepReorg: null, split: null },
   avgHashrate: 0,
-  trends: { start: [], blocktime: [], hashrate: [], difficulty: [], active: [], synced: [], gasPrice: [], peerLatency: [], uptime: [] },
+  trends: { start: [], blocktime: [], hashrate: [], difficulty: [], active: [], synced: [], gasPrice: [], peerLatency: [], uptime: [], pending: [], price: [] },
 };

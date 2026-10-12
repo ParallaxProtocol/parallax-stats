@@ -9,7 +9,7 @@ import { compareParts, parseVersion } from "@/lib/version";
 import { useServerNow } from "./live/provider";
 import { Label, Plate } from "./plate";
 
-function Heading({ id, title, readout }: { id: string; title: string; readout?: string }) {
+export function Heading({ id, title, readout }: { id: string; title: string; readout?: ReactNode }) {
   return (
     <div className="flex items-baseline justify-between gap-3">
       <Label as="h2">
