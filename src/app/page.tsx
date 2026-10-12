@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import Image from "next/image";
 import { Suspense } from "react";
 import { connection } from "next/server";
@@ -14,37 +13,13 @@ import { getPublicNodes, getSnapshot } from "@/server/store";
 const title = "Network Status | Parallax";
 const description = "Live status of Parallax nodes: block times, hashrate, difficulty, propagation and sync state.";
 
-/**
- * Absolute links in the page head (the link preview image) need the public
- * address, which only the request knows behind a proxy: SITE_URL when set,
- * else the forwarded host. Read per request, as the address can differ
- * between deployments of the same image. The page renders per request
- * anyway (LiveDashboard), so this costs no prerendering.
- */
-async function siteURL(): Promise<URL | undefined> {
-  if (process.env.SITE_URL) return new URL(process.env.SITE_URL);
-
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const proto = h.get("x-forwarded-proto")?.split(",")[0].trim() ?? "https";
-
-  try {
-    return host ? new URL(`${proto}://${host}`) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
-export async function generateMetadata(): Promise<Metadata> {
-  return {
-    title,
-    description,
-    metadataBase: await siteURL(),
-    openGraph: { type: "website", siteName: "Parallax", title, description },
-    // X falls back to the Open Graph image
-    twitter: { card: "summary_large_image", title, description },
-  };
-}
+export const metadata: Metadata = {
+  title,
+  description,
+  openGraph: { type: "website", siteName: "Parallax", title, description },
+  // X falls back to the Open Graph image
+  twitter: { card: "summary_large_image", title, description },
+};
 
 export default function Page() {
   return (
