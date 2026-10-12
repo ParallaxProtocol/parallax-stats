@@ -658,7 +658,7 @@ export function ClientVersions({
                   ]
                     .filter(Boolean)
                     .join(" · ")
-                : "Online nodes on each release. Hover a release to see when it came out, or open its notes."}
+                : null}
             </p>
           </div>
 
@@ -682,7 +682,7 @@ export function ClientVersions({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-1.5 self-start border border-border px-3 py-1.5 text-xs transition-colors hover:bg-foreground/5"
               >
-                Get {latestLabel}
+                Get Parallax {latestLabel}
                 <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
                   <path d="M6 3.5h6.5V10M12.5 3.5 4 12" strokeLinecap="round" strokeLinejoin="round" />
                 </svg>

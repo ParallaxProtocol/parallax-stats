@@ -379,11 +379,6 @@ function TimelineBody({ log }: { log: IncidentLog }) {
 
         {/* What the pointer is over: a line of its own, so the rows never move */}
         <p className="min-h-5 text-xs text-muted-foreground sm:pl-[10rem]">
-          <span className="group-data-[hover]:hidden">
-            Recording since {dayFormat.format(log.since)}
-            {log.rebuiltFrom !== null && log.rebuiltFrom < log.since && `; stalls and mining majority rebuilt from ${dayFormat.format(log.rebuiltFrom)}`}. Hover or
-            drag along a row to see what was happening.
-          </span>
           {/* Written by the pointer handler, never by a render */}
           <span ref={caption} className="hidden group-data-[hover]:inline" />
         </p>

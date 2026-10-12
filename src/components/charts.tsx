@@ -351,11 +351,6 @@ export function TrendLine({
           );
         }}
       </Plot>
-      {sparse && (
-        <span className="pointer-events-none absolute bottom-0 left-0 font-mono text-[10px] text-muted-foreground">
-          The trend fills in as readings arrive
-        </span>
-      )}
     </div>
   );
 }

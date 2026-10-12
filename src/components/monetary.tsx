@@ -84,9 +84,6 @@ function Halving({ height }: { height: number }) {
       <p className="text-sm">
         Expected around <span className="font-semibold">{monthYear.format(now + remainingMs)}</span>, in about{" "}
         {formatSpan(remainingMs)}
-        <span className="block text-xs text-muted-foreground">
-          at the 10 minute block time that difficulty adjustment holds
-        </span>
       </p>
 
       <div className="flex flex-col gap-1.5">
