@@ -133,7 +133,8 @@ export function NetworkStatus({ log, alerts }: { log: IncidentLog | null; alerts
               : "All clear"}
         </span>
       </div>
-      {showing.length > 0 && <Alerts alerts={showing} />}
+      {/* Edge to edge across the card */}
+      {showing.length > 0 && <Alerts alerts={showing} className="-mx-5" />}
       {/* Dismissed ones in a line each, still there to bring back */}
       {dismissed.length > 0 && (
         <ul className="flex flex-col gap-1.5">
@@ -157,7 +158,8 @@ export function NetworkStatus({ log, alerts }: { log: IncidentLog | null; alerts
           All clear: nothing needs attention right now.
         </p>
       )}
-      <div className="border-t border-border pt-5">
+      {/* A band's own hairline already closes off the alerts above; otherwise a rule sets the history apart */}
+      <div className={showing.length > 0 && dismissed.length === 0 ? "" : "border-t border-border pt-5"}>
         <Timeline log={log} />
       </div>
     </Plate>

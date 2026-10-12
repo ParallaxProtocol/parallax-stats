@@ -32,8 +32,8 @@ const MINING_POOL_STATS = "https://miningpoolstats.stream/parallax";
 export type Tone = "critical" | "warn" | "info";
 
 /**
- * Each tone's surface, as on the plates: square, a hairline border in the
- * tone, a severity bar down the leading edge and a wash fading from it.
+ * Each tone's surface, as on the plates: square, hairlines in the tone, a
+ * severity bar down the leading edge and a wash fading from it.
  */
 const TONE: Record<Tone, { box: string; bar: string; icon: string; ink: string; label: string }> = {
   critical: {
@@ -123,7 +123,10 @@ export interface Alert {
   restore?: () => void;
 }
 
-/** Banner is one alert across the top of the page: what happened, why it matters and the facts behind it. */
+/**
+ * Banner is one alert as a band across the status card, edge to edge:
+ * what happened, why it matters and the facts behind it.
+ */
 function Banner({ alert, index }: { alert: Alert; index: number }) {
   const { tone, icon, title, body, ask, facts, action, dismiss } = alert;
   const [leaving, setLeaving] = useState(false);
@@ -139,15 +142,16 @@ function Banner({ alert, index }: { alert: Alert; index: number }) {
   return (
     // The wrapper opens and closes the banner's space, so the page below moves smoothly
     <div
-      className={`alert-banner ${leaving ? "alert-banner-leave" : enter ? "alert-banner-enter" : ""}`}
+      // Stacked bands share a hairline rather than doubling it
+      className={`alert-banner ${index > 0 ? "-mt-px" : ""} ${leaving ? "alert-banner-leave" : enter ? "alert-banner-enter" : ""}`}
       style={{ animationDelay: enter && !leaving ? `${index * 90}ms` : undefined }}
       onAnimationEnd={(e) => {
         if (e.animationName === "alert-out" && e.target === e.currentTarget) dismiss?.();
       }}
     >
-      <section role="status" className={`relative flex flex-col gap-3 border py-3.5 pr-4 pl-5 sm:flex-row sm:items-center sm:gap-6 ${TONE[tone].box}`}>
-        <span aria-hidden className={`absolute inset-y-0 -left-px w-0.5 ${TONE[tone].bar}`} />
-        <div className={`flex min-w-0 flex-1 items-start gap-3.5 ${dismiss ? "pr-8 sm:pr-0" : ""}`}>
+      <section role="status" className={`relative flex flex-col gap-3 border-y px-5 py-4 sm:flex-row sm:items-center sm:gap-6 ${TONE[tone].box}`}>
+        <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${TONE[tone].bar}`} />
+        <div className="flex min-w-0 flex-1 items-start gap-3.5">
           {/* A critical alert's icon pulses a few times as it arrives, then rests */}
           <span
             className={`relative mt-0.5 flex size-8 shrink-0 items-center justify-center border bg-background/40 ${TONE[tone].icon} ${tone === "critical" && enter ? "alert-pulse" : ""}`}
@@ -178,16 +182,13 @@ function Banner({ alert, index }: { alert: Alert; index: number }) {
           ))}
           {action && <AlertAction action={action} />}
           {dismiss && (
+            // Quieter than the action beside it: an outline only, in muted ink
             <button
               type="button"
               onClick={close}
-              // In the top corner on phones, where the facts wrap below the text; at the end of the row otherwise
-              className="absolute top-3 right-3 inline-flex size-7 items-center justify-center text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground sm:static"
-              aria-label="Dismiss"
+              className="inline-flex h-7 items-center border border-border px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
             >
-              <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-                <path d="m4 4 8 8M12 4l-8 8" strokeLinecap="round" />
-              </svg>
+              Dismiss
             </button>
           )}
         </div>
@@ -420,14 +421,14 @@ export function useAlerts({
   return alerts.sort((a, b) => SEVERITY[a.tone] - SEVERITY[b.tone]);
 }
 
-/** Alerts calls out what needs attention at the top of the page, as banners. */
-export function Alerts({ alerts: all }: { alerts: Alert[] }) {
+/** Alerts calls out what needs attention, as bands stacked into one strip. */
+export function Alerts({ alerts: all, className = "" }: { alerts: Alert[]; className?: string }) {
   const alerts = all.filter((alert) => !alert.dismissed);
 
   if (alerts.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={`flex flex-col ${className}`}>
       {alerts.map((alert, i) => (
         <Banner key={alert.key} alert={alert} index={i} />
       ))}
