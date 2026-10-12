@@ -2,7 +2,7 @@
 // page and the sections they are about are tinted by the same rules.
 
 import { STALL_MS } from "./format.ts";
-import { PROPAGATION_BANDS, type Charts, type ChainHealth, type PropagationStats } from "./protocol.ts";
+import { PROPAGATION_BANDS, TARGET_BLOCK_TIME, type Charts, type ChainHealth, type PropagationStats } from "./protocol.ts";
 
 export type Level = "warn" | "critical";
 
@@ -18,6 +18,15 @@ export const MAJORITY_MIN_BLOCKS = 10;
 /** Blocks taking longer than these to reach most verified nodes are slow, and far too slow. */
 export const SLOW_SPREAD_MS = PROPAGATION_BANDS[1];
 export const VERY_SLOW_SPREAD_MS = PROPAGATION_BANDS[2];
+
+/**
+ * staleChance is the chance another miner finds a competing block while one
+ * takes `ms` to reach the network: blocks come as a Poisson process at the
+ * target block time.
+ */
+export function staleChance(ms: number): number {
+  return 1 - Math.exp(-ms / 1000 / TARGET_BLOCK_TIME);
+}
 
 /** stallLevel: no block for longer than the stall threshold. */
 export function stallLevel(foundAt: number, now: number): Level | null {

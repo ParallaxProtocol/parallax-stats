@@ -519,6 +519,12 @@ test("a competing block a trusted node saw counts as stale; made-up forks do not
     health.recentStale.map((s) => s.height),
     [10],
   );
+  // The block strip gets every stale height, and the heights the window spans
+  assert.deepEqual(
+    health.stale?.map((s) => s.height),
+    [10],
+  );
+  assert.deepEqual(health.heights, { from: 10, to: 10 });
 });
 
 test("a node switching blocks at a height, or building on a new parent, is a reorg", () => {

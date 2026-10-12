@@ -6,7 +6,7 @@ import { onMainnet, summarize } from "@/lib/derive";
 import { majorityLevel, spreadLevel } from "@/lib/alert-levels";
 import { formatInt } from "@/lib/format";
 import type { Snapshot } from "@/lib/protocol";
-import type { Release, ReleaseCommits } from "@/lib/releases";
+import type { PublishedRelease, Release, ReleaseCommits } from "@/lib/releases";
 import type { WorldMap } from "@/lib/world";
 import { About } from "./about";
 import { AlertCount, useAlerts } from "./alerts";
@@ -31,16 +31,18 @@ export function Dashboard({
   publicNodes,
   latestRelease,
   releaseCommits,
+  releases,
 }: {
   initial: Snapshot;
   world: WorldMap;
   publicNodes: boolean;
   latestRelease: Release | null;
   releaseCommits: ReleaseCommits;
+  releases: PublishedRelease[];
 }) {
   return (
     <LiveProvider initial={initial}>
-      <Live world={world} publicNodes={publicNodes} latestRelease={latestRelease} releaseCommits={releaseCommits} />
+      <Live world={world} publicNodes={publicNodes} latestRelease={latestRelease} releaseCommits={releaseCommits} releases={releases} />
     </LiveProvider>
   );
 }
@@ -50,11 +52,13 @@ function Live({
   publicNodes,
   latestRelease,
   releaseCommits,
+  releases,
 }: {
   world: WorldMap;
   publicNodes: boolean;
   latestRelease: Release | null;
   releaseCommits: ReleaseCommits;
+  releases: PublishedRelease[];
 }) {
   const { nodes, charts, gasPrice, pools, explorer, price, incidents, connection, latency } = useLive();
   const summary = useMemo(() => summarize(nodes), [nodes]);
@@ -121,6 +125,8 @@ function Live({
           <FigureTile figure={figure.hashprice} start={start} />
           <FigureTile figure={figure.security} start={start} />
           <Confirmations charts={charts} className="sm:col-span-2 xl:col-span-1" />
+          {/* Beside how long to wait: whether confirmed blocks have been undone */}
+          <StaleBlocks health={charts?.health ?? null} propagation={charts?.propagation} className="sm:col-span-2 xl:col-span-4" />
         </div>
       </Section>
       <Section id="blocks" sections={sections}>
@@ -139,14 +145,15 @@ function Live({
       </Section>
       {/* Last: the node list grows with the network, and would push anything below it out of reach */}
       <Section id="nodes" sections={sections}>
-        <div className={FOUR}>
+        {/* The four tiles beside the map share one row height: equal fractions settle at the tallest. On
+            two columns the map takes the first row; on four it spans the two; client versions comes after */}
+        <div className={`${FOUR} sm:grid-rows-[auto_1fr_1fr_auto] xl:grid-rows-[1fr_1fr_auto]`}>
           <NodeMap world={world} nodes={nodes} bestBlock={summary.bestBlock} className="sm:col-span-2 xl:row-span-2" />
           <FigureTile figure={figure.active} start={start} />
           <FigureTile figure={figure.latency} start={start} />
           <FigureTile figure={figure.uptime} start={start} />
           <Propagation stats={c.propagation} />
-          <ClientVersions nodes={nodes} latestRelease={latestRelease} className="sm:col-span-2" />
-          <StaleBlocks health={charts?.health ?? null} className="sm:col-span-2" />
+          <ClientVersions nodes={nodes} latestRelease={latestRelease} releases={releases} className="sm:col-span-2 xl:col-span-4" />
         </div>
         <NodeTable nodes={nodes} bestBlock={summary.bestBlock} publicNodes={publicNodes} releaseCommits={releaseCommits} />
       </Section>

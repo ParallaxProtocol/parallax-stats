@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { formatPressure, gradePressure, hashpriceUnit, mempoolPressure, shortVersion } from "../src/lib/format.ts";
+import { parsePlatform } from "../src/lib/version.ts";
 
 const releases = { "v2.1.2": "1dea7a088142f54c80c41fd3ba3d617ca408bf18" };
 
@@ -40,4 +41,12 @@ test("mempool pressure is the room waiting transactions need, as a share of a bl
   assert.equal(gradePressure(0.2), "good");
   assert.equal(gradePressure(1.5), "warn");
   assert.equal(gradePressure(2.5), "critical");
+});
+
+test("a client string's platform is its operating system and processor", () => {
+  assert.equal(parsePlatform("Parallax/v2.1.2-stable-1dea7a08/darwin-arm64/go1.27.2"), "macOS ARM");
+  assert.equal(parsePlatform("Parallax/v2.1.0-stable/linux-amd64/go1.27.1"), "Linux x64");
+  assert.equal(parsePlatform("Parallax/v2.1.0/windows-386/go1.27"), "Windows x86");
+  assert.equal(parsePlatform("Parallax/v2.1.0/plan9-mips/go1.27"), "plan9 mips");
+  assert.equal(parsePlatform("something else"), "unknown");
 });

@@ -37,6 +37,8 @@ const REORG_GROUP_MS = 2 * 60 * 1000;
 const REORG_PERIOD_MS = 24 * 60 * 60 * 1000;
 const MAX_REORG_EVENTS = 200;
 const RECENT_STALE = 5;
+/** Stale heights sent for the block strip, newest first: far more than a healthy window holds. */
+const MAX_STALE = 500;
 const ZERO_HASH = "0x" + "0".repeat(64);
 
 // Forks kept per height. Only trusted nodes can exceed it, so untrusted
@@ -524,6 +526,11 @@ export class History {
       window: this.items.length,
       staleBlocks,
       recentStale: stale.slice(0, RECENT_STALE),
+      stale: stale.slice(0, MAX_STALE),
+      reorgEvents: counted
+        .filter((e) => this.items.length > 0 && e.height >= this.items.at(-1)!.height)
+        .map((e) => ({ height: e.height, at: e.at, nodes: e.nodes.size, depth: e.depth })),
+      heights: this.items.length > 0 ? { from: this.items.at(-1)!.height, to: this.items[0].height } : null,
       reorgs: counted.filter((e) => e.at >= since).length,
       since,
       lastReorg: last ? { height: last.height, at: last.at, nodes: last.nodes.size, depth: last.depth } : null,

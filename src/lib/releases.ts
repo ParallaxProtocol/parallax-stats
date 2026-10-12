@@ -1,8 +1,9 @@
-// parallaxd releases, from GitHub: the latest one, and the commit each
-// release tag points at. Fetched on the server and cached, so every viewer
-// shares the requests: unauthenticated GitHub API calls are limited to 60
-// an hour per address, and refreshing both every 10 minutes uses 12 of
-// them while a new release shows up soon after it is published.
+// parallaxd releases, from GitHub: the latest one, every release with when
+// it was published, and the commit each release tag points at. Fetched on
+// the server and cached, so every viewer shares the requests:
+// unauthenticated GitHub API calls are limited to 60 an hour per address,
+// and refreshing all three every 10 minutes uses 18 of them while a new
+// release shows up soon after it is published.
 
 import { cacheLife } from "next/cache";
 
@@ -13,6 +14,7 @@ export interface Release {
 }
 
 const LATEST = "https://api.github.com/repos/ParallaxProtocol/parallax/releases/latest";
+const RELEASES = "https://api.github.com/repos/ParallaxProtocol/parallax/releases?per_page=50";
 const TAGS = "https://api.github.com/repos/ParallaxProtocol/parallax/tags?per_page=100";
 
 /** fetchLatestRelease throws on failure, so a failed lookup is never cached. */
@@ -45,6 +47,48 @@ export async function getLatestRelease(): Promise<Release | null> {
     return await fetchLatestRelease();
   } catch {
     return null;
+  }
+}
+
+/** A published release on the ladder of releases. */
+export interface PublishedRelease extends Release {
+  /** When it was published, ms. */
+  publishedAt: number;
+}
+
+/** fetchReleases throws on failure, so a failed lookup is never cached. */
+async function fetchReleases(): Promise<PublishedRelease[]> {
+  "use cache";
+  cacheLife({ stale: 300, revalidate: 600, expire: 3600 });
+
+  const res = await fetch(RELEASES, {
+    headers: { Accept: "application/vnd.github+json", "User-Agent": "parallax-stats" },
+    signal: AbortSignal.timeout(5000),
+  });
+
+  if (!res.ok) throw new Error(`GitHub releases: HTTP ${res.status}`);
+
+  const list = (await res.json()) as { tag_name?: unknown; html_url?: unknown; published_at?: unknown; draft?: unknown; prerelease?: unknown }[];
+
+  if (!Array.isArray(list)) throw new Error("GitHub releases: unexpected response");
+
+  // Stable releases only, oldest first
+  return list
+    .filter((r) => !r.draft && !r.prerelease && typeof r.tag_name === "string" && /^v\d+\.\d+\.\d+$/.test(r.tag_name))
+    .map((r) => ({
+      tag: r.tag_name as string,
+      url: typeof r.html_url === "string" ? r.html_url : "https://github.com/ParallaxProtocol/parallax/releases",
+      publishedAt: typeof r.published_at === "string" ? Date.parse(r.published_at) || 0 : 0,
+    }))
+    .sort((a, b) => a.publishedAt - b.publishedAt);
+}
+
+/** getReleases returns the stable releases, oldest first, or none while GitHub cannot be reached. */
+export async function getReleases(): Promise<PublishedRelease[]> {
+  try {
+    return await fetchReleases();
+  } catch {
+    return [];
   }
 }
 

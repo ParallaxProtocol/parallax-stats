@@ -175,6 +175,12 @@ export interface ChainHealth {
   staleBlocks: number;
   /** The latest heights with a stale block, newest first. */
   recentStale: { height: number; at: number }[];
+  /** Every height in the window with a stale block, newest first; missing from servers before the block strip. */
+  stale?: { height: number; at: number }[];
+  /** The reorganizations within the window's heights, oldest first; missing likewise. */
+  reorgEvents?: { height: number; at: number; nodes: number; depth: number }[];
+  /** The window's lowest and highest heights; null while it is empty, missing likewise. */
+  heights?: { from: number; to: number } | null;
   /** Reorganizations seen since `since`. */
   reorgs: number;
   /** Server time the reorg count starts: 24 hours ago, or when the dashboard started. */

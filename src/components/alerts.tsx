@@ -7,6 +7,7 @@ import {
   majority,
   reorgLevel,
   SLOW_SPREAD_MS,
+  staleChance,
   stallLevel,
   VERY_DEEP_REORG,
   VERY_SLOW_SPREAD_MS,
@@ -359,7 +360,6 @@ export function useAlerts({
 
   // Blocks slow to reach the network: the chance a competing block is found meanwhile
   const spread = charts?.propagation.spread ?? null;
-  const staleChance = (ms: number) => `${(100 * (1 - Math.exp(-ms / 1000 / 600))).toFixed(1)}%`;
 
   if (spread && spread.median > SLOW_SPREAD_MS) {
     alerts.push({
@@ -367,7 +367,7 @@ export function useAlerts({
       tone: spread.median > VERY_SLOW_SPREAD_MS ? "critical" : "warn",
       icon: "spread",
       title: `Blocks are taking ${formatMs(spread.median)} to reach most nodes.`,
-      body: `Slow propagation raises the chance of stale blocks, here to about ${staleChance(spread.median)}, and favours the largest miners.`,
+      body: `Slow propagation raises the chance of stale blocks, here to about ${(staleChance(spread.median) * 100).toFixed(1)}%, and favours the largest miners.`,
       facts: [`Last ${plural(spread.blocks, "block")}`],
     });
   } else if (spread?.slowMiner) {
