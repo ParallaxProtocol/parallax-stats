@@ -16,6 +16,15 @@ export function compareParts(a: number[] | null, b: number[] | null): number {
   return 0;
 }
 
+/**
+ * reportsSyncing tells whether a client's syncing flag can be believed.
+ * Releases before v2.1.2 send it reversed, a bug the reporter inherited from
+ * go-ethereum's ethstats; an unknown version may be one of them.
+ */
+export function reportsSyncing(client: string): boolean {
+  return compareParts(parseVersion(client).parts, [2, 1, 2]) >= 0;
+}
+
 const OS: Record<string, string> = { linux: "Linux", darwin: "macOS", windows: "Windows", freebsd: "FreeBSD", openbsd: "OpenBSD", android: "Android" };
 const ARCH: Record<string, string> = { amd64: "x64", arm64: "ARM", "386": "x86", arm: "ARM 32-bit", riscv64: "RISC-V" };
 

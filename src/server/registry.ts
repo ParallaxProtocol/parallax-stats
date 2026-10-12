@@ -4,15 +4,18 @@
 import { randomBytes } from "node:crypto";
 import { summarize } from "../lib/derive.ts";
 import { trendStarts, type Block, type Charts, type IncidentLog, type NameStatus, type PublicNode } from "../lib/protocol.ts";
+import { reportsSyncing } from "../lib/version.ts";
 import { History, type Head, type HistoryRequest, type HistoryState } from "./history.ts";
 import { Incidents, observe, type IncidentsState } from "./incidents.ts";
 import { NodeRecord, type Login, type NodeState } from "./node.ts";
 import { Readings, type ReadingsState } from "./readings.ts";
-import { cleanId, type ReportedBlock } from "./sanitize.ts";
+import { cleanId, type ReportedBlock, type ReportedStats } from "./sanitize.ts";
 import type { Settings } from "./settings.ts";
 
 /** A node's reports start counting toward propagation once it has been connected this long. */
 const PROPAGATION_WARMUP_MS = 2 * 60 * 1000;
+/** A node whose flag cannot be believed counts as syncing this many blocks behind the best block. */
+const SYNCING_LAG = 2;
 /** How long to wait for a history answer before asking another node. */
 const HISTORY_REQUEST_TIMEOUT_MS = 2 * 60 * 1000;
 
@@ -208,6 +211,22 @@ export class Registry {
     };
 
     return node.setBlock(block, this.history.nodePropagation(id)) ? node : null;
+  }
+
+  /**
+   * setStats records a node's stats; it returns the node when anything
+   * changed. A node whose syncing flag cannot be believed is syncing when its
+   * head is well behind the best block, so one a block behind while a new
+   * block spreads still counts as synced.
+   */
+  setStats(id: string, stats: ReportedStats): NodeRecord | null {
+    const node = this.nodes.get(id);
+
+    if (!node) return null;
+
+    const syncing = reportsSyncing(node.info.node) ? stats.syncing : this.history.bestBlockNumber() - node.stats.block.number >= SYNCING_LAG;
+
+    return node.setStats({ ...stats, syncing }) ? node : null;
   }
 
   /** addHistory fills the shared history, but only from the node it was requested from. */

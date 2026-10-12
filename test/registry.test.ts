@@ -9,9 +9,9 @@ const settings = loadSettings({ PUBLIC_SECRET: "open", MAX_NODES: "5", MAX_NODES
 let connections = 0;
 
 /** login returns the refusal reason, or null when admitted. */
-function login(nodes: Registry, id: string, ip: string, trusted = false): string | null {
+function login(nodes: Registry, id: string, ip: string, trusted = false, client = ""): string | null {
   try {
-    nodes.add({ id, ip, trusted, connection: ++connections, latency: 0, geo: null, info: { name: id } as never });
+    nodes.add({ id, ip, trusted, connection: ++connections, latency: 0, geo: null, info: { name: id, node: client } as never });
     return null;
   } catch (err) {
     if (err instanceof LoginRefused) return err.message;
@@ -861,4 +861,26 @@ test("a full history is filled enough to rebuild incidents from", () => {
 
   assert.equal(nodes.checkIncidents((2100 * 600 + 60) * 1000), true);
   assert.notEqual(nodes.incidentLog().rebuiltFrom, null);
+});
+
+test("a node whose syncing flag is reversed is syncing when well behind the best block", () => {
+  const nodes = new Registry(settings);
+  const stats = { active: true, mining: false, hashrate: 0, peers: 8, gasPrice: 0, peerLatency: 0 };
+
+  login(nodes, "new", "1.1.1.1", true, "Parallax/v2.1.2-stable-1dea7a08/linux-amd64/go1.27.1");
+  login(nodes, "old", "2.2.2.2", true, "Parallax/v1.1.0-stable-bee11d20/linux-amd64/go1.24.1");
+  login(nodes, "odd", "3.3.3.3", true, "something else");
+  nodes.addBlock("new", block(100));
+  nodes.addBlock("old", block(99));
+  nodes.addBlock("odd", block(98));
+
+  // A release with the fix is believed, whatever its height
+  nodes.setStats("new", { ...stats, syncing: true });
+  assert.equal(nodes.get("new")!.stats.syncing, true);
+
+  // An older or unknown one says syncing when synced: its height decides, one block behind is synced
+  nodes.setStats("old", { ...stats, syncing: true });
+  nodes.setStats("odd", { ...stats, syncing: false });
+  assert.equal(nodes.get("old")!.stats.syncing, false);
+  assert.equal(nodes.get("odd")!.stats.syncing, true);
 });

@@ -390,7 +390,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
 
           if (stats === null) return log.warn("API", "Invalid stats from:", id);
 
-          if (node.setStats(stats)) broadcast({ type: "stats", id: node.viewId, stats: node.basicStats() });
+          if (registry.setStats(id, stats)) broadcast({ type: "stats", id: node.viewId, stats: node.basicStats() });
           break;
         }
 

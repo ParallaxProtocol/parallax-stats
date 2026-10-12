@@ -92,7 +92,7 @@ async function report(id: string, secret: string, headers?: Record<string, strin
   emit(ws, "hello", {
     id,
     secret,
-    info: { name: id, node: "Parallax/v2.1.0-stable/linux-amd64/go1.27.1", net: "2110", canUpdateHistory: true },
+    info: { name: id, node: "Parallax/v2.1.2-stable/linux-amd64/go1.27.1", net: "2110", canUpdateHistory: true },
   });
 
   return ws;
