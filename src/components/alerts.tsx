@@ -62,7 +62,7 @@ const TONE: Record<Tone, { box: string; bar: string; icon: string; ink: string; 
 /** What each kind of alert is about, named in its eyebrow after the severity. */
 const TOPIC: Record<keyof typeof ICON, string> = {
   stall: "Block stall",
-  reorg: "Reorganization",
+  reorg: "Deep reorg",
   split: "Chain split",
   majority: "Mining majority",
   spread: "Slow propagation",

@@ -260,7 +260,7 @@ export interface Incident {
   id: string;
   kind: IncidentKind;
   /** The worst it got. */
-  level: "info" | "warn" | "critical";
+  level: "warn" | "critical";
   /** Server time it started, ms. */
   start: number;
   /** False when it was already under way when records begin, so it started before `start`. */

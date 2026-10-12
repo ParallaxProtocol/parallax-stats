@@ -14,7 +14,7 @@ const KINDS: { kind: IncidentKind; label: string }[] = [
   { kind: "majority", label: "Mining majority" },
   { kind: "spread", label: "Slow propagation" },
   { kind: "split", label: "Chain split" },
-  { kind: "stall", label: "Possible stall" },
+  { kind: "stall", label: "Block stall" },
   { kind: "reorg", label: "Deep reorg" },
 ];
 const LABEL = Object.fromEntries(KINDS.map(({ kind, label }) => [kind, label])) as Record<IncidentKind, string>;
@@ -38,8 +38,8 @@ const WEEK_MS = 7 * DAY;
 /** The narrowest an incident is drawn, in pixels, so a few minutes stay visible over 30 days. */
 const MIN_BAR_PX = 3;
 
-const FILL: Record<Incident["level"], string> = { critical: "bg-critical", warn: "bg-warn", info: "bg-info" };
-const LEVEL: Record<Incident["level"], string> = { critical: "critical", warn: "warning", info: "notice" };
+const FILL: Record<Incident["level"], string> = { critical: "bg-critical", warn: "bg-warn" };
+const LEVEL: Record<Incident["level"], string> = { critical: "critical", warn: "warning" };
 /** Hatching for time before recording began: neither clear nor troubled, just unknown. */
 const UNRECORDED = "repeating-linear-gradient(135deg, var(--border) 0 1px, transparent 1px 5px)";
 
@@ -342,13 +342,22 @@ function TimelineBody({ log }: { log: IncidentLog }) {
     );
   }, [recent, from, now, span, range, picked, recordedFrom, point, leave]);
 
-  const list = useMemo(() => {
-    const shown = all ? recent : recent.slice(0, SHOWN);
+  // What is over, under the range it ended in: what is going on has its banner above, and its bar
+  const past = useMemo(() => recent.filter((incident) => incident.end !== null && incident.end >= from), [recent, from]);
+  const ongoing = recent.length > past.length;
 
-    return recent.length === 0 ? (
-      <p className="border-t border-border pt-4 text-sm text-muted-foreground">No incidents in the {heading.toLowerCase()}.</p>
+  const list = useMemo(() => {
+    const shown = all ? past : past.slice(0, SHOWN);
+
+    return past.length === 0 ? (
+      <p className="border-t border-border pt-4 text-sm text-muted-foreground">
+        {ongoing ? "Nothing else" : "No incidents"} in the {heading.toLowerCase()}.
+      </p>
     ) : (
-      <div className="flex flex-col border-t border-border pt-3">
+      <div className="flex flex-col gap-1 border-t border-border pt-3">
+        <Label as="h4" className="text-[10px]">
+          Earlier
+        </Label>
         <ol className="flex flex-col">
           {shown.map((incident) => (
             <li key={incident.id}>
@@ -371,14 +380,14 @@ function TimelineBody({ log }: { log: IncidentLog }) {
             </li>
           ))}
         </ol>
-        {recent.length > SHOWN && (
+        {past.length > SHOWN && (
           <button type="button" onClick={() => setAll(!all)} className="mt-2 self-start text-xs text-muted-foreground hover:text-foreground">
-            {all ? "Show fewer" : `Show all ${recent.length}`}
+            {all ? "Show fewer" : `Show all ${past.length}`}
           </button>
         )}
       </div>
     );
-  }, [recent, all, chosen, heading, now]);
+  }, [past, ongoing, all, chosen, heading, now]);
 
   return (
     <div className="flex min-w-0 flex-col gap-5">

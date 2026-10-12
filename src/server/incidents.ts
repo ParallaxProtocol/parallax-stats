@@ -24,7 +24,7 @@ const STALL_CONFIRM_MS = 0;
 const MAJORITY_WINDOW_S = 7 * 86_400;
 const MAJORITY_FULL_S = MAJORITY_WINDOW_S - 3_600;
 
-const RANK = { info: 0, warn: 1, critical: 2 } as const;
+const RANK = { warn: 1, critical: 2 } as const;
 
 /** The kinds recorded; saved incidents of any other kind, from an earlier version, are dropped. */
 const KINDS = new Set<IncidentKind>(["majority", "spread", "split", "stall", "reorg"]);

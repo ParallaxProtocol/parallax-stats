@@ -162,7 +162,7 @@ test("saved incidents of a kind no longer recorded are dropped on restore", () =
     rebuiltFrom: null,
     rebuilt: true,
     list: [
-      { id: `unverified:${T0}`, kind: "unverified" as never, level: "info", start: T0, startKnown: true, end: T0 + MIN, detail: "No verified node online", peak: 0 },
+      { id: `unverified:${T0}`, kind: "unverified" as never, level: "info" as never, start: T0, startKnown: true, end: T0 + MIN, detail: "No verified node online", peak: 0 },
       { id: `stall:${T0}`, kind: "stall", level: "critical", start: T0, startKnown: true, end: T0 + 130 * MIN, detail: "No block after #100", peak: 130 * MIN },
     ],
   });
