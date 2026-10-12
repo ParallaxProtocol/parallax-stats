@@ -120,15 +120,20 @@ const COLUMNS: Column[] = [
 ];
 
 /** Cell shows a value in its grade's color; screen readers hear the grade after the value. */
-function Cell({ grade, children, className = "" }: { grade?: Grade; children: ReactNode; className?: string }) {
+function Cell({ grade, title, children, className = "" }: { grade?: Grade; title?: string; children: ReactNode; className?: string }) {
   return (
-    <td className={`px-3 py-3 whitespace-nowrap ${grade ? GRADE_TEXT[grade] : ""} ${className}`}>
+    <td className={`px-3 py-3 whitespace-nowrap ${grade ? GRADE_TEXT[grade] : ""} ${className}`} title={title}>
       <span className="inline-flex items-center gap-1.5">
         {children}
         {grade && <span className="sr-only">({GRADE_NAME[grade]})</span>}
       </span>
     </td>
   );
+}
+
+/** fewPeersHint says how an active node with few peers can get more, and nothing otherwise. */
+function fewPeersHint(active: boolean, peers: number): string | undefined {
+  return active && gradePeers(peers) !== "good" ? "Few peers: opening P2P port 32110 lets other nodes connect to this one" : undefined;
 }
 
 /** MiningStatus is a pickaxe for a mining node, with its hashrate on hover, and a dash otherwise. */
@@ -408,7 +413,7 @@ function Details({
                 <DetailSection
                   title="Activity"
                   rows={[
-                    ["Peers", formatInt(stats.peers)],
+                    ["Peers", formatInt(stats.peers), fewPeersHint(node.stats.active, stats.peers)],
                     ["Latency to peers", stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"],
                     ["Mempool size", formatInt(stats.pending)],
                     ["Mining", stats.mining ? formatHashrate(stats.hashrate) : "no"],
@@ -578,7 +583,9 @@ export function NodeTable({
                         <span title={version || undefined} className="max-w-28 truncate">{version ? shortVersion(version, releaseCommits) : "unknown"}</span>
                       </Cell>
                       <SyncStatus active={active} syncing={stats.syncing} />
-                      <Cell grade={active ? gradePeers(stats.peers) : undefined}>{stats.peers}</Cell>
+                      <Cell grade={active ? gradePeers(stats.peers) : undefined} title={fewPeersHint(active, stats.peers)}>
+                        {stats.peers}
+                      </Cell>
                       <Cell grade={active ? gradePeerLatency(stats.peerLatency) : undefined}>
                         {stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"}
                       </Cell>

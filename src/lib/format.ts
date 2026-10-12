@@ -183,6 +183,11 @@ export function gradePeerLatency(ms: number): Grade {
   return "critical";
 }
 
+/**
+ * gradePeers grades a node's peer count. Two nodes connect only when one of them
+ * accepts incoming connections, and few mainnet nodes do, so most top out at
+ * that few: 4 is well connected for now.
+ */
 export function gradePeers(peers: number): Grade {
   if (peers <= 1) return "critical";
   if (peers < 4) return "warn";
