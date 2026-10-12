@@ -106,9 +106,10 @@ export function figures({
     hashrate: {
       label: "Network hashrate",
       value: charts?.avgHashrate ? formatHashrate(charts.avgHashrate) : "n/a",
+      note: "estimated over the last 24 hours",
       trend: trends.hashrate,
       format: formatHashrate,
-      detail: () => "estimated",
+      detail: () => "estimated over the 24 hours to its end",
       waiting: "Waiting for blocks",
     },
     difficulty: {

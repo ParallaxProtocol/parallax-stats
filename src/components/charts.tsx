@@ -419,7 +419,7 @@ export function BlockTime({ c, block }: { c: Charts; block: (i: number) => strin
     value = active !== null ? (hovered === null ? "n/a" : formatBlockTime(hovered)) : formatBlockTime(c.avgBlocktime);
     qualifier =
       active !== null && start[active] !== undefined
-        ? `${sliceTime(start[active])}, ${hovered === null ? "no data" : "mean"}`
+        ? `${sliceTime(start[active])}, ${hovered === null ? "no data" : "mean over the 24 hours to its end"}`
         : !c.minerBlocks
           ? "target 10 min"
           : c.minerSpan >= 7 * 86_400 - 3_600
@@ -465,7 +465,7 @@ export function BlockTime({ c, block }: { c: Charts; block: (i: number) => strin
             active={active}
             onActive={setActive}
             format={formatBlockTime}
-            label={`Mean block time over the last 7 days, in ${TREND_SLICE_S / 3600} hour slices, from ${formatBlockTime(Math.min(...knownTrend))} to ${formatBlockTime(Math.max(...knownTrend))}`}
+            label={`Mean block time over the 24 hours to the end of each ${TREND_SLICE_S / 3600} hour slice of the last 7 days, from ${formatBlockTime(Math.min(...knownTrend))} to ${formatBlockTime(Math.max(...knownTrend))}`}
           />
         )
       ) : c.height.length === 0 ? (

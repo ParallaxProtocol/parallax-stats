@@ -255,13 +255,16 @@ Tells the caller whether they can report under a node name: `available`,
   parent's. Blocks whose parent is not yet in the history have none. The
   average block time among the top figures covers the last 7 days; the
   Block time chart shows the last 40 blocks and their own average.
-- **Hashrate** is the total difficulty of the newest unbroken run of up to
-  64 blocks over the time they took: a block takes `difficulty` hashes on
-  average.
+- **Hashrate** is the total difficulty of the newest unbroken run of blocks
+  over the last 24 hours, over the time they took: a block takes
+  `difficulty` hashes on average. Blocks come by luck, so a shorter span
+  swings with it: over one 4 hour slice, a steady hashrate can read 20% off.
 - **The figures' 7 day charts** split the week into 4 hour slices, aligned
-  to UTC. Block time, hashrate and difficulty come from the blocks found in
-  each slice: the mean time to their parents, their work over that time,
-  and their mean difficulty. The other figures come from readings the
+  to UTC. Block time, hashrate and difficulty come from the blocks found:
+  the block time and the hashrate pool the blocks of the 24 hours to each
+  slice's end, the mean time to their parents and the estimate above, so
+  luck in a single slice does not swing them; difficulty is the mean of the
+  slice's own blocks. The other figures come from readings the
   server takes every 5 minutes, averaged over each slice; they are kept
   with the rest of the state in `DATA_DIR`, and a slice with no readings,
   while the dashboard was down, is left empty.

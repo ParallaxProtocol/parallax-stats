@@ -19,7 +19,14 @@ import { median } from "../lib/derive.ts";
 import type { ReportedBlock } from "./sanitize.ts";
 
 const MAX_HISTORY = 2000;
-const HASHRATE_WINDOW = 64;
+/**
+ * POOLED_S is the span the hashrate and the block time trend each pool their
+ * blocks over. Blocks come by luck: over one 4 hour slice, about 24 blocks, a
+ * steady hashrate reads up to 20% off; over 24 hours, about 144 blocks,
+ * around 8%.
+ */
+const POOLED_S = 24 * 3600;
+const POOLED_SLICES = POOLED_S / TREND_SLICE_S;
 const TOP_MINERS = 10;
 /** Who mined is judged over a week of blocks: enough that one lucky pool does not swing it. */
 const MINER_WINDOW_S = 7 * 86_400;
@@ -764,8 +771,8 @@ export class History {
 
   /**
    * avgHashrate estimates network hashes per second as the total work of the
-   * newest unbroken run of blocks over the time it took: each block takes
-   * `difficulty` hashes on average.
+   * newest unbroken run of blocks over the last POOLED_S, over the time it
+   * took: each block takes `difficulty` hashes on average.
    */
   private avgHashrate(): number {
     const run: Height[] = [];
@@ -775,7 +782,8 @@ export class History {
 
       run.push(item);
 
-      if (run.length > HASHRATE_WINDOW) break;
+      // The first block from before the window closes it: only the work after it counts
+      if (item.block.timestamp <= run[0].block.timestamp - POOLED_S) break;
     }
 
     if (run.length < 2) return 0;
@@ -789,18 +797,22 @@ export class History {
 
   /**
    * blockTrends works out each trend slice from the blocks found in it, by
-   * their timestamps: the mean time to their parents, the hashrate as
-   * avgHashrate estimates it (their work over that time), and their mean
-   * difficulty. Only blocks whose parent is known count towards the time.
+   * their timestamps. The block time and the hashrate pool the blocks of the
+   * POOLED_S up to each slice's end: the mean time to their parents, and
+   * their work over that time, as avgHashrate estimates it. The difficulty
+   * is the slice's own blocks' mean. Only blocks whose parent is known count
+   * towards the time.
    */
   blockTrends(starts: number[]): Pick<Trends, "blocktime" | "hashrate" | "difficulty"> {
-    const slices = starts.map(() => ({ work: 0, time: 0, timed: 0, difficulty: 0, blocks: 0 }));
-    const first = starts[0] ?? 0;
+    // The slices before the first that its pooled figures reach back over
+    const lead = POOLED_SLICES - 1;
+    const slices = Array.from({ length: lead + starts.length }, () => ({ work: 0, time: 0, timed: 0, difficulty: 0, blocks: 0 }));
+    const first = (starts[0] ?? 0) - lead * TREND_SLICE_S;
 
     for (let i = 0; i < this.items.length; i++) {
       const item = this.items[i];
       // A timestamp ahead of the clock counts in the slice in progress
-      const index = Math.min(starts.length - 1, Math.floor((item.block.timestamp - first) / TREND_SLICE_S));
+      const index = Math.min(slices.length - 1, Math.floor((item.block.timestamp - first) / TREND_SLICE_S));
 
       if (index < 0) continue;
 
@@ -818,10 +830,23 @@ export class History {
       slice.timed++;
     }
 
+    const shown = slices.slice(lead);
+    // Totals over the POOLED_S to each shown slice's end, divided once: a mean of
+    // each slice's own figure would weigh a short, lucky slice as much as a long one
+    const pooled = shown.map((_, i) => {
+      const window = slices.slice(i, i + POOLED_SLICES);
+
+      return {
+        work: window.reduce((sum, s) => sum + s.work, 0),
+        time: window.reduce((sum, s) => sum + s.time, 0),
+        timed: window.reduce((sum, s) => sum + s.timed, 0),
+      };
+    });
+
     return {
-      blocktime: slices.map((s) => (s.timed > 0 ? s.time / s.timed : null)),
-      hashrate: slices.map((s) => (s.time > 0 ? s.work / s.time : null)),
-      difficulty: slices.map((s) => (s.blocks > 0 ? s.difficulty / s.blocks : null)),
+      blocktime: pooled.map((p) => (p.timed > 0 ? p.time / p.timed : null)),
+      hashrate: pooled.map((p) => (p.time > 0 ? p.work / p.time : null)),
+      difficulty: shown.map((s) => (s.blocks > 0 ? s.difficulty / s.blocks : null)),
     };
   }
 

@@ -642,6 +642,60 @@ test("hashrate is the work of the newest unbroken run over its time span", () =>
   assert.equal(nodes.charts().avgHashrate, 100);
 });
 
+test("hashrate covers only the last 24 hours", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+
+  // A block every 10 minutes for 2 days, at twice the difficulty on the second
+  for (let n = 1; n <= 288; n++) nodes.addBlock("a", { ...block(n), timestamp: n * 600, difficulty: n > 144 ? "2000" : "1000" });
+
+  assert.equal(nodes.charts().avgHashrate, 2000 / 600);
+});
+
+test("a lucky slice moves the block time trend by its share of the 24 hours", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+
+  // A block every 10 minutes, except one 4 hour slice of blocks every 5: the block on its start
+  // and 47 fast ones. Then 2 days of regular blocks again
+  const times = [
+    ...Array.from({ length: 1200 }, (_, i) => (i + 1) * 600),
+    ...Array.from({ length: 47 }, (_, i) => 720_000 + (i + 1) * 300),
+  ];
+
+  for (let i = 0; i < 2 * 144; i++) times.push(times.at(-1)! + 600);
+
+  times.forEach((timestamp, i) => nodes.addBlock("a", { ...block(i + 1), timestamp }));
+
+  const { trends } = nodes.charts((times.at(-1)! + 60) * 1000);
+  const lucky = trends.start.indexOf(50 * 14_400);
+
+  assert.ok(lucky > 0);
+  assert.equal(trends.blocktime[lucky - 1], 600);
+  // 120 blocks at 10 minutes in the 5 slices before, pooled with the lucky slice's 48: not its own mean of about 5 minutes
+  assert.ok(Math.abs(trends.blocktime[lucky]! - (5 * 24 * 600 + 600 + 47 * 300) / 168) < 1e-9);
+});
+
+test("each hashrate trend point pools the 24 hours to its slice's end", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+
+  // A block every 10 minutes for 10 days, at twice the difficulty from the start of a slice 2 days from the end
+  for (let n = 1; n <= 1440; n++) nodes.addBlock("a", { ...block(n), difficulty: n > 1152 ? "2000" : "1000" });
+
+  const { trends } = nodes.charts((1440 * 600 + 60) * 1000);
+  const near = (actual: number | null, expected: number) => assert.ok(Math.abs(actual! - expected) < 1e-9, `${actual} is not ${expected}`);
+
+  // Slice 29 is the first with the higher difficulty: its 23 blocks at 2000 and the one on its start at 1000,
+  // pooled with the 5 slices of 24 blocks at 1000 before it, rather than jumping straight to 2000 / 600
+  near(trends.hashrate[28], 1000 / 600);
+  near(trends.hashrate[29], (5 * 24 * 1000 + 1000 + 23 * 2000) / (6 * 24 * 600));
+  near(trends.hashrate[35], 2000 / 600);
+});
+
 test("the 7 day difficulty change compares with the block a week earlier", () => {
   const nodes = new Registry(settings);
 
