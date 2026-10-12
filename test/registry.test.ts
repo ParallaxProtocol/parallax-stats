@@ -8,8 +8,10 @@ const settings = loadSettings({ PUBLIC_SECRET: "open", MAX_NODES: "5", MAX_NODES
 
 let connections = 0;
 
+const CLIENT = "Parallax/v2.1.2-stable-1dea7a08/linux-amd64/go1.27.1";
+
 /** login returns the refusal reason, or null when admitted. */
-function login(nodes: Registry, id: string, ip: string, trusted = false, client = ""): string | null {
+function login(nodes: Registry, id: string, ip: string, trusted = false, client = CLIENT): string | null {
   try {
     nodes.add({ id, ip, trusted, connection: ++connections, latency: 0, geo: null, info: { name: id, node: client } as never });
     return null;
@@ -137,6 +139,19 @@ test("addresses on the trusted list log in verified", () => {
 
   login(nodes, "ops", "9.9.9.9");
   assert.equal(nodes.get("ops")!.trusted, true);
+});
+
+test("verified nodes must run v2.1.2 or newer, whichever way they are verified", () => {
+  const nodes = new Registry(loadSettings({ PUBLIC_SECRET: "open", TRUSTED_IPS: "9.9.9.9" }));
+
+  assert.match(login(nodes, "old", "1.1.1.1", true, "Parallax/v2.1.1-stable-09519094/linux-amd64/go1.27.1")!, /v2\.1\.2 or newer/);
+  assert.match(login(nodes, "odd", "1.1.1.1", true, "something else")!, /v2\.1\.2 or newer/);
+  assert.match(login(nodes, "ops", "9.9.9.9", false, "Parallax/v2.1.0-stable-e87747a4/linux-amd64/go1.27.1")!, /v2\.1\.2 or newer/);
+  assert.equal(login(nodes, "newer", "1.1.1.1", true, "Parallax/v2.2.0-stable/linux-amd64/go1.27.1"), null);
+  assert.equal(nodes.get("old"), undefined);
+
+  // Unverified nodes may run any release
+  assert.equal(login(nodes, "public", "2.2.2.2", false, "Parallax/v2.1.0-stable-e87747a4/linux-amd64/go1.27.1"), null);
 });
 
 test("untrusted nodes cannot introduce heights while a trusted node is online", () => {
@@ -868,8 +883,8 @@ test("a node whose syncing flag is reversed is syncing when well behind the best
   const stats = { active: true, mining: false, hashrate: 0, peers: 8, gasPrice: 0, peerLatency: 0 };
 
   login(nodes, "new", "1.1.1.1", true, "Parallax/v2.1.2-stable-1dea7a08/linux-amd64/go1.27.1");
-  login(nodes, "old", "2.2.2.2", true, "Parallax/v1.1.0-stable-bee11d20/linux-amd64/go1.24.1");
-  login(nodes, "odd", "3.3.3.3", true, "something else");
+  login(nodes, "old", "2.2.2.2", false, "Parallax/v1.1.0-stable-bee11d20/linux-amd64/go1.24.1");
+  login(nodes, "odd", "3.3.3.3", false, "something else");
   nodes.addBlock("new", block(100));
   nodes.addBlock("old", block(99));
   nodes.addBlock("odd", block(98));

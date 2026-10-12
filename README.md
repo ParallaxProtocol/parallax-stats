@@ -132,6 +132,10 @@ secret that matches neither a private secret nor `PUBLIC_SECRET` is
 refused rather than listed unverified, so a mistyped private secret
 fails loudly.
 
+Verified nodes, by private secret or `TRUSTED_IPS`, must run parallaxd
+v2.1.2 or newer. An older release, or a client string with no version,
+is refused at login.
+
 Give each verified operator (your own nodes, a pool, an exchange) a secret
 of their own, so one can be revoked without touching the others, and limit
 it to the names they report under by writing `pattern=secret`, where `*`

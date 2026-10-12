@@ -26,13 +26,13 @@ test("the v2 stats carry the dashboard's figures and alerts", () => {
   const solo = "0x" + "b".repeat(40);
   const nodes = new Registry(loadSettings({ WS_SECRET: "private-secret", MINING_POOLS: `Big Pool=https://pool.example,${pool}` }));
 
-  nodes.add({ id: "seed", ip: "1.1.1.1", trusted: true, connection: 1, latency: 0, geo: null, info: { name: "seed", node: "Parallax/v2.1.1-stable/linux-amd64/go1.27" } as never });
+  nodes.add({ id: "seed", ip: "1.1.1.1", trusted: true, connection: 1, latency: 0, geo: null, info: { name: "seed", node: "Parallax/v2.1.2-stable/linux-amd64/go1.27" } as never });
 
   // 20 blocks, 10 minutes apart, 15 of them by one pool
   for (let n = 1; n <= 20; n++) nodes.addBlock("seed", block(n, n <= 15 ? pool : solo));
 
   const snapshot = { serverTime: 1, nodes: nodes.all(), charts: nodes.charts(), gasPrice: "1000000000", pools: { [pool]: { name: "Big Pool", url: "https://pool.example/" } }, explorer: null, price: null, incidents: null };
-  const stats = publicStats(snapshot, { tag: "v2.1.2", url: "https://example.org/v2.1.2" }, 20 * 600 * 1000 + 60_000);
+  const stats = publicStats(snapshot, { tag: "v2.1.3", url: "https://example.org/v2.1.3" }, 20 * 600 * 1000 + 60_000);
 
   assert.equal(stats.bestBlock?.number, 20);
   assert.equal(stats.bestBlock?.pool, null);
@@ -78,14 +78,14 @@ test("the v2 stats carry the dashboard's figures and alerts", () => {
   // The node behind the latest release, by version and platform
   assert.deepEqual(stats.clientVersions, {
     online: 1,
-    latest: { version: "v2.1.2", url: "https://example.org/v2.1.2" },
+    latest: { version: "v2.1.3", url: "https://example.org/v2.1.3" },
     upToDate: 0,
     behind: 1,
-    versions: [{ version: "v2.1.1", nodes: 1 }],
+    versions: [{ version: "v2.1.2", nodes: 1 }],
     platforms: [{ platform: "Linux x64", nodes: 1 }],
   });
   assert.equal(stats.nodeList[0].name, "seed");
-  assert.equal(stats.nodeList[0].version, "v2.1.1");
+  assert.equal(stats.nodeList[0].version, "v2.1.2");
 
   // The same alerts the page shows: the majority, and a release the node is behind on
   assert.deepEqual(
@@ -95,5 +95,5 @@ test("the v2 stats carry the dashboard's figures and alerts", () => {
       ["release", "info"],
     ],
   );
-  assert.deepEqual(stats.alerts[1].details, { version: "v2.1.2", url: "https://example.org/v2.1.2", behind: 1, online: 1 });
+  assert.deepEqual(stats.alerts[1].details, { version: "v2.1.3", url: "https://example.org/v2.1.3", behind: 1, online: 1 });
 });

@@ -48,6 +48,8 @@ const ADDRESSES = [
 // commits match the GitHub release tags, and a build from source with local
 // changes, whose commit matches no release.
 const VERSIONS = ["v2.1.2-stable-1dea7a08", "v2.1.1-stable-09519094", "v2.1.2-stable-4f2c9e1b", "v2.1.0-stable-e87747a4"];
+// Verified nodes must run v2.1.2 or newer
+const VERIFIED_VERSIONS = VERSIONS.filter((v) => v.startsWith("v2.1.2"));
 
 // Fourteen miners. The first finds SIM_MAJORITY of blocks (default 0.6, so
 // the dashboard shows a critical mining majority; 0 spreads them out), and
@@ -173,7 +175,7 @@ function startNode(index: number): void {
       secret: verified ? privateSecret : "",
       info: {
         name: id,
-        node: `Parallax/${VERSIONS[index % VERSIONS.length]}/linux-amd64/go1.27.1`,
+        node: `Parallax/${verified ? VERIFIED_VERSIONS[index % VERIFIED_VERSIONS.length] : VERSIONS[index % VERSIONS.length]}/linux-amd64/go1.27.1`,
         port: 32110,
         net: "2110",
         protocol: "prl/68, snap/1",

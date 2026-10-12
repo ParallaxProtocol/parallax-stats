@@ -86,13 +86,15 @@ function isReady(ws: Client): boolean {
   return ws.messages.some((m) => JSON.stringify(m) === '{"emit":["ready"]}');
 }
 
-async function report(id: string, secret: string, headers?: Record<string, string>, url = base): Promise<Client> {
+const CLIENT = "Parallax/v2.1.2-stable/linux-amd64/go1.27.1";
+
+async function report(id: string, secret: string, headers?: Record<string, string>, url = base, client = CLIENT): Promise<Client> {
   const ws = await connect("/api", headers, url);
 
   emit(ws, "hello", {
     id,
     secret,
-    info: { name: id, node: "Parallax/v2.1.2-stable/linux-amd64/go1.27.1", net: "2110", canUpdateHistory: true },
+    info: { name: id, node: client, net: "2110", canUpdateHistory: true },
   });
 
   return ws;
@@ -145,6 +147,25 @@ test("public and private secrets log in with different trust", async () => {
 
   pub.close();
   priv.close();
+});
+
+test("a private secret is refused on a release older than v2.1.2, or an unknown one", async () => {
+  const old = await report("old-node", PRIVATE, undefined, base, "Parallax/v2.1.1-stable/linux-amd64/go1.27.1");
+  const unknown = await report("unknown-node", PRIVATE, undefined, base, "Parallax/linux-amd64/go1.27.1");
+  const newer = await report("newer-node", PRIVATE, undefined, base, "Parallax/v2.2.0-stable/linux-amd64/go1.27.1");
+  const pub = await report("old-public-node", "open", undefined, base, "Parallax/v2.1.0-stable/linux-amd64/go1.27.1");
+
+  await waitFor(() => old.closed && unknown.closed && isReady(newer) && isReady(pub));
+  assert.ok(!isReady(old) && !isReady(unknown));
+
+  const nodes = await viewNodes();
+
+  assert.equal(nodes.find((n) => n.id === "old-node"), undefined);
+  assert.equal(nodes.find((n) => n.id === "unknown-node"), undefined);
+  assert.equal(nodes.find((n) => n.id === "newer-node")?.trusted, true);
+
+  newer.close();
+  pub.close();
 });
 
 test("a node without a secret logs in unverified", async () => {

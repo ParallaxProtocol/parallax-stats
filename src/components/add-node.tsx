@@ -237,6 +237,9 @@ export function AddNode({ publicNodes }: { publicNodes: boolean }) {
                     Keep the secret private. The <code className="font-mono text-foreground">wss://</code> keeps it
                     encrypted on the way.
                   </p>
+                  <p className="text-xs text-muted-foreground">
+                    Verified nodes must run parallaxd v2.1.2 or newer; older releases are refused.
+                  </p>
                 </div>
               </>
             )}

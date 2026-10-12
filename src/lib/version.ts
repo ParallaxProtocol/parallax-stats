@@ -25,6 +25,16 @@ export function reportsSyncing(client: string): boolean {
   return compareParts(parseVersion(client).parts, [2, 1, 2]) >= 0;
 }
 
+/** The oldest release a verified node may run. */
+export const MIN_VERIFIED = { label: "v2.1.2", parts: [2, 1, 2] };
+
+/** canVerify tells whether a client runs a release a verified node may run; an unknown version may not. */
+export function canVerify(client: string): boolean {
+  const parts = parseVersion(client).parts;
+
+  return parts !== null && compareParts(parts, MIN_VERIFIED.parts) >= 0;
+}
+
 const OS: Record<string, string> = { linux: "Linux", darwin: "macOS", windows: "Windows", freebsd: "FreeBSD", openbsd: "OpenBSD", android: "Android" };
 const ARCH: Record<string, string> = { amd64: "x64", arm64: "ARM", "386": "x86", arm: "ARM 32-bit", riscv64: "RISC-V" };
 

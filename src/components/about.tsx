@@ -111,7 +111,7 @@ export function About({ compact = false }: { compact?: boolean }) {
           <Section title="Verified and unverified nodes">
             <p className="text-muted-foreground">
               Verified nodes are run by the Parallax team and known operators such as bootnodes, pools and exchanges, and
-              the best block follows them. Anyone else can report too: those nodes appear under a pseudonym, and what
+              the best block follows them. They must run parallaxd v2.1.2 or newer. Anyone else can report too: those nodes appear under a pseudonym, and what
               they report about themselves is not checked.
             </p>
           </Section>

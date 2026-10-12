@@ -4,7 +4,7 @@
 import { randomBytes } from "node:crypto";
 import { summarize } from "../lib/derive.ts";
 import { trendStarts, type Block, type Charts, type IncidentLog, type NameStatus, type PublicNode } from "../lib/protocol.ts";
-import { reportsSyncing } from "../lib/version.ts";
+import { canVerify, MIN_VERIFIED, reportsSyncing } from "../lib/version.ts";
 import { History, type Head, type HistoryRequest, type HistoryState } from "./history.ts";
 import { Incidents, observe, type IncidentsState } from "./incidents.ts";
 import { NodeRecord, type Login, type NodeState } from "./node.ts";
@@ -87,7 +87,8 @@ export class Registry {
   }
 
   /**
-   * add registers a node login. Untrusted logins cannot take over a name
+   * add registers a node login. Trusted logins must run MIN_VERIFIED or
+   * newer. Untrusted logins cannot take over a name
    * that is connected, or was recently connected, from another address,
    * nor any name a trusted node holds, and are capped per address and in
    * total. It throws LoginRefused with the reason.
@@ -97,6 +98,8 @@ export class Registry {
     const existing = this.nodes.get(login.id);
 
     if (s.trustedIPs.includes(login.ip)) login = { ...login, trusted: true };
+
+    if (login.trusted && !canVerify(login.info.node)) throw new LoginRefused(`Verified nodes must run ${MIN_VERIFIED.label} or newer`);
 
     if (existing && !login.trusted) {
       if (existing.trusted) throw new LoginRefused("Name is reserved by a trusted node");

@@ -13,7 +13,7 @@ const settings = loadSettings({ PUBLIC_SECRET: "open", NAME_HOLD_MINUTES: "60" }
 let connections = 0;
 
 function login(nodes: Registry, id: string, ip: string, trusted: boolean, now: number): void {
-  nodes.add({ id, ip, trusted, connection: ++connections, latency: 12, geo: { country: "US", city: "Boston", ll: [42.36, -71.06] }, info: { name: id } as never }, now);
+  nodes.add({ id, ip, trusted, connection: ++connections, latency: 12, geo: { country: "US", city: "Boston", ll: [42.36, -71.06] }, info: { name: id, node: "Parallax/v2.1.2-stable/linux-amd64/go1.27.1" } as never }, now);
 }
 
 function block(number: number, parent = number - 1): ReportedBlock {
