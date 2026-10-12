@@ -21,21 +21,28 @@ let server: Server;
 let hub: Hub;
 let base: string;
 
-before(async () => {
-  log.quiet = true;
-  hub = createHub(
+/** startHub serves a fresh hub on a free port, for the shared one or a test that needs its own state. */
+async function startHub(): Promise<{ hub: Hub; server: Server; base: string }> {
+  const hub = createHub(
     loadSettings({ WS_SECRET: `${PRIVATE}|pool-*=${POOL_SECRET}`, PUBLIC_SECRET: "open", MAX_NODES_PER_IP: "2", CONN_PER_MINUTE: "1000" }),
     { fetchGasPrice: async () => 117_391_737_659n },
   );
-  server = createServer((req, res) => {
+  const server = createServer((req, res) => {
     if (!hub.handleRequest(req, res)) res.end();
   });
+
   server.on("upgrade", (req, socket, head) => {
     if (!hub.handleUpgrade(req, socket, head)) socket.destroy();
   });
 
   await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-  base = `ws://127.0.0.1:${(server.address() as AddressInfo).port}`;
+
+  return { hub, server, base: `ws://127.0.0.1:${(server.address() as AddressInfo).port}` };
+}
+
+before(async () => {
+  log.quiet = true;
+  ({ hub, server, base } = await startHub());
 });
 
 after(() => {
@@ -45,9 +52,9 @@ after(() => {
 
 type Client = WebSocket & { messages: unknown[]; closed: boolean };
 
-function connect(path: string, headers: Record<string, string> = {}): Promise<Client> {
+function connect(path: string, headers: Record<string, string> = {}, url = base): Promise<Client> {
   return new Promise((resolve, reject) => {
-    const ws = new WebSocket(base + path, { headers }) as Client;
+    const ws = new WebSocket(url + path, { headers }) as Client;
 
     ws.messages = [];
     ws.closed = false;
@@ -79,8 +86,8 @@ function isReady(ws: Client): boolean {
   return ws.messages.some((m) => JSON.stringify(m) === '{"emit":["ready"]}');
 }
 
-async function report(id: string, secret: string, headers?: Record<string, string>): Promise<Client> {
-  const ws = await connect("/api", headers);
+async function report(id: string, secret: string, headers?: Record<string, string>, url = base): Promise<Client> {
+  const ws = await connect("/api", headers, url);
 
   emit(ws, "hello", {
     id,
@@ -222,6 +229,40 @@ test("nodes get pongs and history requests in the Primus framing", async () => {
   await waitFor(() => ws.messages.includes("primus::pong::42"));
 
   ws.close();
+});
+
+test("after a restart, history is asked for from the first block, and batch after batch", async () => {
+  // A hub of its own, as after a restart: no history, and no request outstanding from another test
+  const own = await startHub();
+  const ws = await report("refill-node", PRIVATE, undefined, own.base);
+  const requests = () => ws.messages.filter((m) => (m as { emit?: unknown[] }).emit?.[0] === "history") as { emit: [string, { list: number[] }] }[];
+  const hash = (n: number) => "0x" + n.toString(16).padStart(64, "0");
+
+  await waitFor(() => isReady(ws));
+
+  // The head a node reports on login, then its first latency report
+  emit(ws, "block", { block: { number: 3000, hash: hash(3000), difficulty: "1", totalDifficulty: "3000" } });
+  emit(ws, "latency", { latency: "12" });
+
+  const first = (await waitFor(() => requests()[0])).emit[1].list;
+
+  assert.deepEqual([first[0], first.at(-1)], [2950, 2999]);
+
+  // Answering it brings the next batch at once, with no latency report between
+  emit(ws, "history", { history: [...first].reverse().map((n) => ({ number: n, hash: hash(n), difficulty: "1", totalDifficulty: String(n) })) });
+
+  const second = (await waitFor(() => requests()[1])).emit[1].list;
+
+  assert.deepEqual([second[0], second.at(-1)], [2900, 2949]);
+
+  // An answer that fills nothing waits for the next report, rather than being asked again at once
+  emit(ws, "history", { history: [] });
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  assert.equal(requests().length, 2);
+
+  ws.close();
+  own.hub.close();
+  own.server.close();
 });
 
 test("viewers can measure their latency", async () => {

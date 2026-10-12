@@ -919,7 +919,8 @@ export class History {
 
   /** historyRequest lists the most recent missing heights, or null when none are. */
   historyRequest(): HistoryRequest | null {
-    if (this.items.length < 2) return null;
+    // One block, the head a node reports on login, is enough to know which heights to ask for
+    if (this.items.length === 0) return null;
 
     const best = this.bestBlockNumber();
     const present = new Set(this.items.map((item) => item.height));

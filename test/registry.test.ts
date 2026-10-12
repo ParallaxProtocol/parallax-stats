@@ -181,6 +181,15 @@ test("history is only accepted from the node it was requested from", () => {
   assert.equal(nodes.history.bestBlockNumber(), 5);
 });
 
+test("one block, the head a node reports on login, is enough to ask for history", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "a", "1.1.1.1", true);
+  nodes.addBlock("a", block(60));
+
+  assert.deepEqual(nodes.nextHistoryRequest("a")?.list, Array.from({ length: 50 }, (_, i) => 10 + i));
+});
+
 test("history requests list missing heights and never genesis", () => {
   const nodes = new Registry(settings);
 

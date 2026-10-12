@@ -218,6 +218,16 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
       ws.send(JSON.stringify({ emit: data === undefined ? [event] : [event, data] }));
     }
 
+    /** askForHistory asks this connection's node for missing blocks, when it is the one to ask. */
+    function askForHistory(): void {
+      const request = nodeId ? registry.nextHistoryRequest(nodeId) : null;
+
+      if (!request) return;
+
+      emit("history", request);
+      log.info("HIS", "Asked:", nodeId, "for history:", request.min, "-", request.max);
+    }
+
     ws.alive = true;
     ws.on("pong", () => (ws.alive = true));
 
@@ -342,10 +352,16 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
 
         case "history": {
           const blocks = cleanHistory(data.history);
+          const before = registry.history.length;
 
           if (blocks !== null && registry.addHistory(id, blocks)) {
             log.ok("HIS", "Got history from:", id);
             scheduleCharts();
+
+            // Ask for the next batch at once rather than at the node's next latency report, so a
+            // restart refills in seconds. Only after a batch that filled something: a node that
+            // cannot fill a gap waits for its next report, rather than being asked again and again
+            if (registry.history.length > before) askForHistory();
           }
           break;
         }
@@ -362,12 +378,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
 
           if (node.setLatency(latency)) broadcast({ type: "latency", id: node.viewId, latency });
 
-          const request = registry.nextHistoryRequest(id);
-
-          if (request) {
-            emit("history", request);
-            log.info("HIS", "Asked:", id, "for history:", request.min, "-", request.max);
-          }
+          askForHistory();
           break;
         }
       }
