@@ -5,7 +5,6 @@ import { connection } from "next/server";
 import { Dashboard } from "@/components/dashboard";
 import { About } from "@/components/about";
 import { SoundToggle } from "@/components/block-toast";
-import { ThemeToggle } from "@/components/theme-toggle";
 import { getLatestRelease, getReleaseCommits, getReleases } from "@/lib/releases";
 import { getWorld } from "@/lib/world";
 import { getPublicNodes, getSnapshot } from "@/server/store";
@@ -34,7 +33,6 @@ export default function Page() {
           <span className="sr-only">Network Status</span>
         </h1>
         <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-          <ThemeToggle />
           <SoundToggle />
           <About />
         </div>

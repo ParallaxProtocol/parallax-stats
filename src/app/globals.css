@@ -3,7 +3,7 @@
 /* Design tokens follow parallaxprotocol.org (parallax-website/app/globals.css):
    dark first, a warm off-white light theme, the logo gradient as the brand
    accent, square plates on hairline borders. The light theme applies when
-   <html data-theme="light">. */
+   <html data-theme="light">, which the layout sets from the system theme. */
 @custom-variant light (&:where([data-theme="light"], [data-theme="light"] *));
 
 :root {

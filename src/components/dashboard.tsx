@@ -23,7 +23,6 @@ import { Supply } from "./monetary";
 import { NodeMap } from "./node-map";
 import { NodeTable } from "./node-table";
 import { sectionNumber, SectionNav, STATUS_DOT, type SectionLink } from "./section-nav";
-import { ThemeToggle } from "./theme-toggle";
 import { Tooltip } from "./tooltip";
 
 export function Dashboard({
@@ -110,7 +109,6 @@ function Live({
               </a>
             </Tooltip>
             <AlertCount alerts={alerts} />
-            <ThemeToggle compact />
             <SoundToggle compact />
             <About compact />
           </>

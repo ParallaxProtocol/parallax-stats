@@ -1,6 +1,6 @@
 "use client";
 
-// The "?" button beside the theme switch: what this dashboard is, and how
+// The "?" button beside the sound switch: what this dashboard is, and how
 // far its figures reach. Chain figures cover the whole network; node
 // figures cover only the nodes that report here.
 

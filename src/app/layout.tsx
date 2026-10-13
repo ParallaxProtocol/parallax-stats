@@ -23,7 +23,10 @@ export async function generateMetadata(): Promise<Metadata> {
 }
 
 export const viewport: Viewport = {
-  themeColor: "#06070d",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#faf8f5" },
+    { color: "#06070d" },
+  ],
 };
 
 // Renders nothing, but makes every route render per request, which the
@@ -34,8 +37,9 @@ async function PerRequest() {
   return null;
 }
 
-// Applies a saved light theme before first paint, so it never flashes dark
-const themeScript = `try{if(localStorage.getItem("theme")==="light")document.documentElement.dataset.theme="light"}catch(e){}`;
+// Follows the system theme, dark unless it asks for light. Runs before first
+// paint, so a light system never flashes dark, and follows later switches
+const themeScript = `try{const m=matchMedia("(prefers-color-scheme: light)"),s=()=>{if(m.matches)document.documentElement.dataset.theme="light";else delete document.documentElement.dataset.theme};s();m.addEventListener("change",s)}catch(e){}`;
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
