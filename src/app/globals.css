@@ -17,7 +17,12 @@
   --muted-foreground: oklch(0.6 0.01 265);
   --accent: oklch(0.25 0.02 265);
   --border: oklch(1 0 0 / 8%);
-  --land: rgb(148 163 184 / 0.55);
+  /* The node map: countries without nodes, and the steps for more nodes per country */
+  --country: oklch(0.24 0.015 265);
+  --country-1: color-mix(in oklch, var(--brand-mark) 32%, var(--country));
+  --country-2: color-mix(in oklch, var(--brand-mark) 55%, var(--country));
+  --country-3: color-mix(in oklch, var(--brand-mark) 78%, var(--country));
+  --country-4: var(--brand-mark);
   --brand: #23c9c9;
   /* Teal for data marks (bars, lines, dots); --brand stays the text colour */
   --brand-mark: var(--brand);
@@ -57,7 +62,7 @@
   --muted-foreground: oklch(0.556 0 0);
   --accent: oklch(0.95 0.005 80);
   --border: oklch(0 0 0 / 10%);
-  --land: rgb(71 85 105 / 0.55);
+  --country: oklch(0.9 0.005 265);
   --brand: #007c7d;
   /* The main site's light chart teal: brighter than the text teal, still 3:1 on the surface */
   --brand-mark: #0e8f8f;
