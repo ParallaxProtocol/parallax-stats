@@ -344,7 +344,7 @@ function trends(charts: Charts, pay: number) {
   };
 }
 
-/** activeAlerts lists what the page's banners show right now, by the same rules, without per-viewer dismissals. */
+/** activeAlerts lists what the page's banners show right now, by the same rules. */
 export function activeAlerts(snapshot: Snapshot, latestRelease: Release | null, now = Date.now()): ApiAlert[] {
   const { nodes, charts } = snapshot;
   const summary = summarize(nodes);

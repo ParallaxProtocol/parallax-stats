@@ -3,9 +3,11 @@
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode } from "react";
 import { formatMs } from "@/lib/format";
 import type { Incident, IncidentKind, IncidentLog } from "@/lib/protocol";
-import { Alerts, WARNING_DOT, type Alert } from "./alerts";
+import { AnimatePresence, motion, MotionConfig } from "motion/react";
+import { Alerts, type Alert } from "./alerts";
 import { Switch } from "./charts";
 import { useServerNow } from "./live/provider";
+import { SPRING } from "./motion";
 import { Label, Plate } from "./plate";
 import { usePersistent } from "./use-persistent";
 
@@ -40,6 +42,11 @@ const WEEK_MS = 7 * DAY;
 const MIN_BAR_PX = 3;
 
 const FILL: Record<Incident["level"], string> = { critical: "bg-critical", warn: "bg-warn" };
+/** Incident bars, hatched like the unrecorded stretches but in their severity's colour, over a tint of it. */
+const STRIPES: Record<Incident["level"], string> = {
+  critical: "repeating-linear-gradient(135deg, var(--critical) 0 2px, color-mix(in oklch, var(--critical) 30%, transparent) 2px 5px)",
+  warn: "repeating-linear-gradient(135deg, var(--warn) 0 2px, color-mix(in oklch, var(--warn) 30%, transparent) 2px 5px)",
+};
 /** Drawing order where kinds share a row: the critical over the warnings. */
 const DEPTH: Record<Incident["level"], number> = { warn: 0, critical: 1 };
 const LEVEL: Record<Incident["level"], string> = { critical: "critical", warn: "warning" };
@@ -111,14 +118,10 @@ function ticks(range: Range, from: number, to: number): { at: number; label: str
 
 /**
  * NetworkStatus is the first thing on the page: what needs attention now,
- * as the alerts' banners, or that nothing does, and below it what went
- * wrong before.
+ * as the alerts, or that nothing does, and below it what went wrong
+ * before. Alerts start minimized to a line each, and expand to a banner.
  */
 export function NetworkStatus({ log, alerts }: { log: IncidentLog | null; alerts: Alert[] }) {
-  // A dismissed alert still applies: it is never "all clear", only out of the way
-  const showing = alerts.filter((alert) => !alert.dismissed);
-  const dismissed = alerts.filter((alert) => alert.dismissed);
-
   return (
     <Plate as="section" id="incidents" aria-labelledby="status-title" className="flex min-w-0 scroll-mt-16 flex-col gap-5 p-5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
@@ -126,40 +129,23 @@ export function NetworkStatus({ log, alerts }: { log: IncidentLog | null; alerts
           <span id="status-title">Network status</span>
         </Label>
         <span className="text-xs text-muted-foreground">
-          {showing.length > 0
-            ? `${showing.length} ${showing.length === 1 ? "alert" : "alerts"} now`
-            : dismissed.length > 0
-              ? `${dismissed.length} dismissed ${dismissed.length === 1 ? "alert" : "alerts"}`
-              : "All clear"}
+          {alerts.length > 0 ? `${alerts.length} ${alerts.length === 1 ? "alert" : "alerts"} now` : "All clear"}
         </span>
       </div>
-      {/* Edge to edge across the card */}
-      {showing.length > 0 && <Alerts alerts={showing} className="-mx-5" />}
-      {/* Dismissed ones in a line each, still there to bring back */}
-      {dismissed.length > 0 && (
-        <ul className="flex flex-col gap-1.5">
-          {dismissed.map((alert) => (
-            <li key={alert.key} className="flex flex-wrap items-center gap-x-2.5 gap-y-1 text-sm">
-              <span aria-hidden className={`size-2 shrink-0 rounded-full ${WARNING_DOT[alert.tone]}`} />
-              <span>{alert.title}</span>
-              <span className="text-xs text-muted-foreground">dismissed</span>
-              {alert.restore && (
-                <button type="button" onClick={alert.restore} className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline">
-                  Show
-                </button>
-              )}
-            </li>
-          ))}
-        </ul>
-      )}
-      {alerts.length === 0 && (
-        <p className="flex items-center gap-2.5 text-sm">
-          <span aria-hidden className="size-2 rounded-full bg-good" />
-          All clear: nothing needs attention right now.
-        </p>
-      )}
-      {/* A band's own hairline already closes off the alerts above; otherwise a rule sets the history apart */}
-      <div className={showing.length > 0 && dismissed.length === 0 ? "" : "border-t border-border pt-5"}>
+      {/* One slot, so the space stays the same as the last alert leaves and all clear takes its place. Always
+          there, so an alert coming up on a clear page animates in */}
+      <div>
+        {/* Edge to edge across the card when expanded; the lines' own spacing trimmed at the ends */}
+        <Alerts alerts={alerts} className={alerts.length > 0 ? "-my-[3px]" : ""} />
+        {alerts.length === 0 && (
+          <p className="flex items-center gap-2.5 text-sm">
+            <span aria-hidden className="size-2 rounded-full bg-good" />
+            All clear: nothing needs attention right now.
+          </p>
+        )}
+      </div>
+      {/* A rule sets the history apart, the same whichever alerts are expanded */}
+      <div className="border-t border-border pt-5">
         <Timeline log={log} />
       </div>
     </Plate>
@@ -328,10 +314,13 @@ function TimelineBody({ log }: { log: IncidentLog }) {
             {ofKinds.map((incident) => (
               <div
                 key={incident.id}
-                className={`absolute inset-y-0 rounded-[2px] ${FILL[incident.level]} ${
-                  picked?.id === incident.id ? "ring-1 ring-foreground ring-offset-1 ring-offset-card" : ""
-                }`}
-                style={{ left: `${x(incident.start)}%`, width: `${x(incident.end ?? now) - x(incident.start)}%`, minWidth: MIN_BAR_PX }}
+                className={`absolute inset-y-0 rounded-[2px] ${picked?.id === incident.id ? "ring-1 ring-foreground ring-offset-1 ring-offset-card" : ""}`}
+                style={{
+                  left: `${x(incident.start)}%`,
+                  width: `${x(incident.end ?? now) - x(incident.start)}%`,
+                  minWidth: MIN_BAR_PX,
+                  background: STRIPES[incident.level],
+                }}
               />
             ))}
           </div>
@@ -368,13 +357,38 @@ function TimelineBody({ log }: { log: IncidentLog }) {
           "All kinds",
         )}
 
-        {/* Not positioned, so the cursor still measures each row against the whole area */}
-        <div id={kindRows} hidden={!byKind} className="flex flex-col gap-3">
-          {byKind &&
-            KINDS.map(({ kind, label }) => (
-              <div key={kind}>{row([kind], <span className="truncate text-xs sm:pl-[1.125rem]">{label}</span>, label)}</div>
-            ))}
-        </div>
+        {/* Not positioned, so the cursor still measures each row against the whole area. Its space opens and
+            closes on a spring, the rows following one after another; the gap before it is inside, so it
+            eases too */}
+        <MotionConfig reducedMotion="user">
+          <AnimatePresence initial={false}>
+            {byKind && (
+              <motion.div
+                key="kinds"
+                id={kindRows}
+                className="-mt-3"
+                // Clipped only while it moves, so a chosen incident's ring is never cut off once open
+                initial={{ height: 0, opacity: 0, overflow: "hidden" }}
+                animate={{ height: "auto", opacity: 1, transitionEnd: { overflow: "visible" } }}
+                exit={{ height: 0, opacity: 0, overflow: "hidden" }}
+                transition={SPRING}
+              >
+                <div className="flex flex-col gap-3 pt-3">
+                  {KINDS.map(({ kind, label }, i) => (
+                    <motion.div
+                      key={kind}
+                      initial={{ opacity: 0, y: -6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ ...SPRING, delay: i * 0.04 }}
+                    >
+                      {row([kind], <span className="truncate text-xs sm:pl-[1.125rem]">{label}</span>, label)}
+                    </motion.div>
+                  ))}
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </MotionConfig>
 
         {/* The axis, under the rows' timelines */}
         <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)_10rem] sm:gap-x-4">

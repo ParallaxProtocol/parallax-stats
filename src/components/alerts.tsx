@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useId, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { AnimatePresence, motion, MotionConfig } from "motion/react";
 import {
   DEEP_REORG,
   deepReorg,
@@ -19,11 +20,9 @@ import { compareParts, parseVersion } from "@/lib/version";
 import { SOUND_KEY } from "./block-toast";
 import { reorgChime } from "./chime";
 import { useServerNow } from "./live/provider";
+import { FADE_IN, FADE_OUT, SPRING } from "./motion";
 import { usePersistent } from "./use-persistent";
 
-/** A dismissed majority alert comes back after this long, or sooner if the share grows this much. */
-const MAJORITY_SNOOZE_MS = 24 * 60 * 60 * 1000;
-const MAJORITY_REGROWTH = 0.05;
 /** How long the reorganization sound waits, to follow a new block's chime. */
 const REORG_SOUND_DELAY_MS = 700;
 
@@ -115,85 +114,136 @@ export interface Alert {
   ask?: { who: string; what: string };
   facts: string[];
   action?: { href: string; label: string; external?: boolean };
-  /** Present when the viewer may dismiss the alert. */
-  dismiss?: () => void;
-  /** Set while the viewer has dismissed it: it still applies, but shows no banner. */
-  dismissed?: boolean;
-  /** Brings a dismissed alert's banner back. */
-  restore?: () => void;
 }
 
 /**
- * Banner is one alert as a band across the status card, edge to edge:
- * what happened, why it matters and the facts behind it.
+ * AlertItem is one alert in the status card, minimized to a line or
+ * expanded to a band across the card, edge to edge: what happened, why it
+ * matters and the facts behind it. It changes in place: its height eases
+ * from one to the other as they crossfade, so the alerts around it only
+ * glide aside.
  */
-function Banner({ alert, index }: { alert: Alert; index: number }) {
-  const { tone, icon, title, body, ask, facts, action, dismiss } = alert;
-  const [leaving, setLeaving] = useState(false);
-  // Banners there when the page loads simply appear; ones that come up later slide in
-  const [enter] = useState(() => settled);
+function AlertItem({ alert, open, onToggle }: { alert: Alert; open: boolean; onToggle: () => void }) {
+  const { tone, icon, title, body, ask, facts, action } = alert;
+  const expand = useRef<HTMLButtonElement>(null);
+  const collapse = useRef<HTMLButtonElement>(null);
+  const toggled = useRef(false);
+  const line = useRef<HTMLDivElement>(null);
+  const band = useRef<HTMLDivElement>(null);
+  // Both forms' heights, for the alert's own height to ease between: until measured it is the line's
+  const [heights, setHeights] = useState<{ line: number; band: number } | null>(null);
 
-  // Fade out, then dismiss; at once when animations are off and would never end
-  function close() {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) dismiss?.();
-    else setLeaving(true);
+  useLayoutEffect(() => {
+    const measure = () => {
+      if (line.current && band.current) setHeights({ line: line.current.offsetHeight, band: band.current.offsetHeight });
+    };
+    const observer = new ResizeObserver(measure);
+
+    measure();
+    if (line.current) observer.observe(line.current);
+    if (band.current) observer.observe(band.current);
+
+    return () => observer.disconnect();
+  }, []);
+
+  // The button pressed goes inert with its half: focus follows to the other one
+  useEffect(() => {
+    if (!toggled.current) return;
+
+    toggled.current = false;
+    (open ? collapse : expand).current?.focus({ preventScroll: true });
+  }, [open]);
+
+  function toggle() {
+    toggled.current = true;
+    onToggle();
   }
 
   return (
-    // The wrapper opens and closes the banner's space, so the page below moves smoothly
-    <div
-      // Stacked bands share a hairline rather than doubling it
-      className={`alert-banner ${index > 0 ? "-mt-px" : ""} ${leaving ? "alert-banner-leave" : enter ? "alert-banner-enter" : ""}`}
-      style={{ animationDelay: enter && !leaving ? `${index * 90}ms` : undefined }}
-      onAnimationEnd={(e) => {
-        if (e.animationName === "alert-out" && e.target === e.currentTarget) dismiss?.();
-      }}
+    <motion.div
+      className="relative overflow-hidden"
+      initial={false}
+      animate={{ height: heights ? (open ? heights.band : heights.line) : "auto" }}
+      transition={SPRING}
     >
-      <section role="status" className={`relative flex flex-col gap-3 border-y px-5 py-4 sm:flex-row sm:items-center sm:gap-6 ${TONE[tone].box}`}>
-        <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${TONE[tone].bar}`} />
-        <div className="flex min-w-0 flex-1 items-start gap-3.5">
-          {/* A critical alert's icon pulses a few times as it arrives, then rests */}
-          <span
-            className={`relative mt-0.5 flex size-8 shrink-0 items-center justify-center border bg-background/40 ${TONE[tone].icon} ${tone === "critical" && enter ? "alert-pulse" : ""}`}
+      {/* The line holds the alert's place; the band lies over it, the two crossfading */}
+      <div ref={line} className={open ? "pointer-events-none" : ""} inert={open}>
+        <motion.div
+          className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-5 py-[3px] text-sm"
+          initial={false}
+          animate={open ? { opacity: 0, y: -4 } : { opacity: 1, y: 0 }}
+          transition={open ? FADE_OUT : FADE_IN}
+        >
+          <span aria-hidden className={`size-2 shrink-0 rounded-full ${WARNING_DOT[tone]}`} />
+          <span>{title}</span>
+          <button
+            ref={expand}
+            type="button"
+            onClick={toggle}
+            aria-expanded={false}
+            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
           >
-            <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-              {ICON[icon]}
-            </svg>
-          </span>
-          <div className="flex min-w-0 flex-col gap-1">
-            <p className={`font-mono text-[10px] tracking-[0.15em] uppercase ${TONE[tone].ink}`}>
-              {TONE[tone].label} <span className="text-muted-foreground/60">·</span> {TOPIC[icon]}
-            </p>
-            <p className="text-sm leading-5 font-semibold">{title}</p>
-            <p className="text-sm leading-5 text-muted-foreground">{body}</p>
-            {ask && (
-              <p className="text-sm leading-5">
-                <span className={`font-semibold ${TONE[tone].ink}`}>{ask.who}:</span> {ask.what}
-              </p>
-            )}
-          </div>
-        </div>
+            Expand
+          </button>
+        </motion.div>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-[2.875rem] sm:shrink-0 sm:pl-0">
-          {facts.map((fact) => (
-            <span key={fact} className="font-mono text-xs whitespace-nowrap text-muted-foreground tabular-nums">
-              {fact}
-            </span>
-          ))}
-          {action && <AlertAction action={action} />}
-          {dismiss && (
-            // Quieter than the action beside it: an outline only, in muted ink
-            <button
-              type="button"
-              onClick={close}
-              className="inline-flex h-7 items-center border border-border px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
-            >
-              Dismiss
-            </button>
-          )}
+      {/* Spaced from the lines around it, inside the part that grows, so the space eases in too */}
+      <div ref={band} className={`absolute inset-x-0 top-0 ${open ? "" : "pointer-events-none"}`} inert={!open}>
+        <div className="py-2">
+          <motion.section
+            role="status"
+            className={`relative flex flex-col gap-3 border-y px-5 py-4 sm:flex-row sm:items-center sm:gap-6 ${TONE[tone].box}`}
+            initial={false}
+            animate={open ? { opacity: 1, y: 0 } : { opacity: 0, y: 4 }}
+            transition={open ? FADE_IN : FADE_OUT}
+          >
+            <span aria-hidden className={`absolute inset-y-0 left-0 w-[3px] ${TONE[tone].bar}`} />
+            <div className="flex min-w-0 flex-1 items-start gap-3.5">
+              {/* A critical alert's icon pulses a few times as it opens, then rests */}
+              <span
+                className={`relative mt-0.5 flex size-8 shrink-0 items-center justify-center border bg-background/40 ${TONE[tone].icon} ${tone === "critical" && open ? "alert-pulse" : ""}`}
+              >
+                <svg viewBox="0 0 24 24" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+                  {ICON[icon]}
+                </svg>
+              </span>
+              <div className="flex min-w-0 flex-col gap-1">
+                <p className={`font-mono text-[10px] tracking-[0.15em] uppercase ${TONE[tone].ink}`}>
+                  {TONE[tone].label} <span className="text-muted-foreground/60">·</span> {TOPIC[icon]}
+                </p>
+                <p className="text-sm leading-5 font-semibold">{title}</p>
+                <p className="text-sm leading-5 text-muted-foreground">{body}</p>
+                {ask && (
+                  <p className="text-sm leading-5">
+                    <span className={`font-semibold ${TONE[tone].ink}`}>{ask.who}:</span> {ask.what}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 pl-[2.875rem] sm:shrink-0 sm:pl-0">
+              {facts.map((fact) => (
+                <span key={fact} className="font-mono text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+                  {fact}
+                </span>
+              ))}
+              {action && <AlertAction action={action} />}
+              {/* Quieter than the action beside it: an outline only, in muted ink */}
+              <button
+                ref={collapse}
+                type="button"
+                onClick={toggle}
+                aria-expanded
+                className="inline-flex h-7 items-center border border-border px-2.5 text-xs whitespace-nowrap text-muted-foreground transition-colors hover:border-foreground/30 hover:text-foreground"
+              >
+                Collapse
+              </button>
+            </div>
+          </motion.section>
         </div>
-      </section>
-    </div>
+      </div>
+    </motion.div>
   );
 }
 
@@ -217,19 +267,7 @@ function AlertAction({ action }: { action: NonNullable<Alert["action"]> }) {
   );
 }
 
-const subscribeNothing = () => () => {};
-
-/**
- * Whether the page has settled after loading. Until then, banners appear
- * without animation: a reload should not replay arrivals. Set a moment
- * after the alerts first mount, so the server render, hydration and the
- * dismissible alerts that follow it all count as the page loading.
- */
-let settled = false;
-const SETTLE_MS = 1500;
-
 const SEVERITY: Record<Tone, number> = { critical: 0, warn: 1, info: 2 };
-const NO_DISMISSALS: Record<string, { until?: number; share?: number }> = {};
 
 const plural = (count: number, word: string) => `${formatInt(count)} ${count === 1 ? word : `${word}s`}`;
 
@@ -253,16 +291,6 @@ export function useAlerts({
   latestRelease: Release | null;
 }): Alert[] {
   const now = useServerNow();
-  const [dismissed, setDismissed] = usePersistent("dismissed-alerts", NO_DISMISSALS);
-  // Dismissals live in the browser, unknown to the server render and hydration:
-  // dismissible alerts wait until they can be read, so a dismissed one never flashes
-  const hydrated = useSyncExternalStore(subscribeNothing, () => true, () => false);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => (settled = true), SETTLE_MS);
-
-    return () => window.clearTimeout(timer);
-  }, []);
   const health = charts?.health ?? null;
   const alerts: Alert[] = [];
   const [sound] = usePersistent(SOUND_KEY, true);
@@ -285,8 +313,6 @@ export function useAlerts({
     // The critical one adds a third, lower note.
     window.setTimeout(() => reorgChime(veryDeep), REORG_SOUND_DELAY_MS);
   }, [deepAt, sound, veryDeep]);
-  const dismissKey = (key: string, value: { until?: number; share?: number }) => setDismissed({ ...dismissed, [key]: value });
-  const restoreKey = (key: string) => setDismissed(Object.fromEntries(Object.entries(dismissed).filter(([k]) => k !== key)));
 
   // Verified nodes following different chains
   const split = health?.split ?? null;
@@ -342,15 +368,11 @@ export function useAlerts({
   // One miner with most of the last week's blocks
   const held = majority(charts);
 
-  if (held && hydrated) {
+  if (held) {
     const { miner: top, share, blocks: minerBlocks } = held;
-    const key = `majority:${top.pool?.name ?? top.miner}`;
-    const snoozed = dismissed[key];
-    // Dismissed, until the snooze runs out or the share grows: kept, so it still counts as going on
-    const hidden = !!snoozed && now <= (snoozed.until ?? 0) && share < (snoozed.share ?? 0) + MAJORITY_REGROWTH;
 
     alerts.push({
-      key,
+      key: `majority:${top.pool?.name ?? top.miner}`,
       tone: "critical",
       icon: "majority",
       // A known pool by name, anyone else by address
@@ -360,9 +382,6 @@ export function useAlerts({
       ask: { who: "If you mine LAX", what: "move some or all of your hashrate to a smaller pool." },
       facts: [`${formatInt(top.blocks)} of ${formatInt(minerBlocks)} blocks`],
       action: { href: MINING_POOL_STATS, label: "Find a smaller pool", external: true },
-      dismiss: () => dismissKey(key, { until: now + MAJORITY_SNOOZE_MS, share }),
-      dismissed: hidden,
-      restore: () => restoreKey(key),
     });
   }
 
@@ -400,20 +419,15 @@ export function useAlerts({
     return parts !== null && latest?.parts && compareParts(parts, latest.parts) < 0;
   });
 
-  if (hydrated && latestRelease && latest && behind.length > 0) {
-    const key = `release:${latestRelease.tag}`;
-
+  if (latestRelease && latest && behind.length > 0) {
     alerts.push({
-      key,
+      key: `release:${latestRelease.tag}`,
       tone: "info",
       icon: "release",
       title: `Parallax ${latest.label} is out.`,
       body: `${behind.length} of ${plural(online.length, "online node")} ${behind.length === 1 ? "runs" : "run"} an older version.`,
       facts: [],
       action: { href: latestRelease.url, label: "Release notes", external: true },
-      dismiss: () => dismissKey(key, {}),
-      dismissed: !!dismissed[key],
-      restore: () => restoreKey(key),
     });
   }
 
@@ -421,18 +435,39 @@ export function useAlerts({
   return alerts.sort((a, b) => SEVERITY[a.tone] - SEVERITY[b.tone]);
 }
 
-/** Alerts calls out what needs attention, as bands stacked into one strip. */
-export function Alerts({ alerts: all, className = "" }: { alerts: Alert[]; className?: string }) {
-  const alerts = all.filter((alert) => !alert.dismissed);
-
-  if (alerts.length === 0) return null;
+/**
+ * Alerts lists what needs attention, most severe first, each minimized
+ * until expanded. Alerts there when the page loads simply appear; ones that
+ * come up later open their space and slide in, and ones that clear close it.
+ */
+export function Alerts({ alerts, className = "" }: { alerts: Alert[]; className?: string }) {
+  const [expanded, setExpanded] = useState<string[]>([]);
 
   return (
-    <div className={`flex flex-col ${className}`}>
-      {alerts.map((alert, i) => (
-        <Banner key={alert.key} alert={alert} index={i} />
-      ))}
-    </div>
+    // Motion follows the viewer's reduced motion setting: transforms and heights jump, fades stay
+    <MotionConfig reducedMotion="user">
+      <div className={`flex flex-col ${className}`}>
+        <AnimatePresence initial={false}>
+          {alerts.map((alert, i) => (
+            <motion.div
+              key={alert.key}
+              className="-mx-5 overflow-hidden"
+              initial={{ height: 0, opacity: 0, y: -8 }}
+              animate={{ height: "auto", opacity: 1, y: 0, transition: { ...SPRING, delay: i * 0.06 } }}
+              exit={{ height: 0, opacity: 0, transition: SPRING }}
+            >
+              <AlertItem
+                alert={alert}
+                open={expanded.includes(alert.key)}
+                onToggle={() =>
+                  setExpanded((keys) => (keys.includes(alert.key) ? keys.filter((k) => k !== alert.key) : [...keys, alert.key]))
+                }
+              />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+      </div>
+    </MotionConfig>
   );
 }
 
@@ -443,9 +478,7 @@ export const WARNING_DOT: Record<Tone, string> = { critical: "bg-critical", warn
  * the most severe one's colour. It opens them in a panel below it, in place,
  * closed again by a click elsewhere or Escape.
  */
-export function AlertCount({ alerts: all }: { alerts: Alert[] }) {
-  // Dismissed alerts have had their say: the count is of the banners still showing
-  const alerts = all.filter((alert) => !alert.dismissed);
+export function AlertCount({ alerts }: { alerts: Alert[] }) {
   const [open, setOpen] = useState(false);
   const root = useRef<HTMLDivElement>(null);
   const panel = useId();

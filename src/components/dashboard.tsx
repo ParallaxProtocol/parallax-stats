@@ -78,7 +78,7 @@ function Live({
   const dailyNewCoins = pace !== null && price && summary.bestBlock > 0 ? newCoins(summary.bestBlock, pace) * price.usd : null;
   const thin = thinMarket(markets);
   const alerts = useAlerts({ bestBlock: summary.bestBlock, foundAt, charts, nodes, latestRelease });
-  // Warnings that stand whether or not their banner was dismissed, marked on their sections
+  // Warnings marked on their sections
   const sections = useMemo(() => {
     const status: Record<string, SectionLink["status"]> = {
       mining: (() => {
