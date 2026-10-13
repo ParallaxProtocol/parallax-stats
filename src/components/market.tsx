@@ -26,6 +26,18 @@ function usd(v: number): string {
 /** Dash for a figure the exchange does not report. */
 const NONE = <span className="text-muted-foreground">—</span>;
 
+/** Depth shows one side's ±2% depth: a dash when unreported, and "none" when no orders sit within 2% of the price. */
+function Depth({ dollars }: { dollars: number | null }) {
+  if (dollars === null) return <>—</>;
+  if (dollars > 0) return <>{usd(dollars)}</>;
+
+  return (
+    <Tooltip content="No orders within 2% of the price">
+      <span className="text-muted-foreground italic">none</span>
+    </Tooltip>
+  );
+}
+
 /**
  * Exchanges lists where LAX trades and how well: each pair's share of the
  * volume, its spread and the orders near its price. Below, the orders it
@@ -51,7 +63,9 @@ export function Exchanges({
   const now = useServerNow();
   const list = markets ?? [];
   const total = list.reduce((sum, m) => sum + m.volume24h, 0);
-  const sellers = list.filter((m) => m.depthDown !== null);
+  // An exchange with no orders within 2% below the price takes no selling there
+  const sellers = list.filter((m) => m.depthDown !== null && m.depthDown > 0);
+  const noSellers = sellers.length === 0 && list.some((m) => m.depthDown === 0);
   const sellDepth = sellers.reduce((sum, m) => sum + m.depthDown!, 0);
 
   return (
@@ -102,9 +116,9 @@ export function Exchanges({
                     <td className={`${CELL} text-right`}>
                       {m.depthUp !== null || m.depthDown !== null ? (
                         <>
-                          {m.depthUp !== null ? usd(m.depthUp) : "—"}
+                          <Depth dollars={m.depthUp} />
                           <span className="text-muted-foreground"> / </span>
-                          {m.depthDown !== null ? usd(m.depthDown) : "—"}
+                          <Depth dollars={m.depthDown} />
                         </>
                       ) : (
                         NONE
@@ -129,6 +143,7 @@ export function Exchanges({
               .
             </p>
           )}
+          {noSellers && <p className="mt-auto text-sm text-muted-foreground">No exchange has orders within 2% below the price: any sale moves it further.</p>}
         </>
       )}
     </Plate>
