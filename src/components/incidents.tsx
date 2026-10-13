@@ -72,6 +72,34 @@ function overlaps(incident: Incident, from: number, to: number, now: number): bo
   return incident.start <= to && (incident.end ?? now) >= from;
 }
 
+/**
+ * worst flattens incidents into spans that do not overlap, each in the
+ * colour of the most severe incident over it, for the row of every kind:
+ * bars of different kinds stacked there tinted each other and crossed
+ * their hatching. Moments, with no length, are left to be drawn on their own.
+ */
+function worst(incidents: Incident[], now: number): { start: number; end: number; level: Incident["level"] }[] {
+  const spans = incidents.filter((incident) => (incident.end ?? now) > incident.start);
+  const edges = [...new Set(spans.flatMap((incident) => [incident.start, incident.end ?? now]))].sort((a, b) => a - b);
+  const out: { start: number; end: number; level: Incident["level"] }[] = [];
+
+  for (let i = 0; i < edges.length - 1; i++) {
+    const [start, end] = [edges[i], edges[i + 1]];
+    const over = spans.filter((incident) => incident.start <= start && (incident.end ?? now) >= end);
+
+    if (over.length === 0) continue;
+
+    const level = over.some((incident) => incident.level === "critical") ? "critical" : "warn";
+    const previous = out.at(-1);
+
+    // One span where the level carries on across an edge
+    if (previous && previous.end === start && previous.level === level) previous.end = end;
+    else out.push({ start, end, level });
+  }
+
+  return out;
+}
+
 /** at renders a moment as a date and time: Oct 12, 14:20. */
 function at(ms: number): string {
   return `${dayFormat.format(ms)}, ${timeFormat.format(ms)}`;
@@ -365,6 +393,17 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
     const row = (kinds: IncidentKind[], label: ReactNode, name: string, main = false) => {
       const ofKinds = recent.filter((incident) => kinds.includes(incident.kind)).sort((a, b) => DEPTH[a.level] - DEPTH[b.level]);
       const ongoing = ofKinds.filter((incident) => incident.end === null);
+      // A kind's own row draws its incidents as they are; the row of every kind, flattened by the worst
+      const bars =
+        kinds.length === 1
+          ? ofKinds.map((incident) => ({ key: incident.id, start: incident.start, end: incident.end ?? now, level: incident.level }))
+          : [
+              ...worst(ofKinds, now).map((span) => ({ key: `span:${span.start}`, ...span })),
+              ...ofKinds
+                .filter((incident) => incident.end === incident.start)
+                .map((incident) => ({ key: incident.id, start: incident.start, end: incident.start, level: incident.level })),
+            ];
+      const chosenHere = picked && kinds.includes(picked.kind) ? picked : null;
       const since = Math.max(from, ...kinds.map(recordedFrom));
       const count = `${ofKinds.length} ${ofKinds.length === 1 ? "incident" : "incidents"}`;
       const note =
@@ -404,7 +443,7 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
             <span className="text-right text-xs text-muted-foreground tabular-nums sm:order-last">{note}</span>
           )}
           <div
-            className={`relative col-span-2 ${BAR} touch-pan-y overflow-hidden tap-chart sm:col-span-1`}
+            className={`relative col-span-2 ${BAR} touch-pan-y overflow-hidden tap-chart [container-type:inline-size] sm:col-span-1`}
             role="img"
             aria-label={`${name}, ${heading.toLowerCase()}: ${ofKinds.length === 0 ? "no incidents" : count}`}
             onPointerDown={(e) => point(kinds, e)}
@@ -417,18 +456,30 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
             {marks.map((mark) => (
               <div key={mark.at} aria-hidden className="absolute inset-y-0 w-px bg-card/70" style={{ left: `${x(mark.at)}%` }} />
             ))}
-            {ofKinds.map((incident) => (
+            {bars.map((bar) => (
               <div
-                key={incident.id}
-                className={`absolute inset-y-0 rounded-[2px] ${picked?.id === incident.id ? "ring-1 ring-foreground ring-offset-1 ring-offset-card" : ""}`}
+                key={bar.key}
+                className="absolute inset-y-0 rounded-[2px]"
                 style={{
-                  left: `${x(incident.start)}%`,
-                  width: `${x(incident.end ?? now) - x(incident.start)}%`,
+                  left: `${x(bar.start)}%`,
+                  width: `${x(bar.end) - x(bar.start)}%`,
                   minWidth: MIN_BAR_PX,
-                  background: STRIPES[incident.level],
+                  // Hatched as one piece across the row, so neighbouring bars' stripes run on into each other
+                  backgroundImage: STRIPES[bar.level],
+                  backgroundSize: "100cqw 100%",
+                  backgroundPosition: `${-x(bar.start)}cqw 0`,
+                  backgroundRepeat: "no-repeat",
                 }}
               />
             ))}
+            {/* The chosen incident, outlined over the bars it may have been flattened into */}
+            {chosenHere && (
+              <div
+                aria-hidden
+                className="absolute inset-y-0 rounded-[2px] ring-1 ring-foreground ring-offset-1 ring-offset-card"
+                style={{ left: `${x(chosenHere.start)}%`, width: `${x(chosenHere.end ?? now) - x(chosenHere.start)}%`, minWidth: MIN_BAR_PX }}
+              />
+            )}
           </div>
         </div>
       );
