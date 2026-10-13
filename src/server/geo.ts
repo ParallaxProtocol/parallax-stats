@@ -1,7 +1,8 @@
 // Coarse node locations from ip-api.com, the same source as the network
 // atlas on parallaxprotocol.org. Only reporting nodes are looked up, never
-// viewers, and viewers see only a country, city and approximate
-// coordinates: the address itself stays on the server.
+// viewers, and only a country and coordinates rounded to whole degrees
+// (about 100 km) are kept: neither the address nor the city leaves the
+// server, and the city is never even asked for.
 //
 // The free batch endpoint takes no key, answers up to 100 addresses a
 // request and allows 15 requests a minute. Lookups are queued and sent in
@@ -12,7 +13,7 @@ import { isIP } from "node:net";
 import type { Geo } from "../lib/protocol.ts";
 import { addressList, inList } from "./settings.ts";
 
-const ENDPOINT = "http://ip-api.com/batch?fields=status,countryCode,city,lat,lon,query";
+const ENDPOINT = "http://ip-api.com/batch?fields=status,countryCode,lat,lon,query";
 const BATCH_SIZE = 100;
 /** Waits for more addresses before sending, so reconnect bursts share a request. */
 const GATHER_MS = 1000;
@@ -47,22 +48,26 @@ interface Answer {
   status?: unknown;
   query?: unknown;
   countryCode?: unknown;
-  city?: unknown;
   lat?: unknown;
   lon?: unknown;
 }
 
+/** coarsen keeps only a place's country and its coordinates to the nearest whole degree. */
+export function coarsen(geo: Geo): Geo {
+  // + 0 turns a rounded -0 into 0
+  return { country: geo.country, ll: [Math.round(geo.ll[0]) + 0, Math.round(geo.ll[1]) + 0] };
+}
+
 function toGeo(answer: Answer): Geo | null {
-  const { countryCode, city, lat, lon } = answer;
+  const { countryCode, lat, lon } = answer;
 
   if (answer.status !== "success" || typeof lat !== "number" || typeof lon !== "number") return null;
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
 
-  return {
+  return coarsen({
     country: typeof countryCode === "string" && /^[A-Z]{2}$/.test(countryCode) ? countryCode : "",
-    city: typeof city === "string" ? city.slice(0, 64) : "",
     ll: [lat, lon],
-  };
+  });
 }
 
 /**

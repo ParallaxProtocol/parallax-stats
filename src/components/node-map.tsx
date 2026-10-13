@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { geoEqualEarth } from "d3-geo";
-import { gradeBehind, type Grade } from "@/lib/format";
+import { countryName, gradeBehind, type Grade } from "@/lib/format";
 import type { PublicNode } from "@/lib/protocol";
 import type { WorldMap } from "@/lib/world";
 import { Indicator } from "./indicator";
@@ -38,16 +38,6 @@ function flag(code: string): string {
   const upper = code.toUpperCase();
 
   return String.fromCodePoint(base + upper.charCodeAt(0), base + upper.charCodeAt(1));
-}
-
-const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
-
-function countryName(code: string): string {
-  try {
-    return regionNames.of(code) ?? code;
-  } catch {
-    return code;
-  }
 }
 
 const TOP_COUNTRIES = 5;
@@ -96,7 +86,7 @@ function Countries({ nodes }: { nodes: PublicNode[] }) {
 function place(node: PublicNode): string {
   if (!node.geo) return "";
 
-  return [node.geo.city, node.geo.country].filter(Boolean).join(", ");
+  return node.geo.country ? countryName(node.geo.country) : "";
 }
 
 export function NodeMap({

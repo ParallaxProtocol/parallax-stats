@@ -4,6 +4,7 @@ import { Fragment, useCallback, useEffect, useState, type PointerEvent, type Rea
 import { createPortal } from "react-dom";
 import {
   clientVersion,
+  countryName,
   formatAgo,
   formatGasPrice,
   formatHashrate,
@@ -448,7 +449,7 @@ function Details({
                     ["Protocols", truncate(info.protocol || "unknown"), info.protocol],
                     ["Port", info.port ? String(info.port) : "unknown"],
                     ["System", [info.os, info.os_v].filter(Boolean).join(" ") || "unknown"],
-                    ["Location", geo ? [geo.city, geo.country].filter(Boolean).join(", ") : "unknown"],
+                    ["Location", geo?.country ? countryName(geo.country) : "unknown"],
                   ]}
                 />
                 <DetailSection

@@ -192,7 +192,7 @@ export function About({ compact = false }: { compact?: boolean }) {
               <dd className="text-muted-foreground">Client versions are compared with the latest parallaxd release on GitHub.</dd>
               <dt className="font-medium">Privacy</dt>
               <dd className="text-muted-foreground">
-                Node IP addresses are never shown. Map locations are approximate, to the city at most.
+                Node IP addresses are never shown. Locations go no finer than the country, and map dots are placed to within about 100 km.
               </dd>
             </dl>
           </Section>

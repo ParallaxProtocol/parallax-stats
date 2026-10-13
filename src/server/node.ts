@@ -3,6 +3,7 @@
 
 import { createHmac } from "node:crypto";
 import { HISTORY_BINS, type BasicStats, type Block, type Geo, type NodeInfo, type NodeStats, type PublicNode } from "../lib/protocol.ts";
+import { coarsen } from "./geo.ts";
 import type { ReportedStats } from "./sanitize.ts";
 
 /** Disconnected nodes are forgotten after this long. */
@@ -114,7 +115,16 @@ export class NodeRecord {
    */
   static fromState(state: NodeState, pseudonymKey: Buffer, downtime: number, now = Date.now()): NodeRecord {
     const node = new NodeRecord(
-      { id: state.id, info: state.info, ip: state.ip, connection: 0, latency: state.stats.latency, trusted: state.trusted, geo: state.geo },
+      {
+        id: state.id,
+        info: state.info,
+        ip: state.ip,
+        connection: 0,
+        latency: state.stats.latency,
+        trusted: state.trusted,
+        // State saved before locations were coarsened holds a city and finer coordinates
+        geo: state.geo && coarsen(state.geo),
+      },
       pseudonymKey,
     );
 

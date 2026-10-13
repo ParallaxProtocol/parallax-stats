@@ -20,13 +20,13 @@ test("lookups are batched into one request and cached", async () => {
   const b = lookup("2a02:4780:2d:2d36::1");
 
   assert.ok(a instanceof Promise && b instanceof Promise);
-  assert.deepEqual(await a, { country: "US", city: "Boston", ll: [42.36, -71.06] });
+  assert.deepEqual(await a, { country: "US", ll: [42, -71] });
   assert.deepEqual((await b)?.country, "US");
   assert.equal(calls.length, 1);
   assert.deepEqual(calls[0], ["168.231.74.175", "2a02:4780:2d:2d36::1"]);
 
   // Cached: answered right away, no request
-  assert.deepEqual(lookup("168.231.74.175"), { country: "US", city: "Boston", ll: [42.36, -71.06] });
+  assert.deepEqual(lookup("168.231.74.175"), { country: "US", ll: [42, -71] });
   assert.equal(calls.length, 1);
 });
 

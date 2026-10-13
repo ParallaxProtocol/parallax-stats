@@ -269,3 +269,14 @@ export function gradeUptime(uptime: number): Grade {
 export function survival(ms: number): number {
   return Math.exp(-ms / (TARGET_BLOCK_TIME * 1000));
 }
+
+const regionNames = new Intl.DisplayNames(["en"], { type: "region" });
+
+/** countryName spells out a two-letter country code, or gives the code back if it is not one. */
+export function countryName(code: string): string {
+  try {
+    return regionNames.of(code) ?? code;
+  } catch {
+    return code;
+  }
+}

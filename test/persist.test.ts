@@ -13,7 +13,7 @@ const settings = loadSettings({ PUBLIC_SECRET: "open", NAME_HOLD_MINUTES: "60" }
 let connections = 0;
 
 function login(nodes: Registry, id: string, ip: string, trusted: boolean, now: number): void {
-  nodes.add({ id, ip, trusted, connection: ++connections, latency: 12, geo: { country: "US", city: "Boston", ll: [42.36, -71.06] }, info: { name: id, node: "Parallax/v2.1.2-stable/linux-amd64/go1.27.1" } as never }, now);
+  nodes.add({ id, ip, trusted, connection: ++connections, latency: 12, geo: { country: "US", city: "Boston", ll: [42.36, -71.06] } as never, info: { name: id, node: "Parallax/v2.1.2-stable/linux-amd64/go1.27.1" } as never }, now);
 }
 
 function block(number: number, parent = number - 1): ReportedBlock {
@@ -81,7 +81,8 @@ test("state survives a restart through the store", () => {
     assert.equal(seed.stats.uptime, 100);
     assert.equal(home.stats.uptime, 50);
     assert.equal(seed.stats.block.number, 30);
-    assert.deepEqual(seed.geo, { country: "US", city: "Boston", ll: [42.36, -71.06] });
+    // Saved with a city and fine coordinates, restored with neither
+    assert.deepEqual(seed.geo, { country: "US", ll: [42, -71] });
 
     // Offline since it went down, or for one connected when the dashboard stopped, since then
     assert.equal(home.offlineSince, start + 3_600_000);

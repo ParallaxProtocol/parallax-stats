@@ -319,7 +319,6 @@ function nodeRow(node: PublicNode) {
     pending: stats.pending,
     uptimePercent: stats.uptime,
     country: geo?.country ?? null,
-    city: geo?.city ?? null,
   };
 }
 

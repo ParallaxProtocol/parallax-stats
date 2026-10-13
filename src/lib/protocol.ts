@@ -112,8 +112,7 @@ export interface NodeInfo {
 
 export interface Geo {
   country: string;
-  city: string;
-  /** [latitude, longitude], approximate */
+  /** [latitude, longitude], to the nearest whole degree */
   ll: [number, number];
 }
 
