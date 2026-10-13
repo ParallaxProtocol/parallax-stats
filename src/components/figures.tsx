@@ -242,8 +242,9 @@ export function figures({
         : undefined,
       note: "in sync",
       trend: trends.active,
-      format: (v) => significant.format(v),
-      detail: () => "mean active nodes",
+      // A slice's mean is fractional when a node was off for part of it: the figure counts whole nodes
+      format: (v) => formatInt(Math.round(v)),
+      detail: (v) => (Number.isInteger(v) ? "active nodes" : `mean ${v.toFixed(1)} active nodes`),
       waiting: "Collecting readings",
     },
     fee: {
