@@ -175,10 +175,8 @@ function Dash() {
   );
 }
 
-/** MempoolSize counts a node's pending transactions, and says when there are none. */
+/** MempoolSize counts a node's pending transactions. */
 function MempoolSize({ pending }: { pending: number }) {
-  if (pending === 0) return <span className="italic">empty</span>;
-
   return <>{`${formatInt(pending)} ${pending === 1 ? "txn" : "txns"}`}</>;
 }
 
@@ -728,7 +726,18 @@ export function NodeTable({
                           </span>
                         )}
                       </td>
-                      <Cell className={`text-muted-foreground ${fade}`}>{active ? <MempoolSize pending={stats.pending} /> : "—"}</Cell>
+                      <Cell className={`text-muted-foreground ${fade}`}>
+                        {!active ? (
+                          "—"
+                        ) : stats.pending === 0 ? (
+                          <>
+                            <Dash />
+                            <span className="sr-only">Empty</span>
+                          </>
+                        ) : (
+                          <MempoolSize pending={stats.pending} />
+                        )}
+                      </Cell>
                       <Cell grade={active ? gradeUptime(stats.uptime) : undefined} className={fade}>
                         {stats.uptime}%
                       </Cell>
