@@ -4,6 +4,7 @@ import { formatAgo, formatCompact, formatPercent } from "@/lib/format";
 import type { Market } from "@/lib/protocol";
 import { Waiting } from "./charts";
 import { ExternalLink } from "./external-link";
+import { Ping } from "./indicator";
 import { Heading } from "./health";
 import { useServerNow } from "./live/provider";
 import { Plate } from "./plate";
@@ -125,7 +126,7 @@ export function Exchanges({
             // At the foot of the card
             <p className="mt-auto flex items-center gap-2.5 border-t border-border pt-3 text-xs">
               <span aria-hidden className="relative flex size-2 shrink-0">
-                <span className="absolute inline-flex size-full animate-ping rounded-full bg-warn opacity-60 motion-reduce:hidden" />
+                <Ping color="bg-warn" cause={warning} />
                 <span className="relative inline-flex size-2 rounded-full bg-warn" />
               </span>
               {warning}

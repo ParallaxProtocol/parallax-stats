@@ -6,6 +6,7 @@ import type { Incident, IncidentKind, IncidentLog } from "@/lib/protocol";
 import { AnimatePresence, motion } from "motion/react";
 import { Alerts, WARNING_DOT, type Alert } from "./alerts";
 import { Switch } from "./charts";
+import { Ping } from "./indicator";
 import { useServerNow } from "./live/provider";
 import { SPRING } from "./motion";
 import { Label, Plate } from "./plate";
@@ -168,7 +169,7 @@ function Headline({ alerts }: { alerts: Alert[] }) {
   return (
     <span className="inline-flex min-w-0 items-center gap-2.5 text-sm" role="status">
       <span aria-hidden className="relative flex size-2 shrink-0">
-        {tone === "critical" && <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 ${WARNING_DOT.critical}`} />}
+        {tone === "critical" && <Ping color={WARNING_DOT.critical} critical />}
         <span className={`relative inline-flex size-2 rounded-full ${tone ? WARNING_DOT[tone] : "bg-good"}`} />
       </span>
       <span className="truncate">{alerts.length === 0 ? "All clear" : `${alerts.length} ${alerts.length === 1 ? "alert" : "alerts"} now`}</span>

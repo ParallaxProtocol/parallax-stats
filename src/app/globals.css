@@ -115,6 +115,8 @@
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: var(--radius);
+  /* A status dot's ring that spreads three times and rests, ending unseen */
+  --animate-ping-few: ping 1s cubic-bezier(0, 0, 0.2, 1) 3 forwards;
 }
 
 @layer base {
@@ -286,26 +288,51 @@
   }
 }
 
-/* Dialogs fade and rise in; the page behind stops scrolling */
-@keyframes dialog-in {
-  from {
-    opacity: 0;
-    transform: translateY(12px) scale(0.98);
-  }
+/* Dialogs fade and rise in, and sink and fade out a little quicker, staying
+   in the top layer until they have; the page behind stops scrolling. Where
+   a browser cannot keep a closing dialog shown, it simply goes. */
+.modal-dialog,
+.modal-dialog::backdrop {
+  transition:
+    opacity 0.15s ease-in,
+    translate 0.15s ease-in,
+    scale 0.15s ease-in,
+    overlay 0.15s allow-discrete,
+    display 0.15s allow-discrete;
 }
 
-@keyframes backdrop-in {
-  from {
-    opacity: 0;
-  }
+.modal-dialog {
+  opacity: 0;
+  translate: 0 8px;
+  scale: 0.98;
+}
+
+.modal-dialog::backdrop {
+  opacity: 0;
+}
+
+.modal-dialog[open],
+.modal-dialog[open]::backdrop {
+  opacity: 1;
+  transition-duration: 0.25s;
+  transition-timing-function: cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .modal-dialog[open] {
-  animation: dialog-in 0.25s cubic-bezier(0.25, 0.1, 0.25, 1);
+  translate: 0 0;
+  scale: 1;
 }
 
-.modal-dialog[open]::backdrop {
-  animation: backdrop-in 0.25s ease;
+@starting-style {
+  .modal-dialog[open] {
+    opacity: 0;
+    translate: 0 12px;
+    scale: 0.98;
+  }
+
+  .modal-dialog[open]::backdrop {
+    opacity: 0;
+  }
 }
 
 /* A critical alert's icon pulses a few times as it opens */

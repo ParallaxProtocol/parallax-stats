@@ -20,6 +20,7 @@ import { compareParts, parseVersion } from "@/lib/version";
 import { watch } from "@/lib/withholding";
 import { SOUND_KEY } from "./block-toast";
 import { reorgChime } from "./chime";
+import { Ping } from "./indicator";
 import { useServerNow } from "./live/provider";
 import { FADE_IN, FADE_OUT, SPRING } from "./motion";
 import { usePersistent } from "./use-persistent";
@@ -550,7 +551,7 @@ export function AlertCount({ alerts }: { alerts: Alert[] }) {
       >
         <span aria-hidden className="relative flex size-2">
           {alerts[0].tone === "critical" && (
-            <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 ${WARNING_DOT.critical}`} />
+            <Ping color={WARNING_DOT.critical} critical />
           )}
           <span className={`relative inline-flex size-2 rounded-full ${WARNING_DOT[alerts[0].tone]}`} />
         </span>

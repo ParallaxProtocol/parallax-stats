@@ -27,6 +27,7 @@ import { Supply } from "./monetary";
 import { NodeMap } from "./node-map";
 import { NodeTable } from "./node-table";
 import { sectionNumber, SectionNav, STATUS_DOT, type SectionLink } from "./section-nav";
+import { Ping } from "./indicator";
 import { Tooltip } from "./tooltip";
 
 export function Dashboard({
@@ -287,7 +288,7 @@ function Section({
         {status && !quiet && (
           <span className="mb-0.5 inline-flex items-center gap-2 font-mono text-[11px] tracking-wider text-muted-foreground uppercase">
             <span className={`relative flex size-1.5`}>
-              <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 ${STATUS_DOT[status.level]}`} />
+              <Ping color={STATUS_DOT[status.level]} critical={status.level === "critical"} cause={status.label} />
               <span className={`relative inline-flex size-1.5 rounded-full ${STATUS_DOT[status.level]}`} />
             </span>
             {status.label}
@@ -310,9 +311,8 @@ function ConnectionStatus({ connection, latency }: { connection: string; latency
   return (
     <p className="flex items-center gap-2 font-mono text-xs text-muted-foreground" role="status">
       <span className="relative flex size-2">
-        {connection === "live" && (
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-brand-mark opacity-60 motion-reduce:hidden" />
-        )}
+        {/* Pulses as it goes live, again on each reconnection, then rests */}
+        {connection === "live" && <Ping color="bg-brand-mark" />}
         <span
           className={`relative inline-flex size-2 rounded-full ${connection === "live" ? "bg-brand-mark" : connection === "connecting" ? "bg-warn" : "bg-critical"}`}
         />

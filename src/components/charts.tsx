@@ -7,7 +7,7 @@ import { formatBlockTime, formatCompact, formatInt, formatMs, formatPercent, gra
 import { HISTORY_BINS, TARGET_BLOCK_TIME, TREND_SLICE_S, type Charts, type MinerCount, type PropagationStats } from "@/lib/protocol";
 import { majority as majorityHeld, majorityLevel, spreadLevel, type Level } from "@/lib/alert-levels";
 import { DECENTRALIZATION_MIN_BLOCKS, gradeDecentralization, majorityHolders } from "@/lib/decentralization";
-import { Indicator } from "./indicator";
+import { Indicator, Ping } from "./indicator";
 import { REVEAL } from "./motion";
 import { Label, Plate } from "./plate";
 import { Rolling } from "./rolling";
@@ -1020,12 +1020,12 @@ export const CAUSE_ROW: Record<Level, string> = {
 /** The verdict's dot pulses for any grade short of healthy. */
 const PING: Partial<Record<Grade, string>> = { warn: "bg-warn", serious: "bg-serious", critical: "bg-critical" };
 
-/** Verdict is a tile's graded figure: its status dot, pulsing when it is short of healthy, then the words. */
+/** Verdict is a tile's graded figure: its status dot, pulsing when it is short of healthy (for good when critical), then the words. */
 export function Verdict({ grade, children }: { grade: Grade; children: ReactNode }) {
   return (
     <span className="inline-flex items-center gap-2.5">
       <span className="relative inline-flex size-2.5">
-        {PING[grade] && <span aria-hidden className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 motion-reduce:hidden ${PING[grade]}`} />}
+        {PING[grade] && <Ping color={PING[grade]} critical={grade === "critical"} cause={grade} />}
         <Indicator grade={grade} label="" className="relative size-2.5" />
       </span>
       {children}

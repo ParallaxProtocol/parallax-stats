@@ -40,3 +40,20 @@ export function Indicator({ grade, label, className = "" }: { grade: Grade; labe
 
   return <span className={classes} role="img" aria-label={label ?? GRADE_NAME[grade]} />;
 }
+
+/**
+ * Ping is the ring that spreads from a status dot to draw the eye. A
+ * critical one keeps spreading while the state lasts; any other spreads
+ * three times and rests, so a page with several warnings on it stays calm.
+ * It goes under the dot, in a relative box the dot's size. A new `cause`
+ * starts it again, so a change of state draws the eye anew.
+ */
+export function Ping({ color, critical = false, cause }: { color: string; critical?: boolean; cause?: string }) {
+  return (
+    <span
+      key={cause}
+      aria-hidden
+      className={`absolute inline-flex size-full rounded-full opacity-60 motion-reduce:hidden ${critical ? "animate-ping" : "animate-ping-few"} ${color}`}
+    />
+  );
+}

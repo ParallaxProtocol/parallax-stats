@@ -704,7 +704,14 @@ export function Method({
       <dialog
         ref={dialog}
         aria-labelledby={`${id}-title`}
-        onClose={() => setShown(false)}
+        // Its contents go once it has finished closing, not while it fades out
+        onClose={() => {
+          const el = dialog.current;
+
+          void Promise.allSettled(el?.getAnimations().map((animation) => animation.finished) ?? []).then(() => {
+            if (!el?.open) setShown(false);
+          });
+        }}
         className="modal-dialog m-auto max-h-[90dvh] w-[min(56rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain border border-border bg-surface-elevated p-0 text-left text-sm whitespace-normal text-foreground shadow-[0_4px_10px_oklch(0_0_0/0.45),0_20px_48px_oklch(0_0_0/0.45)] backdrop:bg-black/60 backdrop:backdrop-blur-sm"
         onClick={(e) => {
           // A click on the backdrop lands on the dialog element itself
