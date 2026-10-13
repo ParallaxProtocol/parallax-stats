@@ -150,6 +150,39 @@ function ticks(range: Range, from: number, to: number): { at: number; label: str
   return out;
 }
 
+/** captionLine is a line of the hover caption, built outside React: the pointer handler writes the caption. */
+function captionLine(text: string, className = ""): HTMLElement {
+  const line = document.createElement("div");
+
+  line.className = className;
+  line.textContent = text;
+
+  return line;
+}
+
+/** captionIncident is an incident's line in the hover caption: its severity's dot, its kind where the row has several, and what happened. */
+function captionIncident({ level, kind, detail }: { level: Incident["level"]; kind: string | null; detail: string }): HTMLElement {
+  const line = document.createElement("div");
+  const dot = document.createElement("span");
+  const text = document.createElement("span");
+
+  line.className = "flex items-baseline gap-2";
+  dot.className = `size-1.5 shrink-0 -translate-y-px rounded-full ${FILL[level]}`;
+
+  if (kind) {
+    const name = document.createElement("span");
+
+    name.className = "font-medium text-foreground";
+    name.textContent = kind;
+    text.append(name, " ");
+  }
+
+  text.append(detail);
+  line.append(dot, text);
+
+  return line;
+}
+
 /** A question mark in a circle that explains its row on hover or focus. */
 function Help({ text }: { text: string }) {
   return (
@@ -244,7 +277,7 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
   // through a render would put them a frame or two behind a fast drag
   const area = useRef<HTMLDivElement>(null);
   const cursor = useRef<HTMLDivElement>(null);
-  const caption = useRef<HTMLSpanElement>(null);
+  const caption = useRef<HTMLDivElement>(null);
   // The row under the pointer, measured once as the pointer arrives: measuring on every move would make
   // the browser lay the page out again before it could draw
   const measured = useRef<{ track: HTMLDivElement; left: number; width: number; x: number; y: number } | null>(null);
@@ -296,20 +329,21 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
     const tolerance = (MIN_BAR_PX / track.width) * span;
     const under = recent.filter((i) => at_.kinds.includes(i.kind) && overlaps(i, moment - tolerance, moment + tolerance, now));
     const unrecorded = at_.kinds.filter((kind) => moment < recordedFrom(kind)).length;
-    // The row of every kind names each incident's kind; a kind's own row names it once
+    // The row of every kind names each incident's kind; a kind's own row names it once, in the heading
     const one = at_.kinds.length === 1 ? at_.kinds[0] : null;
-    const what =
-      under.length > 0
-        ? under.map((i) => (one ? i.detail : `${LABEL[i.kind]}: ${i.detail}`)).join("; ")
-        : unrecorded === at_.kinds.length
-          ? "not on record"
-          : unrecorded > 0
-            ? "nothing on record"
-            : "nothing";
-    const text = `${at(moment)} · ${one ? `${LABEL[one]}: ` : ""}${what}`;
+    const heading = `${at(moment)}${one ? ` · ${LABEL[one]}` : ""}`;
+    const quiet = unrecorded === at_.kinds.length ? "not on record" : unrecorded > 0 ? "nothing on record" : "nothing";
+    // An incident a line, the most severe first, then the newest
+    const lines = [...under]
+      .sort((a, b) => DEPTH[b.level] - DEPTH[a.level] || b.start - a.start)
+      .map((i) => ({ level: i.level, kind: one ? null : LABEL[i.kind], detail: i.detail }));
+    const text = JSON.stringify([heading, quiet, lines]);
 
     // To the minute, so most frames leave it as it is
-    if (caption.current && caption.current.textContent !== text) caption.current.textContent = text;
+    if (!caption.current || caption.current.dataset.text === text) return;
+
+    caption.current.dataset.text = text;
+    caption.current.replaceChildren(captionLine(lines.length > 0 ? heading : `${heading} · ${quiet}`, "tabular-nums"), ...lines.map(captionIncident));
   }, []);
 
   const point = useCallback(
@@ -566,10 +600,10 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
       {/* The cursor and what it is over, on the row under the pointer: moved directly, so the rows stay as
           they are. The caption is written by the pointer handler, never by a render */}
       <div ref={cursor} aria-hidden className="pointer-events-none absolute top-0 left-0 hidden w-px bg-foreground group-data-[hover]:block" />
-      <span
+      <div
         ref={caption}
         aria-hidden
-        className="pointer-events-none absolute top-0 left-0 z-10 hidden w-max max-w-full border border-border bg-surface-elevated px-2 py-1 text-xs leading-snug text-muted-foreground shadow-lg group-data-[hover]:block"
+        className="pointer-events-none absolute top-0 left-0 z-10 hidden w-max max-w-full flex-col gap-1 border border-border bg-surface-elevated px-2.5 py-1.5 text-xs leading-snug text-muted-foreground shadow-lg group-data-[hover]:flex"
       />
     </div>
   );
