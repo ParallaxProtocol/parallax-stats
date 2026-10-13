@@ -39,6 +39,8 @@ const INCIDENT_GRACE_MS = 2 * 60_000;
 const PRICE_POLL_MS = 5 * 60_000;
 /** Where LAX trades changes slowly, and the call weighs more against the free limit. */
 const MARKETS_POLL_MS = 15 * 60_000;
+/** A failed read of the markets or the history is tried again this soon, then twice as long each time, up to MARKETS_POLL_MS. */
+const MARKETS_RETRY_MS = 60_000;
 /** How often the node list's figures are read for the trends. */
 const READING_MS = 5 * 60 * 1000;
 
@@ -211,41 +213,46 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
     broadcast({ type: "price", price });
   }
 
-  void pollPrice();
+  const firstPrice = pollPrice();
   const pricePoll = options.fetchPrice ? setInterval(() => void pollPrice(), PRICE_POLL_MS) : null;
 
-  // Where LAX trades, the same way
+  // Where LAX trades, and once the week's price and volume where the dashboard took no readings
+  // of its own: before it read them, or while it was down. One call to CoinGecko at a time, after
+  // the price: its free API refuses an address that calls too often. A failed read is tried again
+  // within a minute rather than at the next poll
   let markets: Market[] | null = null;
+  let historyFilled = !options.fetchHistory;
+  let marketsTimer: ReturnType<typeof setTimeout> | undefined;
+  let marketsRetry = MARKETS_RETRY_MS;
+  let closed = false;
 
   async function pollMarkets(): Promise<void> {
-    void fillHistory();
+    const next = (await options.fetchMarkets?.()) ?? null;
 
-    const next = await options.fetchMarkets?.();
+    if (next && JSON.stringify(next) !== JSON.stringify(markets)) {
+      markets = next;
+      broadcast({ type: "markets", markets });
+    }
 
-    if (!next || JSON.stringify(next) === JSON.stringify(markets)) return;
+    if (!historyFilled) {
+      const points = await options.fetchHistory?.();
 
-    markets = next;
-    broadcast({ type: "markets", markets });
+      if (points) {
+        historyFilled = true;
+        registry.backfillMarket(points);
+        scheduleCharts();
+      }
+    }
+
+    const failed = (options.fetchMarkets && !next) || !historyFilled;
+    const wait = failed ? marketsRetry : MARKETS_POLL_MS;
+
+    marketsRetry = failed ? Math.min(marketsRetry * 2, MARKETS_POLL_MS) : MARKETS_RETRY_MS;
+
+    if (!closed && (options.fetchMarkets || !historyFilled)) marketsTimer = setTimeout(() => void pollMarkets(), wait);
   }
 
-  // The week's price and volume, where the dashboard took no readings of its own: before it
-  // read them, or while it was down. Once is enough; readings take over from there
-  let historyFilled = !options.fetchHistory;
-
-  async function fillHistory(): Promise<void> {
-    if (historyFilled) return;
-
-    const points = await options.fetchHistory?.();
-
-    if (!points || historyFilled) return;
-
-    historyFilled = true;
-    registry.backfillMarket(points);
-    scheduleCharts();
-  }
-
-  void pollMarkets();
-  const marketsPoll = options.fetchMarkets ? setInterval(() => void pollMarkets(), MARKETS_POLL_MS) : null;
+  if (options.fetchMarkets || options.fetchHistory) void firstPrice.then(pollMarkets);
   // Not at startup: restored nodes are offline until they report again, which would read as an outage
   const reading = setInterval(() => {
     registry.recordReading(gasPrice, Date.now(), price?.usd ?? null, price?.volume24h ?? null);
@@ -612,7 +619,8 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
 
       if (gasPricePoll) clearInterval(gasPricePoll);
       if (pricePoll) clearInterval(pricePoll);
-      if (marketsPoll) clearInterval(marketsPoll);
+      closed = true;
+      clearTimeout(marketsTimer);
       clearInterval(incidentCheck);
       clearInterval(reading);
       clearInterval(heartbeat);

@@ -2,7 +2,11 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
+import { log } from "../src/server/log.ts";
 import { fetchHistory, fetchMarkets, fetchPrice } from "../src/server/price.ts";
+
+// Refused reads are logged; the tests make plenty on purpose
+log.quiet = true;
 
 /** coingecko serves one canned body (or status) for an endpoint and returns the API's base URL. */
 async function coingecko(body: unknown, status = 200, path = /^\/simple\/price\?ids=parallax-2&vs_currencies=usd/): Promise<{ api: string; close: () => void }> {

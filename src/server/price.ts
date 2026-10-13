@@ -5,6 +5,7 @@
 // the last week's price and volume once, to fill the trends.
 
 import type { Market, Price } from "../lib/protocol.ts";
+import { log } from "./log.ts";
 
 const TIMEOUT_MS = 5000;
 /** Anything outside this is a broken response, not a price. */
@@ -46,6 +47,17 @@ export async function fetchPrice(id: string, api = COINGECKO_API): Promise<Price
   }
 }
 
+/**
+ * refused logs why CoinGecko gave no answer, its status or the error, and
+ * returns null. Its free API refuses addresses that call too often, and a
+ * server's shared address may already have.
+ */
+function refused(what: string, why: number | unknown): null {
+  log.warn("PRC", `CoinGecko gave no ${what}:`, typeof why === "number" ? `HTTP ${why}` : why instanceof Error ? why.message : why);
+
+  return null;
+}
+
 /** Pairs kept, most volume first: enough for any exchange that trades. */
 const MAX_MARKETS = 20;
 
@@ -58,7 +70,7 @@ export async function fetchMarkets(id: string, api = COINGECKO_API): Promise<Mar
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) return refused("markets", res.status);
 
     const body = (await res.json()) as { tickers?: unknown };
 
@@ -102,8 +114,8 @@ export async function fetchMarkets(id: string, api = COINGECKO_API): Promise<Mar
         .sort((a, b) => b.volume24h - a.volume24h)
         .slice(0, MAX_MARKETS)
     );
-  } catch {
-    return null;
+  } catch (err) {
+    return refused("markets", err);
   }
 }
 
@@ -126,7 +138,7 @@ export async function fetchHistory(id: string, api = COINGECKO_API): Promise<Mar
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
 
-    if (!res.ok) return null;
+    if (!res.ok) return refused("price history", res.status);
 
     const body = (await res.json()) as { prices?: unknown; total_volumes?: unknown };
 
@@ -154,7 +166,7 @@ export async function fetchHistory(id: string, api = COINGECKO_API): Promise<Mar
     take(body.total_volumes, "volume", 0);
 
     return [...points.values()].sort((a, b) => a.at - b.at);
-  } catch {
-    return null;
+  } catch (err) {
+    return refused("markets", err);
   }
 }

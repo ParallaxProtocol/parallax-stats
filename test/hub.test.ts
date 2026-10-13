@@ -418,6 +418,37 @@ test("viewers get the recommended gas price in the snapshot", async () => {
   ws.close();
 });
 
+test("CoinGecko is called one at a time, the price first, and the markets and history reach viewers", async () => {
+  const calls: string[] = [];
+  let open = 0;
+  // Each read notes whether another was still waiting for CoinGecko
+  const read = async <T>(name: string, value: T): Promise<T> => {
+    calls.push(open > 0 ? `${name} (overlapping)` : name);
+    open++;
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    open--;
+
+    return value;
+  };
+  const market = { exchange: "SafeTrade", url: null, pair: "LAX/USDT", volume24h: 601, spread: 40, depthUp: 0, depthDown: 0, lastTrade: null };
+  const now = Date.now();
+  const marketHub = createHub(loadSettings({ PUBLIC_SECRET: "open" }), {
+    fetchPrice: () => read("price", { usd: 0.015, btc: null, volume24h: 627, change24h: null, at: now, url: "https://www.coingecko.com/en/coins/parallax-2" }),
+    fetchMarkets: () => read("markets", [market]),
+    fetchHistory: () => read("history", [{ at: now, usd: 0.014, volume: 600 }]),
+  });
+
+  try {
+    await waitFor(() => (marketHub.snapshot().charts?.trends.volume.at(-1) ?? null) !== null);
+
+    assert.deepEqual(calls, ["price", "markets", "history"]);
+    assert.deepEqual(marketHub.snapshot().markets, [market]);
+    assert.equal(marketHub.snapshot().charts?.trends.volume.at(-1), 600);
+  } finally {
+    marketHub.close();
+  }
+});
+
 test("the stats endpoints are rate limited per address", async () => {
   const limited = createHub(loadSettings({ PUBLIC_SECRET: "open", API_PER_MINUTE: "3" }));
   const api = createServer((req, res) => {
