@@ -58,7 +58,7 @@ const SORT_VALUE: Record<SortKey, (n: PublicNode) => number | string> = {
   // Miners first, by hashrate; offline nodes count as not mining
   mining: (n) => (n.stats.active && n.stats.mining ? 1 + n.stats.hashrate : 0),
   propagation: (n) => shownPropagation(n.stats.block),
-  propagationAvg: (n) => n.stats.propagationAvg,
+  propagationAvg: (n) => timedAverage(n) ?? Infinity,
   pending: (n) => n.stats.pending,
   uptime: (n) => n.stats.uptime,
 };
@@ -68,6 +68,11 @@ function compare(a: number | string, b: number | string): number {
 
   // Untimed values (Infinity) tie with each other rather than give NaN
   return a === b ? 0 : a - (b as number);
+}
+
+/** timedAverage is a node's average propagation, or null while none of its recent blocks were timed. */
+function timedAverage(node: PublicNode): number | null {
+  return node.history.some((p) => p >= 0) ? node.stats.propagationAvg : null;
 }
 
 /** shownPropagation sorts an untimed head, one the node caught up to, after every timed one. */
@@ -161,6 +166,15 @@ function fewPeersHint(active: boolean, peers: number): string | undefined {
   return active && gradePeers(peers) !== "good" ? "Few peers: opening P2P port 32110 lets other nodes connect to this one" : undefined;
 }
 
+/** Dash stands in for a value there is none of, such as a node not mining. */
+function Dash() {
+  return (
+    <svg viewBox="0 0 16 16" className="size-4 text-muted-foreground/60" aria-hidden>
+      <path d="M5 8h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 /** MiningStatus is a pickaxe for a mining node, with its hashrate on hover, and a dash otherwise. */
 function MiningStatus({ mining, hashrate, className = "" }: { mining: boolean; hashrate: number; className?: string }) {
   const label = mining ? `Mining at ${formatHashrate(hashrate)}` : "Not mining";
@@ -187,9 +201,7 @@ function MiningStatus({ mining, hashrate, className = "" }: { mining: boolean; h
               <path d="M19.686 8.314a12.501 12.501 0 0 1 1.356 10.225 1 1 0 0 1-1.751-.119 22 22 0 0 0-3.393-6.319" />
             </svg>
           ) : (
-            <svg viewBox="0 0 16 16" className="size-4 text-muted-foreground/60" aria-hidden>
-              <path d="M5 8h6" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-            </svg>
+            <Dash />
           )}
         </span>
       </Tooltip>
@@ -449,7 +461,7 @@ function Details({
                     ["Reported", formatAgo(stats.block.received, now)],
                     ["Transactions", formatInt(stats.block.txCount)],
                     ["Total difficulty", truncate(formatInt(Number(stats.block.totalDifficulty))), stats.block.totalDifficulty],
-                    ["Average propagation", formatMs(stats.propagationAvg)],
+                    ["Average propagation", timedAverage(node) === null ? <Dash /> : formatMs(stats.propagationAvg)],
                   ]}
                 />
                 <DetailSection
@@ -668,7 +680,20 @@ export function NodeTable({
                         title={active && atHead && !timed ? "Caught up to after connecting: timed from the next block" : undefined}
                         className={fade}
                       >
-                        {!active ? "—" : atHead && timed ? (stats.block.propagation ? `+${formatMs(stats.block.propagation)}` : "first") : "n/a"}
+                        {!active ? (
+                          "—"
+                        ) : !atHead ? (
+                          "n/a"
+                        ) : !timed ? (
+                          <>
+                            <Dash />
+                            <span className="sr-only">Not timed</span>
+                          </>
+                        ) : stats.block.propagation ? (
+                          `+${formatMs(stats.block.propagation)}`
+                        ) : (
+                          "first"
+                        )}
                       </Cell>
                       <td className={`px-3 py-3 ${fade}`}>
                         {nodes.length < 2 ? (
@@ -680,7 +705,18 @@ export function NodeTable({
                           <span className="inline-flex items-center gap-2">
                             <PropagationStrip history={node.history} bestBlock={bestBlock} offline={!active} />
                             <span className="text-xs whitespace-nowrap text-muted-foreground">
-                              {behind > HISTORY_BINS ? "n/a" : `avg ${formatMs(stats.propagationAvg)}`}
+                              {behind > HISTORY_BINS ? (
+                                "n/a"
+                              ) : timedAverage(node) === null ? (
+                                <Tooltip content={`None of the last ${HISTORY_BINS} blocks timed yet`}>
+                                  <span className="inline-flex">
+                                    <Dash />
+                                    <span className="sr-only">No average yet</span>
+                                  </span>
+                                </Tooltip>
+                              ) : (
+                                `avg ${formatMs(stats.propagationAvg)}`
+                              )}
                             </span>
                           </span>
                         )}
