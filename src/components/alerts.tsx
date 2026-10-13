@@ -511,6 +511,8 @@ export const WARNING_DOT: Record<Tone, string> = { critical: "bg-critical", warn
  */
 export function AlertCount({ alerts }: { alerts: Alert[] }) {
   const [open, setOpen] = useState(false);
+  // The status card's history, opened on the way to it: the same key as the card's own toggle
+  const [, setHistory] = usePersistent("incident-history", false);
   const root = useRef<HTMLDivElement>(null);
   const panel = useId();
 
@@ -590,8 +592,13 @@ export function AlertCount({ alerts }: { alerts: Alert[] }) {
               </div>
             </section>
           ))}
-          {/* What came before: closes the panel on the way, so it does not cover the timeline */}
-          <a href="#incidents" onClick={() => setOpen(false)} className="px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground">
+          {/* What came before: closes the panel on the way, so it does not cover the timeline, and opens it */}
+          <a
+            href="#incidents"
+            onClick={() => {
+              setOpen(false);
+              setHistory(true);
+            }} className="px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground">
             See past incidents
           </a>
         </div>
