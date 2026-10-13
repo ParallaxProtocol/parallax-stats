@@ -743,16 +743,17 @@ export class History {
   }
 
   /**
-   * blockPropagation summarizes how long blocks took to reach nodes after
-   * the first report, over counted reports only. First reports are left
-   * out: their delay is 0 by definition, and counting them would pull every
-   * figure down.
+   * blockPropagation summarizes how long blocks took to reach verified
+   * nodes after the first verified report, over counted reports only, so
+   * unverified nodes cannot skew the bands and percentiles with made-up
+   * timings. First reports are left out: their delay is 0 by definition,
+   * and counting them would pull every figure down.
    */
   private blockPropagation(): PropagationStats {
     const samples: number[] = [];
 
     for (const item of this.items) {
-      for (const { delays } of this.delays(item)) samples.push(...delays.slice(1));
+      for (const { delays } of this.delays(item, true)) samples.push(...delays.slice(1));
     }
 
     samples.sort((a, b) => a - b);

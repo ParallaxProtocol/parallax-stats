@@ -158,9 +158,9 @@ export interface PublicNode {
  */
 export const PROPAGATION_BANDS = [5000, 15_000, 60_000] as const;
 
-/** How long blocks took to reach nodes after the first report. */
+/** How long blocks took to reach verified nodes after the first verified report. */
 export interface PropagationStats {
-  /** Reports counted; the first report of each block is left out, as its delay is 0 by definition. */
+  /** Verified reports counted; the first of each block is left out, as its delay is 0 by definition. */
   samples: number;
   avg: number;
   p50: number;

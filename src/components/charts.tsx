@@ -678,13 +678,13 @@ function share(part: number, total: number): string {
 }
 
 /**
- * Propagation shows how quickly blocks reach nodes. It leads with how long
- * recent blocks took to reach 90% of verified nodes, the figure its colour
+ * Propagation shows how quickly blocks reach verified nodes. It leads with
+ * how long recent blocks took to reach 90% of them, the figure its colour
  * and the slow propagation alert grade, or, with too few verified reports
  * for that, the share of reports within 5 s. Delays are heavily skewed
  * (nearly all arrive within a second), so instead of a histogram on a
- * linear axis it splits all reports into speed bands, and gives the tail
- * as percentiles.
+ * linear axis it splits the verified reports into speed bands, and gives
+ * the tail as percentiles.
  */
 export function Propagation({ stats }: { stats: PropagationStats }) {
   const { samples, bands, spread } = stats;
@@ -699,10 +699,10 @@ export function Propagation({ stats }: { stats: PropagationStats }) {
       title="Propagation"
       readout={samples ? `${formatInt(samples)} reports` : undefined}
       value={spread ? formatMs(spread.median) : samples ? share(bands[0], samples) : undefined}
-      qualifier={spread ? "to reach 90% of verified nodes" : "reached nodes within 5 s"}
+      qualifier={spread ? "to reach 90% of verified nodes" : "reached verified nodes within 5 s"}
     >
       {samples === 0 ? (
-        <Waiting>Waiting for blocks to reach a second node</Waiting>
+        <Waiting>Waiting for blocks to reach a second verified node</Waiting>
       ) : (
         <div className="flex flex-1 flex-col justify-between gap-3">
           <div

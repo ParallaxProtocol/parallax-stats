@@ -514,6 +514,26 @@ test("propagation ignores catching-up nodes and takes off each node's latency", 
   assert.equal(propagation.p50, 100);
 });
 
+test("propagation stats count verified nodes only", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "seed", "10.4.0.1", true);
+  login(nodes, "ops", "10.4.0.2", true);
+  login(nodes, "stranger", "10.4.0.3");
+  settle(nodes, "seed", "ops", "stranger");
+
+  report(nodes, "seed", block(10), 1_000_000, 0);
+  report(nodes, "ops", block(10), 1_000_000, 2000);
+  // An unverified node claiming to be a minute late would land in the slowest band
+  report(nodes, "stranger", block(10), 1_000_000, 90_000);
+
+  const { propagation } = nodes.charts();
+
+  assert.equal(propagation.samples, 1);
+  assert.deepEqual(propagation.bands, [1, 0, 0, 0]);
+  assert.equal(propagation.p99, 2000);
+});
+
 test("a node's own propagation history leaves out its catch-up after connecting", () => {
   const nodes = new Registry(settings);
 

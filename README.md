@@ -246,7 +246,7 @@ numbers; shares are fractions from 0 to 1.
 | `uptime` | `verifiedAveragePercent`: verified nodes' average uptime |
 | `decentralization` | over the last 7 days of blocks: `grade` (`healthy`, `fair`, `concentrated`, `critical`), `majorityHolders` (the fewest miners holding a majority, `null` when more than are listed), `distinctMiners`, `topMiners` (`name` and `website` for known pools, `address`, `blocks`, `share`) |
 | `staleBlocks` | `window`, `count`, `recent` stale heights, `reorgs` (count and `since`), `lastReorg` and `lastDeepReorg` (`height`, `at`, `nodes`, `depth`), `split`, the panel's warning `level`, and what the fork graph draws: the window's `heights` (`from`, `to`), every `stale` height and every one of the `reorgEvents` |
-| `propagation` | `reports`, `medianMs`, `p90Ms`, `p99Ms`, `reach90`: how long recent blocks took to reach 90% of verified nodes, with any consistently slow miner, and `bands`: reports by speed (`fromMs`, `toMs`, `null` for no limit, `reports`) |
+| `propagation` | `reports` (from verified nodes only, as are the percentiles and bands), `medianMs`, `p90Ms`, `p99Ms`, `reach90`: how long recent blocks took to reach 90% of verified nodes, with any consistently slow miner, and `bands`: reports by speed (`fromMs`, `toMs`, `null` for no limit, `reports`) |
 | `clientVersions` | the online nodes: `online`, the `latest` release (`version`, `url`), how many are `upToDate` on it or newer and how many `behind` (`null` while GitHub cannot be reached), and counts by `versions` and `platforms` |
 | `nodeList` | every node the table lists: `name`, `verified`, `client`, `version`, `active`, `offlineSince` (when it was last known connected, `null` while it is), `syncing`, `mining`, `hashesPerSecond`, `peers`, `peerLatencyMs`, `block`, `propagationMs`, `propagationAvgMs`, `pending`, `uptimePercent`, `country`, `city` |
 | `alerts` | the alerts showing on the page, most severe first: `type` (`split`, `stall`, `reorg`, `majority`, `propagation`, `slow-miner`, `release`), `level` (`critical`, `warn`, `info`), `since` where it applies, and `details` |
@@ -340,6 +340,8 @@ Tells the caller whether they can report under a node name: `available`,
   before any verified node is held until a verified node reports that
   same block, then timed from when it came: the node that really had it
   first shows as first.
+  The speed bands and percentiles cover verified nodes only, timed from
+  the first verified report, so unverified nodes cannot skew them.
   The alert uses how long recent blocks took to reach 90% of the
   verified nodes: amber over 15 s, red over 60 s, or amber naming a miner
   whose blocks are consistently that slow while everyone else's spread in
