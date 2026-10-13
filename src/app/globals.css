@@ -84,6 +84,17 @@
   --off: oklch(0.7 0 0);
 }
 
+/*
+ * Charts read by touch: a press shows a value instead of selecting the
+ * chart's text, calling up the browser's menu or flashing a highlight
+ */
+@utility tap-chart {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);

@@ -80,7 +80,7 @@ function Live({
   const start = c.trends?.start ?? [];
   const foundAt = (summary.bestStats?.block.timestamp ?? 0) * 1000;
   const thin = thinMarket(markets);
-  const alerts = useAlerts({ bestBlock: summary.bestBlock, foundAt, charts, nodes, latestRelease });
+  const alerts = useAlerts({ charts, nodes, latestRelease });
   const quiet = watch(charts, useServerNow())?.level ?? null;
   // Warnings marked on their sections
   const sections = useMemo(() => {

@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, use, useCallback, useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { createContext, use, useCallback, useEffect, useId, useRef, useState, type CSSProperties, type MouseEvent, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { motion, useReducedMotion } from "motion/react";
 import { blockReward, WEI_PER_LAX } from "@/lib/emission";
 import { formatBlockTime, formatCompact, formatInt, formatMs, formatPercent, gradeAvgBlockTime, shortHash, type Grade } from "@/lib/format";
@@ -190,6 +190,40 @@ export function Grow({ className, style, delay = 0 }: { className: string; style
   );
 }
 
+/** fromMouse reports whether a pointer or click event came from a mouse; a click from an older browser, by whether the page can hover. */
+export function fromMouse(event: PointerEvent<Element> | MouseEvent<Element>): boolean {
+  const type = (event.nativeEvent as globalThis.PointerEvent).pointerType;
+
+  return type === undefined ? window.matchMedia("(hover: hover)").matches : type === "mouse";
+}
+
+/**
+ * hoverable lights up one part of a chart: for a mouse while over it, and
+ * for touch on a tap, until a tap on another part or on it again. Touch has
+ * no hover: following its pointerenter, every touch that starts a scroll
+ * would light something up, and the tap's own pointerleave put it out again.
+ */
+export function hoverable(on: boolean, show: () => void, hide: () => void) {
+  return {
+    onPointerEnter: (e: PointerEvent<Element>) => {
+      if (e.pointerType === "mouse") show();
+    },
+    onPointerLeave: (e: PointerEvent<Element>) => {
+      if (e.pointerType === "mouse") hide();
+    },
+    onClick: (e: MouseEvent<Element>) => {
+      if (fromMouse(e)) return;
+      if (on) hide();
+      else show();
+    },
+  };
+}
+
+/** mouseLeave is a pointerleave handler for a mouse only, as touch lifts off what it tapped at once. */
+export const mouseLeave = (hide: () => void) => (e: PointerEvent<Element>) => {
+  if (e.pointerType === "mouse") hide();
+};
+
 /**
  * scrubIndex maps a pointer's x position across an element to one of `count` slots.
  * Touch pointers are captured by the element they first land on, so per-slot
@@ -225,7 +259,7 @@ function Plot({
       <svg
         viewBox={`0 0 ${size.width} ${size.height}`}
         preserveAspectRatio="none"
-        className={`absolute inset-0 block size-full touch-pan-y overflow-visible select-none [-webkit-touch-callout:none] ${
+        className={`absolute inset-0 block size-full touch-pan-y overflow-visible tap-chart ${
           seen ? "chart-reveal" : "chart-pending"
         }`}
         role="img"
@@ -817,7 +851,7 @@ export function Propagation({ stats }: { stats: PropagationStats }) {
             ref={bar}
             role="img"
             aria-label={BANDS.map((band, i) => `${band.label}: ${bands[i]} reports`).join(", ")}
-            className={`flex h-3.5 w-full items-center gap-0.5 ${seen ? "chart-reveal" : "chart-pending"}`}
+            className={`tap-chart flex h-3.5 w-full items-center gap-0.5 ${seen ? "chart-reveal" : "chart-pending"}`}
           >
             {BANDS.map((band, i) =>
               bands[i] > 0 ? (
@@ -827,23 +861,21 @@ export function Propagation({ stats }: { stats: PropagationStats }) {
                       active === null || active === i ? "" : "opacity-35"
                     }`}
                     style={{ flexGrow: bands[i], flexBasis: 0, minWidth }}
-                    onPointerEnter={() => setActive(i)}
-                    onPointerLeave={() => setActive(null)}
+                    {...hoverable(active === i, () => setActive(i), () => setActive(null))}
                   />
                 </Tooltip>
               ) : null,
             )}
           </div>
 
-          <ul className="grid grid-cols-2 gap-x-5 gap-y-0.5">
+          <ul className="tap-chart grid grid-cols-2 gap-x-5 gap-y-0.5">
             {BANDS.map((band, i) => (
               <li
                 key={band.label}
                 className={`-mx-2 flex items-baseline gap-2 rounded-sm px-2 py-1 text-xs transition-[background-color,opacity] duration-150 ${
                   active === i ? "bg-foreground/8" : active === null ? "" : "opacity-35"
                 }`}
-                onPointerEnter={() => setActive(i)}
-                onPointerLeave={() => setActive(null)}
+                {...hoverable(active === i, () => setActive(i), () => setActive(null))}
               >
                 <span
                   aria-hidden
@@ -1119,7 +1151,7 @@ function Donut({
   const starts = slices.map((_, i) => slices.slice(0, i).reduce((sum, s) => sum + (s.blocks / total) * circumference, 0));
 
   return (
-    <svg viewBox="0 0 120 120" className="size-32 shrink-0 -rotate-90 sm:size-36 xl:size-44" role="img" aria-label="Share of recent blocks by miner">
+    <svg viewBox="0 0 120 120" className="tap-chart size-32 shrink-0 -rotate-90 sm:size-36 xl:size-44" role="img" aria-label="Share of recent blocks by miner">
       <RingSweep center={60} radius={radius} width={24}>
         {slices.map((slice, i) => {
           const length = (slice.blocks / total) * circumference;
@@ -1137,8 +1169,7 @@ function Donut({
                 strokeDashoffset={-starts[i]}
                 className="transition-[stroke-width,opacity] duration-150"
                 opacity={active === null || active === slice.key ? 1 : 0.35}
-                onPointerEnter={() => onActive(slice.key)}
-                onPointerLeave={() => onActive(null)}
+                {...hoverable(active === slice.key, () => onActive(slice.key), () => onActive(null))}
               />
             </Tooltip>
           );
@@ -1239,7 +1270,7 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
               </div>
             </div>
 
-            <ol className="flex min-w-0 flex-1 flex-col gap-0.5">
+            <ol className="tap-chart flex min-w-0 flex-1 flex-col gap-0.5">
               {slices.map((slice, i) => (
                 <li
                   key={slice.key}
@@ -1247,8 +1278,7 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
                     // A holder's row keeps its tint under the pointer; the others light up as before
                     concern && i < holders ? CAUSE_ROW[concern] : active === slice.key ? "bg-foreground/8" : ""
                   } ${active === slice.key ? "text-foreground" : active === null ? "" : "opacity-35"}`}
-                  onPointerEnter={() => setActive(slice.key)}
-                  onPointerLeave={() => setActive(null)}
+                  {...hoverable(active === slice.key, () => setActive(slice.key), () => setActive(null))}
                 >
                   <span
                     className={`size-2.5 rounded-sm transition-transform duration-150 ${active === slice.key ? "scale-125" : ""}`}

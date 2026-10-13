@@ -10,15 +10,19 @@ import { Ping } from "./indicator";
 import { useServerNow } from "./live/provider";
 import { SPRING } from "./motion";
 import { Label, Plate } from "./plate";
+import { Tooltip } from "./tooltip";
 import { usePersistent } from "./use-persistent";
 
 /** Each kind of incident, in the timeline's order. */
-const KINDS: { kind: IncidentKind; label: string }[] = [
+const KINDS: { kind: IncidentKind; label: string; help?: string }[] = [
   { kind: "majority", label: "Mining majority" },
-  { kind: "withholding", label: "Hidden mining" },
+  {
+    kind: "withholding",
+    label: "Potential hidden mining",
+    help: "The largest miner published fewer blocks than its share predicts, as it would while mining a chain in secret. A sudden drop in its hashrate looks the same.",
+  },
   { kind: "spread", label: "Slow propagation" },
   { kind: "split", label: "Chain split" },
-  { kind: "stall", label: "Block stall" },
   { kind: "reorg", label: "Deep reorg" },
 ];
 const LABEL = Object.fromEntries(KINDS.map(({ kind, label }) => [kind, label])) as Record<IncidentKind, string>;
@@ -118,8 +122,23 @@ function ticks(range: Range, from: number, to: number): { at: number; label: str
   return out;
 }
 
+/** A question mark in a circle that explains its row on hover or focus. */
+function Help({ text }: { text: string }) {
+  return (
+    <Tooltip content={text}>
+      <span role="img" aria-label={text} tabIndex={0} className="shrink-0 rounded-full outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring">
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" className="size-3" aria-hidden="true">
+          <circle cx="8" cy="8" r="6.25" />
+          <path d="M6.25 6.25a1.75 1.75 0 1 1 2.5 1.6c-.45.22-.75.6-.75 1.1v.3" />
+          <circle cx="8" cy="11.25" r=".4" fill="currentColor" />
+        </svg>
+      </span>
+    </Tooltip>
+  );
+}
+
 /** The grid every row shares: its label, its bar and a note at the end. On phones the bar goes under the other two. */
-const ROW = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 sm:grid-cols-[9rem_minmax(0,1fr)_11rem]";
+const ROW = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 sm:grid-cols-[11rem_minmax(0,1fr)_11rem]";
 /** The bars' height, the same on every row. */
 const BAR = "h-4 rounded-[3px]";
 
@@ -206,10 +225,10 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
   const from = now - span;
   const recent = useMemo(() => log.list.filter((incident) => overlaps(incident, from, now, now)), [log, from, now]);
   const picked = recent.find((incident) => incident.id === chosen) ?? null;
-  // Since when each kind is on record: stalls, quiet spells and the majority were rebuilt from saved blocks
+  // Since when each kind is on record: quiet spells and the majority were rebuilt from saved blocks
   const recordedFrom = useCallback(
     (kind: IncidentKind) =>
-      log.rebuiltFrom === null ? log.since : kind === "stall" || kind === "withholding" ? log.rebuiltFrom : kind === "majority" ? Math.min(log.since, log.rebuiltFrom + WEEK_MS) : log.since,
+      log.rebuiltFrom === null ? log.since : kind === "withholding" ? log.rebuiltFrom : kind === "majority" ? Math.min(log.since, log.rebuiltFrom + WEEK_MS) : log.since,
     [log],
   );
 
@@ -385,7 +404,7 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
             <span className="text-right text-xs text-muted-foreground tabular-nums sm:order-last">{note}</span>
           )}
           <div
-            className={`relative col-span-2 ${BAR} touch-pan-y overflow-hidden select-none sm:col-span-1`}
+            className={`relative col-span-2 ${BAR} touch-pan-y overflow-hidden tap-chart sm:col-span-1`}
             role="img"
             aria-label={`${name}, ${heading.toLowerCase()}: ${ofKinds.length === 0 ? "no incidents" : count}`}
             onPointerDown={(e) => point(kinds, e)}
@@ -449,14 +468,21 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
                     }}
                   />
                 </div>
-                {KINDS.map(({ kind, label }, i) => (
+                {KINDS.map(({ kind, label, help }, i) => (
                   <motion.div key={kind} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING, delay: i * 0.04 }}>
-                    {row([kind], <span className="truncate text-xs text-muted-foreground">{label}</span>, label)}
+                    {row(
+                      [kind],
+                      <span className="flex min-w-0 items-center gap-1 text-xs text-muted-foreground">
+                        <span className="truncate">{label}</span>
+                        {help && <Help text={help} />}
+                      </span>,
+                      label,
+                    )}
                   </motion.div>
                 ))}
 
                 {/* The axis, under the rows' timelines */}
-                <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)_11rem] sm:gap-x-4">
+                <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-[11rem_minmax(0,1fr)_11rem] sm:gap-x-4">
                   <div className="relative h-3 font-mono text-[10px] text-muted-foreground sm:col-start-2">
                     {marks
                       // Too near an end, a centred label would be cut off

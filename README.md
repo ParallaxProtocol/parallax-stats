@@ -67,8 +67,9 @@ blocks, so the mining majority alert shows; `SIM_MAJORITY=0` spreads blocks
 out, `SIM_SKEW=1` shares the rest evenly so decentralization grades healthy,
 `SIM_BLOCK_MS` sets the block interval (default 20 s), and `SIM_QUIET=240`
 has the largest miner stop publishing 240 minutes before the simulation
-starts, as it would to mine a chain in secret, so the hidden mining alert
-shows (at 60% of blocks, amber from about 2.6 hours and red from 3.8).
+starts, as it would to mine a chain in secret, so the potential hidden
+mining alert shows (at 60% of blocks, amber from about 2.6 hours and red
+from 3.8).
 
 ## Adding a node
 
@@ -252,8 +253,8 @@ numbers; shares are fractions from 0 to 1.
 | `propagation` | `reports` (from verified nodes only, as are the percentiles and bands), `medianMs`, `p90Ms`, `p99Ms`, `reach90`: how long recent blocks took to reach 90% of verified nodes, with any consistently slow miner, and `bands`: reports by speed (`fromMs`, `toMs`, `null` for no limit, `reports`) |
 | `clientVersions` | the online nodes: `online`, the `latest` release (`version`, `url`), how many are `upToDate` on it or newer and how many `behind` (`null` while GitHub cannot be reached), and counts by `versions` and `platforms` |
 | `nodeList` | every node the table lists: `name`, `verified`, `client`, `version`, `active`, `offlineSince` (when it was last known connected, `null` while it is), `syncing`, `mining`, `hashesPerSecond`, `peers`, `peerLatencyMs`, `block`, `propagationMs`, `propagationAvgMs`, `pending`, `uptimePercent`, `country` |
-| `alerts` | the alerts showing on the page, most severe first: `type` (`split`, `stall`, `reorg`, `majority`, `withholding`, `propagation`, `slow-miner`, `release`), `level` (`critical`, `warn`, `info`), `since` where it applies, and `details` |
-| `incidents` | the network status card's record: `since` (when recording began), `rebuiltFrom`, and `list`, the last 90 days newest first: `kind` (`majority`, `withholding`, `spread`, `split`, `stall`, `reorg`), `level`, `start`, `startKnown`, `end` (`null` while it lasts) and `detail` |
+| `alerts` | the alerts showing on the page, most severe first: `type` (`split`, `reorg`, `majority`, `withholding`, `propagation`, `slow-miner`, `release`), `level` (`critical`, `warn`, `info`), `since` where it applies, and `details` |
+| `incidents` | the network status card's record: `since` (when recording began), `rebuiltFrom`, and `list`, the last 90 days newest first: `kind` (`majority`, `withholding`, `spread`, `split`, `reorg`), `level`, `start`, `startKnown`, `end` (`null` while it lasts) and `detail` |
 | `trends` | each figure over the last 7 days, in 4 hour slices, oldest first, `null` where there was nothing to measure: `start`, `blockTimeSeconds`, `hashesPerSecond`, `difficulty`, `hashpriceLax` and `securityBudgetLax` (at today's block pay), `activeNodes`, `syncedNodes`, `recommendedFeeWei`, `latencyMs`, `uptimePercent`, `pending`, `mempoolPressure` |
 
 The figures cover the nodes reporting to this dashboard, not the whole
@@ -323,19 +324,19 @@ Tells the caller whether they can report under a node name: `available`,
   the blocks replaced, its own, at 6, 12 and 24 confirmations, in dollars
   at the current price. Wait until that is more than the payment. It
   leaves out what cannot be counted, such as the pool's miners leaving.
-- **Hidden mining**: to replace payments the largest miner has to mine a
-  chain in secret, and the hashrate it gives that chain goes missing from
-  the public one. So the tile also watches, for a miner with 25% of the
-  blocks or more, how long since its last block, and over its last 144
-  blocks, the stretch it published fewest in for its share (allowing for
-  the stretches looked at). The dot is green while that is ordinary luck,
-  grey once a miner mining openly would show it less than once in 100
-  times, amber at once in 10,000, with an alert, and red at once in a
-  million, with payments on hold: at 94% of the blocks, about 1 h 20 min
-  and 2 h without one of its blocks. Colour on the tile only ever means
-  this, what is happening now; what the largest miner could do is the
-  decentralization tile's and the majority alert's. A miner that
-  is merely down looks the same, and is flagged the same: the blocks after
+- **Potential hidden mining**: to replace payments the largest miner has
+  to mine a chain in secret, and the hashrate it gives that chain goes
+  missing from the public one. So the tile also watches, for a miner with
+  25% of the blocks or more, how long since its last block, and over its
+  last 144 blocks, the stretch it published fewest in for its share
+  (allowing for the stretches looked at). The dot is green while that is
+  ordinary luck, grey once a miner mining openly would show it less than
+  once in 100 times, amber at once in 10,000, with an alert, and red at
+  once in a million, with payments on hold: at 94% of the blocks, about
+  1 h 20 min and 2 h without one of its blocks. Colour on the tile only
+  ever means this, what is happening now; what the largest miner could do
+  is the decentralization tile's and the majority alert's. A miner that is
+  merely down looks the same, and is flagged the same: the blocks after
   its last one are the ones a secret chain would replace.
 - **Mempool pressure** is the room the transactions waiting in the
   mempool need, as a share of a block: the median of synced nodes' pending
@@ -390,17 +391,19 @@ Tells the caller whether they can report under a node name: `available`,
   are an ordinary block race.
 - **Incidents** are the alerts' conditions, recorded by the server with
   when each started and ended, and saved with the rest of the state for 90
-  days: a mining majority, hidden mining, slow propagation, a chain split
-  and a possible stall, each from when it first applied, once it has held
-  for 10 minutes (a stall and hidden mining at once, from the last block),
-  until it has been gone for as long (those two, until the next block);
-  and deep reorganizations, as moments. The page shows the last 30 days.
-  When recording begins, past stalls, quiet spells of the largest miner
-  and majorities are rebuilt from the saved blocks; a majority already
-  holding then is shown as starting before that.
-- **Possible stall** shows after 2 hours without a block. Block intervals
-  vary with luck: an hour happens, two hours is a one-in-160,000 wait at
-  steady hashrate.
+  days: a mining majority, potential hidden mining, slow propagation and a
+  chain split, each from when it first applied, once it has held for 10
+  minutes (potential hidden mining at once, from the miner's last block),
+  until it has been gone for as long (potential hidden mining, until the
+  miner's next block); and deep reorganizations, as moments. The page
+  shows the last 30 days. When recording begins, past quiet spells of the
+  largest miner and majorities are rebuilt from the saved blocks; a
+  majority already holding then is shown as starting before that.
+- **Very long wait** tints the block clock after 2 hours without a block.
+  Block intervals vary with luck: an hour happens, two hours is a
+  one-in-160,000 wait at steady hashrate. On proof of work a long wait is
+  luck or hashrate leaving, not a halted network, so it raises no alert
+  and is not recorded as an incident.
 
 ## Security model
 

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { stallLevel } from "@/lib/alert-levels";
+import { longWaitLevel } from "@/lib/alert-levels";
 import { formatClock, formatInt, gradeElapsed, survival, type Grade } from "@/lib/format";
 import { TARGET_BLOCK_TIME } from "@/lib/protocol";
 import { Indicator } from "./indicator";
@@ -13,7 +13,7 @@ const VERDICT: Record<Grade, string> = {
   good: "On schedule",
   warn: "Running long",
   serious: "Unusually long",
-  critical: "Possible stall",
+  critical: "Very long wait",
   info: "",
   off: "Waiting for nodes",
 };
@@ -35,14 +35,14 @@ const TICKS = [
  */
 /**
  * ClockPlate is the best block's plate, tinted while no block has come for
- * longer than the stall threshold. It ticks on its own, so the rest of the
+ * longer than the long wait threshold. It ticks on its own, so the rest of the
  * page does not re-render every second.
  */
 export function ClockPlate({ id, foundAt, className, children }: { id?: string; foundAt: number; className?: string; children: ReactNode }) {
   const now = useServerNow();
 
   return (
-    <Plate id={id} tone={stallLevel(foundAt, now)} className={className}>
+    <Plate id={id} tone={longWaitLevel(foundAt, now)} className={className}>
       {children}
     </Plate>
   );

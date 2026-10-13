@@ -53,17 +53,6 @@ test("an incident keeps its worst point, and closes when the condition was first
   assert.equal(incidents.log().list.length, 1);
 });
 
-test("a stall opens at once, dated from the last block, and ends with the next", () => {
-  const incidents = new Incidents(T0);
-  const lastBlock = T0 - 125 * MIN;
-
-  assert.equal(incidents.update({ stall: { level: "critical", peak: 125 * MIN, detail: "No block after #100", since: lastBlock } }, T0), true);
-  assert.equal(incidents.log().list[0].start, lastBlock);
-
-  assert.equal(incidents.update({}, T0 + MIN), true);
-  assert.equal(incidents.log().list[0].end, T0 + MIN);
-});
-
 test("deep reorganizations are moments, followed as they are measured deeper", () => {
   const incidents = new Incidents(T0);
 
@@ -86,7 +75,7 @@ test("deep reorganizations are moments, followed as they are measured deeper", (
   assert.equal(incidents.reorgs([{ height: 100, at: T0, nodes: 4, depth: 6 }], T0 + 2 * MIN), false);
 });
 
-test("past stalls and majorities are rebuilt from saved blocks, a majority holding from the start with its start unknown", () => {
+test("past majorities are rebuilt from saved blocks, a majority holding from the start with its start unknown", () => {
   const pool = "0x" + "a".repeat(40);
   const other = "0x" + "b".repeat(40);
   const blocks: TimelineBlock[] = [];
@@ -107,13 +96,10 @@ test("past stalls and majorities are rebuilt from saved blocks, a majority holdi
   incidents.rebuild(blocks, new Map([[pool, { name: "Big Pool", url: null }]]));
 
   const log = incidents.log();
-  const stall = log.list.find((i) => i.kind === "stall")!;
   const held = log.list.find((i) => i.kind === "majority")!;
 
   assert.equal(log.rebuiltFrom, blocks[0].timestamp * 1000);
-  assert.equal(stall.start, blocks[9 * 144 - 1].timestamp * 1000);
-  assert.equal(stall.end, blocks[9 * 144].timestamp * 1000);
-  assert.equal(stall.detail, `No block after #${(9 * 144).toLocaleString("en-US")}`);
+  assert.equal(log.list.filter((i) => (i.kind as string) === "stall").length, 0);
   assert.equal(log.list.filter((i) => i.kind === "majority").length, 1);
   assert.equal(held.startKnown, false);
   assert.equal(held.detail, "Big Pool mined 67% of the week's blocks");
@@ -143,7 +129,7 @@ test("the largest miner going quiet opens at once, dated from its last block, an
     health: { split: null },
     propagation: { spread: null },
   } as unknown as Charts;
-  const seen = observe(charts, T0 - 30 * MIN, 501, T0);
+  const seen = observe(charts, T0);
   const incidents = new Incidents(T0);
 
   assert.equal(seen.withholding?.level, "warn");
@@ -208,12 +194,13 @@ test("saved incidents of a kind no longer recorded are dropped on restore", () =
     rebuilt: true,
     list: [
       { id: `unverified:${T0}`, kind: "unverified" as never, level: "info" as never, start: T0, startKnown: true, end: T0 + MIN, detail: "No verified node online", peak: 0 },
-      { id: `stall:${T0}`, kind: "stall", level: "critical", start: T0, startKnown: true, end: T0 + 130 * MIN, detail: "No block after #100", peak: 130 * MIN },
+      { id: `stall:${T0}`, kind: "stall" as never, level: "critical", start: T0, startKnown: true, end: T0 + 130 * MIN, detail: "No block after #100", peak: 130 * MIN },
+      { id: `reorg:${T0}`, kind: "reorg", level: "warn", start: T0, startKnown: true, end: T0, detail: "3 blocks replaced at #100, seen by 2 nodes", peak: 3 },
     ],
   });
 
   assert.deepEqual(
     incidents.log().list.map((i) => i.kind),
-    ["stall"],
+    ["reorg"],
   );
 });

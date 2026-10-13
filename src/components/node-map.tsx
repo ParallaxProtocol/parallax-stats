@@ -5,7 +5,7 @@ import { countryName, gradeBehind, type Grade } from "@/lib/format";
 import { geoMiller } from "@/lib/projection";
 import type { PublicNode } from "@/lib/protocol";
 import type { WorldMap } from "@/lib/world";
-import { Grow } from "./charts";
+import { Grow, hoverable, mouseLeave } from "./charts";
 import { Indicator } from "./indicator";
 import { Label, Plate } from "./plate";
 
@@ -112,11 +112,11 @@ function Countries({
 
   return (
     <div className="border-t border-border pt-3">
-      <ol className="flex flex-col gap-0.5" onPointerLeave={() => onFocus(null)}>
+      <ol className="tap-chart flex flex-col gap-0.5" onPointerLeave={mouseLeave(() => onFocus(null))}>
         {rows.map(([code, place], i) => (
           <li
             key={code}
-            onPointerEnter={() => onFocus(code)}
+            {...hoverable(focus === code, () => onFocus(code), () => onFocus(null))}
             className={`-mx-2 grid grid-cols-[minmax(0,1fr)_minmax(3rem,7rem)_1.5rem] items-center gap-3 rounded-sm px-2 py-1 text-xs transition-colors duration-150 ${
               focus === code ? "bg-foreground/8" : ""
             }`}
@@ -279,7 +279,7 @@ export function NodeMap({
         <div className="relative w-full">
           <svg
             viewBox={`0 0 ${world.width} ${world.height}`}
-            className={`h-auto w-full transition-opacity duration-500 ${located === 0 && nodes.length > 0 ? "opacity-30" : ""}`}
+            className={`tap-chart h-auto w-full transition-opacity duration-500 ${located === 0 && nodes.length > 0 ? "opacity-30" : ""}`}
             role="group"
             aria-label={`World map of ${located} located nodes, shaded by nodes per country`}
           >

@@ -183,7 +183,7 @@ function SupplyCurve({ height }: { height: number }) {
         <svg
           viewBox={`0 0 ${width} ${h}`}
           preserveAspectRatio="none"
-          className="absolute inset-0 size-full touch-pan-y overflow-visible select-none [-webkit-touch-callout:none]"
+          className="absolute inset-0 size-full touch-pan-y overflow-visible tap-chart"
           role="img"
           aria-label={`Supply curve: ${(nowShare * 100).toFixed(1)}% of the maximum supply is issued, half by the first halving and over 99% by the ${ordinal(CURVE_ERAS)}`}
           onPointerDown={(e) => setActive(scrubIndex(e, curve.length, true))}

@@ -10,7 +10,6 @@ import {
   majority,
   reorgLevel,
   SLOW_SPREAD_MS,
-  stallLevel,
   VERY_SLOW_SPREAD_MS,
   type Level,
 } from "../lib/alert-levels.ts";
@@ -33,7 +32,7 @@ const TRANSFER_GAS = 21_000;
 const POOL_UNIT = 2 ** 32;
 
 export interface ApiAlert {
-  type: "split" | "stall" | "reorg" | "majority" | "withholding" | "propagation" | "slow-miner" | "release";
+  type: "split" | "reorg" | "majority" | "withholding" | "propagation" | "slow-miner" | "release";
   level: Level | "info";
   /** When the condition began, where it has a start. */
   since: number | null;
@@ -386,18 +385,11 @@ function trends(charts: Charts, pay: number) {
 /** activeAlerts lists what the page's banners show right now, by the same rules. */
 export function activeAlerts(snapshot: Snapshot, latestRelease: Release | null, now = Date.now()): ApiAlert[] {
   const { nodes, charts } = snapshot;
-  const summary = summarize(nodes);
   const health = charts?.health ?? null;
   const alerts: ApiAlert[] = [];
 
   if (health?.split) {
     alerts.push({ type: "split", level: "critical", since: null, details: { chains: health.split.chains, verifiedNodes: health.split.nodes, sharedHeight: health.split.height } });
-  }
-
-  const foundAt = (summary.bestStats?.block.timestamp ?? 0) * 1000;
-
-  if (stallLevel(foundAt, now)) {
-    alerts.push({ type: "stall", level: "critical", since: foundAt, details: { lastBlock: summary.bestBlock, waitingSeconds: Math.round((now - foundAt) / 1000) } });
   }
 
   const reorg = deepReorg(health, now);

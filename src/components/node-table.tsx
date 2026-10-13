@@ -314,7 +314,7 @@ function PropagationStrip({ history, bestBlock, offline }: { history: number[]; 
       <svg
         width={HISTORY_BINS * 3}
         height={h}
-        className={`block touch-pan-y select-none [-webkit-touch-callout:none] ${offline ? "grayscale" : ""}`}
+        className={`block touch-pan-y tap-chart ${offline ? "grayscale" : ""}`}
         aria-hidden
         onPointerDown={point}
         onPointerMove={point}

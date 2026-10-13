@@ -4,8 +4,8 @@
 // before it opens an incident, and be gone for a while before it closes
 // one, so a figure hovering around a threshold does not leave dozens.
 
-import { DEEP_REORG, majority, reorgLevel, SLOW_SPREAD_MS, spreadLevel, stallLevel } from "../lib/alert-levels.ts";
-import { formatClock, formatInt, formatMs, shortHash, STALL_MS } from "../lib/format.ts";
+import { DEEP_REORG, majority, reorgLevel, SLOW_SPREAD_MS, spreadLevel } from "../lib/alert-levels.ts";
+import { formatClock, formatInt, formatMs, shortHash } from "../lib/format.ts";
 import type { Charts, Incident, IncidentKind, IncidentLog, MiningPool } from "../lib/protocol.ts";
 import { HIDDEN_CHANCE, UNUSUAL_CHANCE, watch, WATCH_MIN_BLOCKS, WATCH_MIN_SHARE } from "../lib/withholding.ts";
 
@@ -16,12 +16,10 @@ const MAX_INCIDENTS = 500;
 /** How long a condition must hold before it opens an incident, and be gone before it closes one. */
 const CONFIRM_MS = 10 * 60_000;
 /**
- * A stall needs no confirming: it only applies after 2 hours without a block,
- * and ends with the next block. Nor does the largest miner going quiet: it
- * only applies once the quiet is already unlikely, and ends with its next
- * block.
+ * The largest miner going quiet needs no confirming: it only applies once
+ * the quiet is already unlikely, and ends with its next block.
  */
-const STALL_CONFIRM_MS = 0;
+const QUIET_CONFIRM_MS = 0;
 
 /** The 7 day window the majority is judged over, as on the page; a little short, for the week's first block. */
 const MAJORITY_WINDOW_S = 7 * 86_400;
@@ -30,7 +28,7 @@ const MAJORITY_FULL_S = MAJORITY_WINDOW_S - 3_600;
 const RANK = { warn: 1, critical: 2 } as const;
 
 /** The kinds recorded; saved incidents of any other kind, from an earlier version, are dropped. */
-const KINDS = new Set<IncidentKind>(["majority", "withholding", "spread", "split", "stall", "reorg"]);
+const KINDS = new Set<IncidentKind>(["majority", "withholding", "spread", "split", "reorg"]);
 
 type Level = Incident["level"];
 type SpanKind = Exclude<IncidentKind, "reorg">;
@@ -40,7 +38,7 @@ export interface Observation {
   level: Level;
   peak: number;
   detail: string;
-  /** When the condition began, when it knows: a stall began with the last block. */
+  /** When the condition began, when it knows: a quiet spell began with the miner's last block. */
   since?: number;
 }
 
@@ -66,11 +64,8 @@ export interface TimelineBlock {
 
 const plural = (count: number, word: string) => `${formatInt(count)} ${count === 1 ? word : `${word}s`}`;
 
-/**
- * observe works out which conditions hold now, by the rules the alerts use.
- * `foundAt` is the best block's timestamp, ms, as the block clock has it.
- */
-export function observe(charts: Charts | null, foundAt: number, bestBlock: number, now: number): Partial<{ [K in SpanKind]: Observation }> {
+/** observe works out which conditions hold now, by the rules the alerts use. */
+export function observe(charts: Charts | null, now: number): Partial<{ [K in SpanKind]: Observation }> {
   const seen: Partial<{ [K in SpanKind]: Observation }> = {};
   const split = charts?.health.split ?? null;
 
@@ -81,8 +76,6 @@ export function observe(charts: Charts | null, foundAt: number, bestBlock: numbe
       detail: `Verified nodes on ${split.chains} chains${split.height !== null ? `, parting after block #${formatInt(split.height)}` : ""}`,
     };
   }
-
-  if (stallLevel(foundAt, now)) seen.stall = { level: "critical", peak: now - foundAt, detail: `No block after #${formatInt(bestBlock)}`, since: foundAt };
 
   const held = majority(charts);
 
@@ -144,10 +137,10 @@ export class Incidents {
   update(seen: Partial<{ [K in SpanKind]: Observation }>, now: number): boolean {
     let changed = false;
 
-    for (const kind of ["majority", "withholding", "spread", "split", "stall"] as const) {
+    for (const kind of ["majority", "withholding", "spread", "split"] as const) {
       const observation = seen[kind];
       const open = this.list.find((r) => r.kind === kind && r.end === null);
-      const confirm = kind === "stall" || kind === "withholding" ? STALL_CONFIRM_MS : CONFIRM_MS;
+      const confirm = kind === "withholding" ? QUIET_CONFIRM_MS : CONFIRM_MS;
 
       if (observation) {
         this.clear.delete(kind);
@@ -228,8 +221,7 @@ export class Incidents {
 
   /**
    * rebuild works out, once, the incidents saved blocks can tell of from
-   * before recording began: stalls, from gaps of more than STALL_MS between
-   * blocks; a mining majority, judged over 7 days as on the page; and the
+   * before recording began: a mining majority, judged over 7 days as on the page; and the
    * largest miner going quiet, from gaps between its own blocks, judged by
    * its share of the 7 days up to the block that ended the gap. A majority
    * holding from the first moment there are 7 days to judge began before
@@ -244,23 +236,6 @@ export class Incidents {
     if (chain.length < 2) return;
 
     this.rebuiltFrom = chain[0].timestamp * 1000;
-
-    // Stalls: a gap between a block and the next
-    for (let i = 1; i < chain.length; i++) {
-      const [before, after] = [chain[i - 1], chain[i]];
-
-      if (after.height !== before.height + 1 || (after.timestamp - before.timestamp) * 1000 <= STALL_MS) continue;
-
-      this.add({
-        kind: "stall",
-        level: "critical",
-        peak: (after.timestamp - before.timestamp) * 1000,
-        detail: `No block after #${formatInt(before.height)}`,
-        start: before.timestamp * 1000,
-        startKnown: true,
-        end: after.timestamp * 1000,
-      });
-    }
 
     // Majority: the 7 days of blocks up to each block, a known pool's addresses counted together
     const key = (b: TimelineBlock) => (pools.has(b.miner) ? `pool:${pools.get(b.miner)!.name}` : b.miner);

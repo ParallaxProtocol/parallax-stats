@@ -7,7 +7,7 @@ import type { PublishedRelease, Release } from "@/lib/releases";
 import { chainLevel, DEEP_REORG, staleChance, VERY_DEEP_REORG } from "@/lib/alert-levels";
 import { compareParts, parsePlatform, parseVersion } from "@/lib/version";
 import { useServerNow } from "./live/provider";
-import { Grow, RingSweep } from "./charts";
+import { Grow, hoverable, mouseLeave, RingSweep } from "./charts";
 import { Label, Plate } from "./plate";
 import { Rolling } from "./rolling";
 import { Tooltip } from "./tooltip";
@@ -211,7 +211,7 @@ function ForkGraph({ from, to, list }: { from: number; to: number; list: Fork[] 
   return (
     <div ref={measure} className="flex min-w-0 flex-col gap-2">
       {/* The newest end matters most: when the graph outgrows the room, it scrolls, starting there */}
-      <div ref={scroller} className="flex overflow-x-auto" onPointerLeave={() => setHovered(null)}>
+      <div ref={scroller} className="tap-chart flex overflow-x-auto" onPointerLeave={mouseLeave(() => setHovered(null))}>
         <svg
           width={width}
           height={HEIGHT}
@@ -261,7 +261,7 @@ function ForkGraph({ from, to, list }: { from: number; to: number; list: Fork[] 
             return (
               <g
                 key={fork.start}
-                onPointerEnter={() => setHovered(i)}
+                {...hoverable(on, () => setHovered(i), () => setHovered(null))}
                 className="cursor-default"
               >
                 {/* Off the parent, along the lost blocks */}
@@ -328,7 +328,7 @@ function ForkGraph({ from, to, list }: { from: number; to: number; list: Fork[] 
           ? describe(focus)
           : list.length === 0
             ? `No forks in the last ${formatInt(to - from + 1)} blocks.`
-            : "Branches are blocks that lost to a competing one; dashed lines, nodes that had followed them switching back. Hover a fork for details."}
+            : "Branches are blocks that lost to a competing one; dashed lines, nodes that had followed them switching back. Hover or tap a fork for details."}
       </p>
     </div>
   );
@@ -589,12 +589,14 @@ function VersionDonut({
   const pct = (nodes: number) => `${Math.round((nodes / total) * 100)}%`;
   // Nodes reporting no version are a slice, not a version in use
   const versions = slices.filter((s) => s.kind !== "unknown").length;
-  const enter = (slice: VersionSlice) => () => onHover({ station: slice.station, version: slice.label });
+  // Lit by this slice itself, not by its release lit on the ladder, so a tap there and then here shows it
+  const handlers = (slice: VersionSlice) =>
+    hoverable(hover?.version === slice.label, () => onHover({ station: slice.station, version: slice.label }), () => onHover(null));
 
   return (
     <div className="flex items-center gap-3 sm:gap-4">
       <div className="relative size-32 shrink-0">
-        <svg viewBox="0 0 100 100" className="size-full -rotate-90" role="img" aria-label="Online nodes by client version">
+        <svg viewBox="0 0 100 100" className="tap-chart size-full -rotate-90" role="img" aria-label="Online nodes by client version">
           <RingSweep center={50} radius={radius} width={16}>
             {painted.map((arc) => (
               <Tooltip key={arc.label} content={`${arc.label}: ${formatInt(arc.nodes)} of ${formatInt(total)} nodes`}>
@@ -609,8 +611,7 @@ function VersionDonut({
                   strokeDashoffset={-arc.start}
                   className="transition-[stroke-width,opacity] duration-150"
                   opacity={hover === null || arc.on ? 1 : 0.35}
-                  onPointerEnter={enter(arc)}
-                  onPointerLeave={() => onHover(null)}
+                  {...handlers(arc)}
                 />
               </Tooltip>
             ))}
@@ -625,15 +626,14 @@ function VersionDonut({
       </div>
 
       {/* Every version, newest first; scrolls past six. The rows stay inside it, as a scrolling list would scroll sideways for any that stick out */}
-      <ol className="flex max-h-40 min-w-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+      <ol className="tap-chart flex max-h-40 min-w-0 flex-1 flex-col gap-0.5 overflow-y-auto">
         {painted.map((arc) => (
           <li
             key={arc.label}
             className={`grid grid-cols-[0.625rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-sm px-2 py-1 text-xs transition-[background-color,opacity] duration-150 ${
               arc.on ? "bg-foreground/8 text-foreground" : hover === null ? "" : "opacity-35"
             }`}
-            onPointerEnter={enter(arc)}
-            onPointerLeave={() => onHover(null)}
+            {...handlers(arc)}
           >
             <span className={`size-2.5 rounded-sm transition-transform duration-150 ${arc.on ? "scale-125" : ""}`} style={{ background: arc.color }} aria-hidden />
             <span className="truncate">

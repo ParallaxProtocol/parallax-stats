@@ -9,7 +9,6 @@ import {
   reorgLevel,
   SLOW_SPREAD_MS,
   staleChance,
-  stallLevel,
   VERY_DEEP_REORG,
   VERY_SLOW_SPREAD_MS,
 } from "@/lib/alert-levels";
@@ -62,23 +61,15 @@ const TONE: Record<Tone, { box: string; bar: string; icon: string; ink: string; 
 
 /** What each kind of alert is about, named in its eyebrow after the severity. */
 const TOPIC: Record<keyof typeof ICON, string> = {
-  stall: "Block stall",
   reorg: "Deep reorg",
   split: "Chain split",
   majority: "Mining majority",
-  withholding: "Hidden mining",
+  withholding: "Potential hidden mining",
   spread: "Slow propagation",
   release: "New release",
 };
 
 const ICON = {
-  // A clock for a stall
-  stall: (
-    <>
-      <circle cx="12" cy="12" r="8.25" />
-      <path d="M12 7.5V12l3 2" strokeLinecap="round" strokeLinejoin="round" />
-    </>
-  ),
   // A chain that branches off for a reorganization
   reorg: (
     <>
@@ -287,20 +278,16 @@ const SEVERITY: Record<Tone, number> = { critical: 0, warn: 1, info: 2 };
 const plural = (count: number, word: string) => `${formatInt(count)} ${count === 1 ? word : `${word}s`}`;
 
 /**
- * useAlerts works out what needs attention, most severe first: verified nodes on different chains, no block for longer than the
- * stall threshold, a recent chain reorganization, one miner holding a
+ * useAlerts works out what needs attention, most severe first: verified nodes on different chains,
+ * a recent chain reorganization, one miner holding a
  * majority, blocks slow to reach the network, and
  * a client release most nodes have not caught up with.
  */
 export function useAlerts({
-  bestBlock,
-  foundAt,
   charts,
   nodes,
   latestRelease,
 }: {
-  bestBlock: number;
-  foundAt: number;
   charts: Charts | null;
   nodes: PublicNode[];
   latestRelease: Release | null;
@@ -343,20 +330,6 @@ export function useAlerts({
           ? `They agree up to block #${formatInt(split.height)}, then part: some of the network may have forked.`
           : "Some of the network may have forked.",
       facts: [plural(split.nodes, "verified node")],
-    });
-  }
-
-  // No block for a long time
-  const elapsed = foundAt ? now - foundAt : 0;
-
-  if (stallLevel(foundAt, now)) {
-    alerts.push({
-      key: "stall",
-      tone: "critical",
-      icon: "stall",
-      title: `No new block for ${formatClock(elapsed)}.`,
-      body: "The network may have stalled.",
-      facts: [`Last block #${formatInt(bestBlock)}`, `${Math.floor(elapsed / 600_000)}× the 10 min target`],
     });
   }
 

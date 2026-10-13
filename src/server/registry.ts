@@ -400,13 +400,10 @@ export class Registry {
 
     // Charts first: working them out measures reorganizations again
     const charts = this.charts(now);
-    const nodes = this.all();
-    const summary = summarize(nodes);
-    const foundAt = (summary.bestStats?.block.timestamp ?? 0) * 1000;
 
     changed = this.incidents.reorgs(this.history.deepReorgs(), now) || changed;
 
-    return this.incidents.update(observe(charts, foundAt, summary.bestBlock, now), now) || changed;
+    return this.incidents.update(observe(charts, now), now) || changed;
   }
 
   incidentLog(): IncidentLog {

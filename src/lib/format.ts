@@ -144,19 +144,19 @@ export function shortVersion(version: string, releases: Record<string, string>):
 // Grades
 
 /**
- * After this long without a block the network may have stalled. Block
- * intervals are exponential, so waits of an hour happen; two hours at the
- * 10 minute target is a one-in-160,000 wait at steady hashrate.
+ * After this long without a block the wait is very long. Block intervals
+ * are exponential, so waits of an hour happen; two hours at the 10 minute
+ * target is a one-in-160,000 wait at steady hashrate.
  */
-export const STALL_MS = 2 * 60 * 60 * 1000;
+export const LONG_WAIT_MS = 2 * 60 * 60 * 1000;
 
-/** gradeElapsed grades the time since the last block: on schedule, long, unusually long, or a possible stall. */
+/** gradeElapsed grades the time since the last block: on schedule, long, unusually long, or very long. */
 export function gradeElapsed(ms: number): Grade {
   const t = TARGET_BLOCK_TIME * 1000;
 
   if (ms <= t) return "good";
   if (ms <= 3 * t) return "warn";
-  if (ms <= STALL_MS) return "serious";
+  if (ms <= LONG_WAIT_MS) return "serious";
 
   return "critical";
 }

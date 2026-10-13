@@ -1,7 +1,7 @@
 // When each warning applies, in one place: the banners at the top of the
 // page and the sections they are about are tinted by the same rules.
 
-import { STALL_MS } from "./format.ts";
+import { LONG_WAIT_MS } from "./format.ts";
 import { PROPAGATION_BANDS, TARGET_BLOCK_TIME, type Charts, type ChainHealth, type Market, type PropagationStats } from "./protocol.ts";
 
 export type Level = "warn" | "critical";
@@ -28,9 +28,9 @@ export function staleChance(ms: number): number {
   return 1 - Math.exp(-ms / 1000 / TARGET_BLOCK_TIME);
 }
 
-/** stallLevel: no block for longer than the stall threshold. */
-export function stallLevel(foundAt: number, now: number): Level | null {
-  return foundAt > 0 && now - foundAt > STALL_MS ? "critical" : null;
+/** longWaitLevel: no block for longer than the long wait threshold. */
+export function longWaitLevel(foundAt: number, now: number): Level | null {
+  return foundAt > 0 && now - foundAt > LONG_WAIT_MS ? "critical" : null;
 }
 
 /**

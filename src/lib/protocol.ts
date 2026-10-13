@@ -300,7 +300,7 @@ export interface Market {
 }
 
 /** The kinds of incident the dashboard records: what its alerts warn of, kept once they pass. */
-export type IncidentKind = "majority" | "withholding" | "spread" | "split" | "stall" | "reorg";
+export type IncidentKind = "majority" | "withholding" | "spread" | "split" | "reorg";
 
 /** Something that went wrong, from when it started to when it ended. */
 export interface Incident {
