@@ -143,7 +143,7 @@ const COLUMNS: Column[] = [
   { key: "mining", label: "Mining", title: "Whether the node is mining; hover the icon for its hashrate", desc: true },
   { key: "propagation", label: "Propagation", title: "Delay after the first node reported the block" },
   { key: "propagationAvg", label: "Propagation history", title: "Propagation delay for each of the last 40 blocks, and the average" },
-  { key: "pending", label: "Mempool size", title: "Transactions waiting in the node's mempool", desc: true },
+  { key: "pending", label: "Mempool", title: "Transactions waiting in the node's mempool", desc: true },
   { key: "uptime", label: "Uptime", title: "Share of time connected since first seen", desc: true },
 ];
 
