@@ -1,14 +1,14 @@
 "use client";
 
-import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type CSSProperties, type PointerEvent, type ReactNode } from "react";
 import { formatMs } from "@/lib/format";
 import type { Incident, IncidentKind, IncidentLog } from "@/lib/protocol";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, animate, motion, useReducedMotion } from "motion/react";
 import { Alerts, WARNING_DOT, type Alert } from "./alerts";
 import { Switch } from "./charts";
 import { Ping } from "./indicator";
 import { useServerNow } from "./live/provider";
-import { SPRING } from "./motion";
+import { FADE_IN, FADE_OUT, REVEAL, SPRING } from "./motion";
 import { Label, Plate } from "./plate";
 import { Tooltip } from "./tooltip";
 import { usePersistent } from "./use-persistent";
@@ -44,15 +44,16 @@ const RANGES: Record<Range, { span: number; label: string; heading: string }> = 
 const SHOWN = 4;
 /** A majority is judged over a week, so rebuilt records of it begin a week after the oldest saved block. */
 const WEEK_MS = 7 * DAY;
-/** The narrowest an incident is drawn, in pixels, so a few minutes stay visible over 30 days. */
+/** How near a thin bar the pointer finds it, in pixels, beside half the row's height for a moment's dot. */
 const MIN_BAR_PX = 3;
+/** How far the hover cursor stands over a row, above and below. */
+const CURSOR_OVER_PX = 4;
 
 const FILL: Record<Incident["level"], string> = { critical: "bg-critical", warn: "bg-warn" };
-/** Incident bars, hatched like the unrecorded stretches but in their severity's colour, over a tint of it. */
-const STRIPES: Record<Incident["level"], string> = {
-  critical: "repeating-linear-gradient(135deg, var(--critical) 0 2px, color-mix(in oklch, var(--critical) 30%, transparent) 2px 5px)",
-  warn: "repeating-linear-gradient(135deg, var(--warn) 0 2px, color-mix(in oklch, var(--warn) 30%, transparent) 2px 5px)",
-};
+/** Stripes drift toward now by one every so many seconds while an incident goes on. */
+const DRIFT_S = 2.2;
+/** How far apart along a row the stripes of an ongoing incident are (globals.css): 5px at 135°. */
+const STRIPE_PX = 7.071;
 /** Drawing order where kinds share a row: the critical over the warnings. */
 const DEPTH: Record<Incident["level"], number> = { warn: 0, critical: 1 };
 const LEVEL: Record<Incident["level"], string> = { critical: "critical", warn: "warning" };
@@ -76,12 +77,13 @@ function overlaps(incident: Incident, from: number, to: number, now: number): bo
  * worst flattens incidents into spans that do not overlap, each in the
  * colour of the most severe incident over it, for the row of every kind:
  * bars of different kinds stacked there tinted each other and crossed
- * their hatching. Moments, with no length, are left to be drawn on their own.
+ * their hatching. A span is live where an incident of its level over it
+ * is still going on. Moments, with no length, are left to be drawn on their own.
  */
-function worst(incidents: Incident[], now: number): { start: number; end: number; level: Incident["level"] }[] {
+function worst(incidents: Incident[], now: number): { start: number; end: number; level: Incident["level"]; live: boolean }[] {
   const spans = incidents.filter((incident) => (incident.end ?? now) > incident.start);
   const edges = [...new Set(spans.flatMap((incident) => [incident.start, incident.end ?? now]))].sort((a, b) => a - b);
-  const out: { start: number; end: number; level: Incident["level"] }[] = [];
+  const out: { start: number; end: number; level: Incident["level"]; live: boolean }[] = [];
 
   for (let i = 0; i < edges.length - 1; i++) {
     const [start, end] = [edges[i], edges[i + 1]];
@@ -90,11 +92,12 @@ function worst(incidents: Incident[], now: number): { start: number; end: number
     if (over.length === 0) continue;
 
     const level = over.some((incident) => incident.level === "critical") ? "critical" : "warn";
+    const live = over.some((incident) => incident.level === level && incident.end === null);
     const previous = out.at(-1);
 
-    // One span where the level carries on across an edge
-    if (previous && previous.end === start && previous.level === level) previous.end = end;
-    else out.push({ start, end, level });
+    // One span where the level and whether it goes on carry on across an edge
+    if (previous && previous.end === start && previous.level === level && previous.live === live) previous.end = end;
+    else out.push({ start, end, level, live });
   }
 
   return out;
@@ -200,8 +203,8 @@ function Help({ text }: { text: string }) {
 
 /** The grid every row shares: its label, its bar and a note at the end. On phones the bar goes under the other two. */
 const ROW = "grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-4 gap-y-1.5 sm:grid-cols-[11rem_minmax(0,1fr)_11rem]";
-/** The bars' height, the same on every row. */
-const BAR = "h-4 rounded-[3px]";
+/** The status line's track: a pill a little taller than each kind's, which is [--bar-h:10px]. */
+const BAR = "[--bar-h:14px] h-(--bar-h) rounded-full";
 
 /**
  * NetworkStatus is the first thing on the page, a line of it until asked
@@ -261,11 +264,14 @@ function Headline({ alerts }: { alerts: Alert[] }) {
  * Timeline shows what went wrong and when, each incident a bar from its
  * exact start to its end, over the last 24 hours, 7 days or 30 days: every
  * kind on the status line, and once expanded a row per kind and the
- * incidents themselves, newest first. Hovering or dragging along a row says
- * what was happening then; choosing an incident marks it.
+ * incidents themselves, newest first. What is over is a solid tint; what
+ * goes on is hatched, its stripes drifting toward now. Changing the period
+ * springs the bars to their new places. Hovering or dragging along a row
+ * says what was happening then; choosing an incident marks it.
  */
 function Timeline({ log, headline, children }: { log: IncidentLog; headline: ReactNode; children: ReactNode }) {
   const now = useServerNow();
+  const still = useReducedMotion() ?? false;
   const [range, setRange] = usePersistent<Range>("incident-range", "day");
   const [chosen, setChosen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
@@ -277,14 +283,19 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
   // through a render would put them a frame or two behind a fast drag
   const area = useRef<HTMLDivElement>(null);
   const cursor = useRef<HTMLDivElement>(null);
+  // The caption is placed by the outer box and faded in and out by the inner one, which holds the text
+  const captionAt = useRef<HTMLDivElement>(null);
   const caption = useRef<HTMLDivElement>(null);
   // The row under the pointer, measured once as the pointer arrives: measuring on every move would make
   // the browser lay the page out again before it could draw
-  const measured = useRef<{ track: HTMLDivElement; left: number; width: number; x: number; y: number } | null>(null);
+  const measured = useRef<{ track: HTMLDivElement; left: number; width: number; height: number; x: number; y: number } | null>(null);
 
   const { span, label: rangeLabel, heading } = RANGES[range in RANGES ? range : "day"];
   const from = now - span;
   const recent = useMemo(() => log.list.filter((incident) => overlaps(incident, from, now, now)), [log, from, now]);
+  // Drawn: everything over the longest period, so the bars a shorter one leaves out slide off the row
+  // rather than vanish, and slide back
+  const drawn = useMemo(() => log.list.filter((incident) => overlaps(incident, now - RANGES.month.span, now, now)), [log, now]);
   const picked = recent.find((incident) => incident.id === chosen) ?? null;
   // Since when each kind is on record: quiet spells and the majority were rebuilt from saved blocks
   const recordedFrom = useCallback(
@@ -294,11 +305,20 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
   );
 
   // The figures a frame's drawing needs, as of the latest render, so drawing does not wait on one
-  const latest = useRef({ from, span, recent, now, recordedFrom });
+  const latest = useRef({ from, span, recent, now, recordedFrom, still });
 
   useLayoutEffect(() => {
-    latest.current = { from, span, recent, now, recordedFrom };
+    latest.current = { from, span, recent, now, recordedFrom, still };
   });
+
+  // Ongoing incidents' stripes drift toward now, all together
+  useEffect(() => {
+    if (still || !area.current) return;
+
+    const drift = animate(area.current, { "--stripe-drift": ["0px", `${STRIPE_PX}px`] }, { duration: DRIFT_S, ease: "linear", repeat: Infinity });
+
+    return () => drift.stop();
+  }, [still]);
 
   // The pointer's latest place on a row, drawn at most once a frame, just before the browser paints:
   // Firefox handles a stream of moves before painting, so drawing on each one held the cursor still
@@ -318,16 +338,26 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
     const fraction = Math.min(1, Math.max(0, (at_.clientX - track.left) / track.width));
     const moment = from + fraction * span;
     const x = track.x + fraction * track.width;
+    // The cursor stands a little over the row, above and below
+    const y = track.y - CURSOR_OVER_PX;
 
-    if (cursor.current) cursor.current.style.transform = `translate(${x}px, ${track.y}px)`;
+    if (cursor.current) cursor.current.style.transform = `translate(${x}px, ${y}px)`;
 
     // Over the row, sliding from left of the cursor to right of it across the row, so it never leaves the
     // area and is never measured
-    if (caption.current) caption.current.style.transform = `translate(calc(${x}px - ${fraction * 100}%), calc(${track.y}px - 100% - 6px))`;
+    if (captionAt.current) captionAt.current.style.transform = `translate(calc(${x}px - ${fraction * 100}%), calc(${y}px - 100% - 6px))`;
 
-    // A few pixels either way, so a thin bar can be found
-    const tolerance = (MIN_BAR_PX / track.width) * span;
+    // A few pixels either way, so a thin bar or a moment's dot can be found
+    const tolerance = (Math.max(MIN_BAR_PX, track.height / 2) / track.width) * span;
     const under = recent.filter((i) => at_.kinds.includes(i.kind) && overlaps(i, moment - tolerance, moment + tolerance, now));
+
+    // The bars under the pointer stay bright as the row's others dim
+    for (const bar of track.track.querySelectorAll<HTMLElement>("[data-start]")) {
+      const hit = Number(bar.dataset.start) <= moment + tolerance && Number(bar.dataset.end) >= moment - tolerance;
+
+      if (hit !== bar.hasAttribute("data-active")) bar.toggleAttribute("data-active", hit);
+    }
+
     const unrecorded = at_.kinds.filter((kind) => moment < recordedFrom(kind)).length;
     // The row of every kind names each incident's kind; a kind's own row names it once, in the heading
     const one = at_.kinds.length === 1 ? at_.kinds[0] : null;
@@ -346,32 +376,64 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
     caption.current.replaceChildren(captionLine(lines.length > 0 ? heading : `${heading} · ${quiet}`, "tabular-nums"), ...lines.map(captionIncident));
   }, []);
 
+  // Leaves the row the pointer was on: its bars brighten again
+  const unmeasure = useCallback(() => {
+    const track = measured.current?.track;
+
+    track?.removeAttribute("data-pointer");
+    track?.querySelectorAll("[data-active]").forEach((bar) => bar.removeAttribute("data-active"));
+    measured.current = null;
+  }, []);
+
   const point = useCallback(
     (kinds: IncidentKind[], e: PointerEvent<HTMLDivElement>) => {
       const track = e.currentTarget;
 
-      if (measured.current?.track !== track) {
-        measured.current = { track, left: track.getBoundingClientRect().left, width: track.offsetWidth, x: track.offsetLeft, y: track.offsetTop };
+      if (measured.current?.track !== track && area.current) {
+        unmeasure();
 
-        if (cursor.current) cursor.current.style.height = `${track.offsetHeight}px`;
+        // Against the area, which the cursor and caption are placed in: the row's own box is not it
+        const box = track.getBoundingClientRect();
+        const outer = area.current.getBoundingClientRect();
+
+        measured.current = { track, left: box.left, width: box.width, height: box.height, x: box.left - outer.left, y: box.top - outer.top };
+        track.setAttribute("data-pointer", "");
+
+        if (cursor.current) cursor.current.style.height = `${box.height + 2 * CURSOR_OVER_PX}px`;
       }
 
       // Only on arriving: setting it again on every move, even unchanged, has the browser restyle every row
-      if (!area.current?.hasAttribute("data-hover")) area.current?.setAttribute("data-hover", "");
+      if (!area.current?.hasAttribute("data-hover")) {
+        area.current?.setAttribute("data-hover", "");
+
+        if (caption.current) animate(caption.current, { opacity: [0, 1], y: [4, 0] }, latest.current.still ? { duration: 0 } : { duration: 0.18, ease: "easeOut" });
+      }
 
       pointer.current = { kinds, clientX: e.clientX };
       frame.current ||= requestAnimationFrame(draw);
     },
-    [draw],
+    [draw, unmeasure],
   );
 
   const leave = useCallback(() => {
     cancelAnimationFrame(frame.current);
     frame.current = 0;
     pointer.current = null;
-    measured.current = null;
-    area.current?.removeAttribute("data-hover");
-  }, []);
+    unmeasure();
+
+    if (!area.current?.hasAttribute("data-hover")) return;
+
+    area.current.removeAttribute("data-hover");
+
+    // Back to the corner once faded, so a caption left at the row's far end never widens the page
+    if (caption.current) {
+      animate(caption.current, { opacity: 0, y: 2 }, latest.current.still ? { duration: 0 } : { duration: 0.12, ease: "easeOut" }).then(() => {
+        if (pointer.current || !captionAt.current) return;
+
+        captionAt.current.style.transform = "";
+      });
+    }
+  }, [unmeasure]);
 
   // What is over, under the range it ended in: what is going on has its alert above, and its bar.
   // With nothing over, the empty rows already say so: no list at all.
@@ -420,23 +482,31 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
   // the pointer: worked out once for those, so moving the pointer redraws only the cursor and the caption
   const rows = useMemo(() => {
     const x = (t: number) => ((Math.min(Math.max(t, from), now) - from) / span) * 100;
+    // Bars are placed unclamped, so those before the period sit off the row's left end, ready to slide in
+    const place = (t: number) => ((t - from) / span) * 100;
     const marks = ticks(range, from, now);
+    const glide = still ? { duration: 0 } : SPRING;
+    const fadeIn = still ? { duration: 0 } : FADE_IN;
+    const fadeOut = still ? { duration: 0 } : FADE_OUT;
 
     // A row's timeline: every incident of its kinds over the range, hatched until all of them were on record.
-    // The status line's note says the range too, and opens the history
-    const row = (kinds: IncidentKind[], label: ReactNode, name: string, main = false) => {
-      const ofKinds = recent.filter((incident) => kinds.includes(incident.kind)).sort((a, b) => DEPTH[a.level] - DEPTH[b.level]);
-      const ongoing = ofKinds.filter((incident) => incident.end === null);
+    // The status line's note says the range too, and opens the history. Its bars sweep in from the left
+    // when it first shows, `reveal` seconds in
+    const row = (kinds: IncidentKind[], label: ReactNode, name: string, reveal: number, main = false) => {
+      const ofKinds = recent.filter((incident) => kinds.includes(incident.kind));
+      const ongoing = ofKinds.filter((incident) => incident.end === null).sort((a, b) => DEPTH[b.level] - DEPTH[a.level]);
+      const mine = drawn.filter((incident) => kinds.includes(incident.kind)).sort((a, b) => DEPTH[a.level] - DEPTH[b.level]);
+      const moments = mine
+        .filter((incident) => incident.end === incident.start)
+        .map((incident) => ({ key: incident.id, start: incident.start, end: incident.start, level: incident.level, look: "incident-moment" }));
       // A kind's own row draws its incidents as they are; the row of every kind, flattened by the worst
-      const bars =
-        kinds.length === 1
-          ? ofKinds.map((incident) => ({ key: incident.id, start: incident.start, end: incident.end ?? now, level: incident.level }))
-          : [
-              ...worst(ofKinds, now).map((span) => ({ key: `span:${span.start}`, ...span })),
-              ...ofKinds
-                .filter((incident) => incident.end === incident.start)
-                .map((incident) => ({ key: incident.id, start: incident.start, end: incident.start, level: incident.level })),
-            ];
+      const bars = [
+        ...(main
+          ? worst(mine, now).map((span) => ({ key: `span:${span.start}`, ...span }))
+          : mine.filter((incident) => incident.end !== incident.start).map((incident) => ({ key: incident.id, start: incident.start, end: incident.end ?? now, level: incident.level, live: incident.end === null }))
+        ).map(({ live, ...bar }) => ({ ...bar, look: live ? "incident-live" : "incident-ended" })),
+        ...moments,
+      ];
       const chosenHere = picked && kinds.includes(picked.kind) ? picked : null;
       const since = Math.max(from, ...kinds.map(recordedFrom));
       const count = `${ofKinds.length} ${ofKinds.length === 1 ? "incident" : "incidents"}`;
@@ -476,43 +546,67 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
           ) : (
             <span className="text-right text-xs text-muted-foreground tabular-nums sm:order-last">{note}</span>
           )}
-          <div
-            className={`relative col-span-2 ${BAR} touch-pan-y overflow-hidden tap-chart [container-type:inline-size] sm:col-span-1`}
-            role="img"
-            aria-label={`${name}, ${heading.toLowerCase()}: ${ofKinds.length === 0 ? "no incidents" : count}`}
-            onPointerDown={(e) => point(kinds, e)}
-            onPointerMove={(e) => point(kinds, e)}
-            onPointerLeave={leave}
-          >
-            {/* Before records began: hatched, unknown rather than clear */}
-            {since > from && <div className="absolute inset-y-0 left-0" style={{ width: `${x(since)}%`, background: UNRECORDED }} />}
-            <div className="absolute inset-y-0 right-0 bg-foreground/[0.07]" style={{ left: `${x(since)}%` }} />
-            {marks.map((mark) => (
-              <div key={mark.at} aria-hidden className="absolute inset-y-0 w-px bg-card/70" style={{ left: `${x(mark.at)}%` }} />
-            ))}
-            {bars.map((bar) => (
-              <div
-                key={bar.key}
-                className="absolute inset-y-0 rounded-[2px]"
-                style={{
-                  left: `${x(bar.start)}%`,
-                  width: `${x(bar.end) - x(bar.start)}%`,
-                  minWidth: MIN_BAR_PX,
-                  // Hatched as one piece across the row, so neighbouring bars' stripes run on into each other
-                  backgroundImage: STRIPES[bar.level],
-                  backgroundSize: "100cqw 100%",
-                  backgroundPosition: `${-x(bar.start)}cqw 0`,
-                  backgroundRepeat: "no-repeat",
-                }}
-              />
-            ))}
-            {/* The chosen incident, outlined over the bars it may have been flattened into */}
-            {chosenHere && (
-              <div
-                aria-hidden
-                className="absolute inset-y-0 rounded-[2px] ring-1 ring-foreground ring-offset-1 ring-offset-card"
-                style={{ left: `${x(chosenHere.start)}%`, width: `${x(chosenHere.end ?? now) - x(chosenHere.start)}%`, minWidth: MIN_BAR_PX }}
-              />
+          <div className="relative col-span-2 sm:col-span-1">
+            <div
+              className={`relative ${main ? BAR : "[--bar-h:10px] h-(--bar-h) rounded-full"} touch-pan-y overflow-hidden tap-chart [container-type:inline-size]`}
+              role="img"
+              aria-label={`${name}, ${heading.toLowerCase()}: ${ofKinds.length === 0 ? "no incidents" : count}`}
+              onPointerDown={(e) => point(kinds, e)}
+              onPointerMove={(e) => point(kinds, e)}
+              onPointerLeave={leave}
+            >
+              {/* Before records began: hatched, unknown rather than clear */}
+              <motion.div className="absolute inset-y-0 left-0" style={{ background: UNRECORDED }} initial={false} animate={{ width: `${x(since)}%` }} transition={glide} />
+              <motion.div className="absolute inset-y-0 right-0 bg-foreground/[0.07]" initial={false} animate={{ left: `${x(since)}%` }} transition={glide} />
+              {/* Under the bars, so they only mark the empty track; the old period's fade as the new one's come */}
+              <AnimatePresence initial={false}>
+                <motion.div
+                  key={range}
+                  aria-hidden
+                  className="absolute inset-0"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1, transition: fadeIn }}
+                  exit={{ opacity: 0, transition: fadeOut }}
+                >
+                  {marks.map((mark) => (
+                    <div key={mark.at} className="absolute inset-y-0 w-px bg-card/70" style={{ left: `${x(mark.at)}%` }} />
+                  ))}
+                </motion.div>
+              </AnimatePresence>
+              <motion.div
+                className="absolute inset-0"
+                initial={still ? false : { clipPath: "inset(0 100% 0 0)" }}
+                animate={{ clipPath: "inset(0 0% 0 0)" }}
+                transition={{ ...REVEAL, delay: reveal }}
+              >
+                {bars.map((bar) => (
+                  <motion.div
+                    key={bar.key}
+                    data-start={bar.start}
+                    data-end={bar.end}
+                    className={`incident-bar ${bar.look} transition-[opacity,filter] duration-200 in-data-[pointer]:opacity-50 data-[active]:opacity-100 data-[active]:brightness-110`}
+                    style={{ "--bar-c": `var(--${bar.level})` } as CSSProperties}
+                    initial={false}
+                    animate={{ "--bar-x": place(bar.start), "--bar-w": place(bar.end) - place(bar.start) }}
+                    transition={glide}
+                  />
+                ))}
+              </motion.div>
+              {/* The chosen incident, outlined over the bars it may have been flattened into */}
+              {chosenHere && (
+                <div
+                  aria-hidden
+                  className="absolute inset-y-0 rounded-full ring-1 ring-foreground ring-offset-1 ring-offset-card"
+                  style={{ left: `${x(chosenHere.start)}%`, width: `${x(chosenHere.end ?? now) - x(chosenHere.start)}%`, minWidth: "var(--bar-h)" }}
+                />
+              )}
+            </div>
+            {/* Now, at the status line's end, in the colour of the worst that goes on */}
+            {main && ongoing.length > 0 && (
+              <span aria-hidden className="pointer-events-none absolute top-1/2 left-full flex size-2 -translate-x-1/2 -translate-y-1/2">
+                <Ping color={FILL[ongoing[0].level]} critical={ongoing[0].level === "critical"} cause={ongoing[0].id} />
+                <span className={`relative inline-flex size-2 rounded-full ring-2 ring-card ${FILL[ongoing[0].level]}`} />
+              </span>
             )}
           </div>
         </div>
@@ -521,7 +615,7 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
 
     return (
       <>
-        {row(ALL_KINDS, headline, "All kinds", true)}
+        {row(ALL_KINDS, headline, "All kinds", 0, true)}
         {children}
 
         {/* Not positioned, so the cursor still measures each row against the whole area. Its space opens and
@@ -562,25 +656,30 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
                         {help && <Help text={help} />}
                       </span>,
                       label,
+                      0.1 + i * 0.06,
                     )}
                   </motion.div>
                 ))}
 
-                {/* The axis, under the rows' timelines */}
+                {/* The axis, under the rows' timelines, its labels faded across as the period changes */}
                 <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-[11rem_minmax(0,1fr)_11rem] sm:gap-x-4">
                   <div className="relative h-3 font-mono text-[10px] text-muted-foreground sm:col-start-2">
-                    {marks
-                      // Too near an end, a centred label would be cut off
-                      .filter((mark) => mark.label !== null && x(mark.at) > 4 && x(mark.at) < 96)
-                      .map((mark) => (
-                        <span
-                          key={mark.at}
-                          className={`absolute -translate-x-1/2 whitespace-nowrap ${mark.minor ? "max-sm:hidden" : ""}`}
-                          style={{ left: `${x(mark.at)}%` }}
-                        >
-                          {mark.label}
-                        </span>
-                      ))}
+                    <AnimatePresence initial={false}>
+                      <motion.div key={range} className="absolute inset-0" initial={{ opacity: 0 }} animate={{ opacity: 1, transition: fadeIn }} exit={{ opacity: 0, transition: fadeOut }}>
+                        {marks
+                          // Too near an end, a centred label would be cut off
+                          .filter((mark) => mark.label !== null && x(mark.at) > 4 && x(mark.at) < 96)
+                          .map((mark) => (
+                            <span
+                              key={mark.at}
+                              className={`absolute -translate-x-1/2 whitespace-nowrap ${mark.minor ? "max-sm:hidden" : ""}`}
+                              style={{ left: `${x(mark.at)}%` }}
+                            >
+                              {mark.label}
+                            </span>
+                          ))}
+                      </motion.div>
+                    </AnimatePresence>
                   </div>
                 </div>
                 {list}
@@ -590,7 +689,7 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
         </AnimatePresence>
       </>
     );
-  }, [recent, from, now, span, range, rangeLabel, heading, picked, recordedFrom, point, leave, open, setOpen, history, headline, children, list, setRange]);
+  }, [recent, drawn, from, now, span, range, rangeLabel, heading, picked, recordedFrom, point, leave, open, setOpen, history, headline, children, list, setRange, still]);
 
   return (
     // data-hover is set while the pointer is on a row, showing the cursor and the caption
@@ -599,12 +698,16 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
 
       {/* The cursor and what it is over, on the row under the pointer: moved directly, so the rows stay as
           they are. The caption is written by the pointer handler, never by a render */}
-      <div ref={cursor} aria-hidden className="pointer-events-none absolute top-0 left-0 hidden w-px bg-foreground group-data-[hover]:block" />
-      <div
-        ref={caption}
-        aria-hidden
-        className="pointer-events-none absolute top-0 left-0 z-10 hidden w-max max-w-full flex-col gap-1 border border-border bg-surface-elevated px-2.5 py-1.5 text-xs leading-snug text-muted-foreground shadow-lg group-data-[hover]:flex"
-      />
+      <div ref={cursor} aria-hidden className="pointer-events-none absolute top-0 left-0 hidden w-px bg-foreground/55 group-data-[hover]:block">
+        <span className="absolute top-1/2 left-1/2 size-[7px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-foreground ring-2 ring-card" />
+      </div>
+      <div ref={captionAt} aria-hidden className="pointer-events-none absolute top-0 left-0 z-10 w-max max-w-full">
+        <div
+          ref={caption}
+          style={{ opacity: 0 }}
+          className="flex flex-col gap-1 rounded-[8px] border border-border bg-surface-elevated/80 px-2.5 py-1.5 text-xs leading-snug text-muted-foreground shadow-lg backdrop-blur-md backdrop-saturate-150"
+        />
+      </div>
     </div>
   );
 }

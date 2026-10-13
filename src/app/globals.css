@@ -286,6 +286,61 @@
   animation: chart-reveal 0.9s cubic-bezier(0.3, 0.7, 0.2, 1);
 }
 
+/*
+ * The network status timeline's incidents (incidents.tsx): placed by
+ * --bar-x and --bar-w, percentages of the row, which spring when the period
+ * changes, at least as wide as the row is high (--bar-h), in --bar-c.
+ */
+@property --bar-x {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+@property --bar-w {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+/* How far ongoing incidents' stripes have drifted toward now, one stripe at a time */
+@property --stripe-drift {
+  syntax: "<length>";
+  inherits: true;
+  initial-value: 0px;
+}
+
+.incident-bar {
+  position: absolute;
+  inset-block: 0;
+  left: calc(var(--bar-x) * 1%);
+  width: max(calc(var(--bar-w) * 1%), var(--bar-h));
+  border-radius: 9999px;
+}
+
+/* Over: a solid tint */
+.incident-ended {
+  background: color-mix(in oklch, var(--bar-c) 34%, var(--card));
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--bar-c) 60%, transparent);
+}
+
+/* Going on: hatched as one piece across the row, a stripe wider than it so drifting by one never shows an
+   edge. Stripes 5px apart at 135° repeat every 5√2px along the row */
+.incident-live {
+  background-image: repeating-linear-gradient(135deg, var(--bar-c) 0 2px, color-mix(in oklch, var(--bar-c) 32%, var(--card)) 2px 5px);
+  background-size: calc(100cqw + 7.071px) 100%;
+  background-position: calc(var(--bar-x) * -1cqw - 7.071px + var(--stripe-drift)) 0;
+  background-repeat: no-repeat;
+}
+
+/* A moment, as a deep reorg is: a dot */
+.incident-moment {
+  width: var(--bar-h);
+  translate: -50% 0;
+  background: var(--bar-c);
+  box-shadow: 0 0 0 2px var(--card);
+}
+
 /* Tooltips fade in once placed */
 @keyframes tooltip-in {
   from {
