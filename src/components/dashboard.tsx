@@ -4,7 +4,6 @@ import { useMemo, type ReactNode } from "react";
 import { miningDifficulty } from "@/lib/asert";
 import { onMainnet, summarize } from "@/lib/derive";
 import { majorityLevel, spreadLevel, thinMarket } from "@/lib/alert-levels";
-import { latestPace, newCoins } from "@/lib/earnings";
 import { formatInt } from "@/lib/format";
 import type { Snapshot } from "@/lib/protocol";
 import type { PublishedRelease, Release, ReleaseCommits } from "@/lib/releases";
@@ -13,7 +12,7 @@ import { About } from "./about";
 import { AlertCount, useAlerts } from "./alerts";
 import { BlockClock, ClockPlate, MiniClock } from "./block-clock";
 import { BlockToasts, SoundToggle } from "./block-toast";
-import { BestBlock, BlockTime, Decentralization, EMPTY_CHARTS, Fees, Fullness, Propagation, Transactions } from "./charts";
+import { BestBlock, BlockTime, Decentralization, EMPTY_CHARTS, Fees, Fullness, MinerCall, Propagation, Transactions } from "./charts";
 import { Confirmations } from "./confirmations";
 import { FigureTile, figures } from "./figures";
 import { NetworkStatus } from "./incidents";
@@ -73,9 +72,6 @@ function Live({
   const figure = figures({ summary, charts, mining, gasPrice, explorer, price });
   const start = c.trends?.start ?? [];
   const foundAt = (summary.bestStats?.block.timestamp ?? 0) * 1000;
-  // What miners bring to sell in a day, in dollars, for the market's depth to be read against
-  const pace = latestPace(c.trends?.blocktime ?? []);
-  const dailyNewCoins = pace !== null && price && summary.bestBlock > 0 ? newCoins(summary.bestBlock, pace) * price.usd : null;
   const thin = thinMarket(markets);
   const alerts = useAlerts({ bestBlock: summary.bestBlock, foundAt, charts, nodes, latestRelease });
   // Warnings marked on their sections
@@ -122,7 +118,10 @@ function Live({
         }
         asideAfter="best-block"
       />
-      <Section id="mining" sections={sections}>
+      {/* The call to miners at the top says what the header's status would */}
+      <Section id="mining" sections={sections} quiet>
+        {/* While one miner holds a majority, the section opens with what miners can do about it */}
+        <MinerCall charts={charts} />
         <div className={FOUR}>
           <FigureTile figure={figure.hashrate} start={start} />
           <FigureTile figure={figure.difficulty} start={start} />
@@ -151,19 +150,19 @@ function Live({
       <Section id="supply" sections={sections}>
         <Supply bestBlock={summary.bestBlock} />
       </Section>
-      <Section id="market" sections={sections}>
+      {/* The exchanges card says at its foot what the header's status would */}
+      <Section id="market" sections={sections} quiet>
         <div className={FOUR}>
           <FigureTile figure={figure.price} start={start} />
           <FigureTile figure={figure.marketCap} start={start} />
           <FigureTile figure={figure.volume} start={start} />
           {/* Last: what miners bring to market each day, read against the volume beside it */}
           <FigureTile figure={figure.issuance} start={start} />
-          {/* Whether the price above can be trusted, and whether the market can take the new coins */}
+          {/* Whether the price above can be trusted */}
           <Exchanges
             markets={markets}
-            dailyNewCoins={dailyNewCoins}
             priceUrl={price?.url ?? null}
-            tone={thin ? "warn" : null}
+            warning={thin}
             className="sm:col-span-2 xl:col-span-3"
           />
           <FigureTile figure={figure.securityShare} start={start} className="sm:col-span-2 xl:col-span-1" />
@@ -206,7 +205,18 @@ const SECTIONS: SectionLink[] = [
  * scale: a bracketed index, the title, and a ruled line out to any warning
  * about the section.
  */
-function Section({ id, sections, children }: { id: string; sections: SectionLink[]; children: ReactNode }) {
+function Section({
+  id,
+  sections,
+  quiet = false,
+  children,
+}: {
+  id: string;
+  sections: SectionLink[];
+  /** Leaves the status out of the header, for a section whose own content opens with it; the bar still marks it. */
+  quiet?: boolean;
+  children: ReactNode;
+}) {
   const index = sections.findIndex((section) => section.id === id);
   const { title, description, status } = sections[index];
 
@@ -219,7 +229,7 @@ function Section({ id, sections, children }: { id: string; sections: SectionLink
         </h2>
         <p className="pb-0.5 text-sm text-muted-foreground max-sm:basis-full">{description}</p>
         <span aria-hidden className="section-rule mb-1.5 hidden min-w-8 flex-1 sm:block" />
-        {status && (
+        {status && !quiet && (
           <span className="mb-0.5 inline-flex items-center gap-2 font-mono text-[11px] tracking-wider text-muted-foreground uppercase">
             <span className={`relative flex size-1.5`}>
               <span className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 ${STATUS_DOT[status.level]}`} />

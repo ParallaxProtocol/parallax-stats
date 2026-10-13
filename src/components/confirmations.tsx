@@ -1,12 +1,11 @@
 "use client";
 
 import { useMemo } from "react";
-import { majorityLevel } from "@/lib/alert-levels";
 import { CONFIDENCE, confirmationsFor, MAX_CONFIRMATIONS } from "@/lib/confirmations";
 import { DECENTRALIZATION_MIN_BLOCKS } from "@/lib/decentralization";
 import { formatInt, formatMs, shortHash } from "@/lib/format";
 import { TARGET_BLOCK_TIME, type Charts } from "@/lib/protocol";
-import { EMPTY_CHARTS, Tile, Waiting } from "./charts";
+import { EMPTY_CHARTS, Tile, Verdict, Waiting } from "./charts";
 import { ExternalLink } from "./external-link";
 
 /** The confidence the figure answers for: 99.9%. */
@@ -27,7 +26,9 @@ function wait(confirmations: number): string {
  * Confirmations says how many blocks a payment should wait for, against
  * the largest miner of the last 7 days trying to replace it, by the
  * calculation in the Bitcoin paper. While that miner holds a majority no
- * wait is safe, and the tile shows its share against the 50% line instead.
+ * wait is safe at any confidence. The tile itself stays untinted: the
+ * verdict's dot pulses, red with no safe wait and amber with the miner close
+ * to a majority.
  */
 export function Confirmations({ charts, className = "" }: { charts: Charts | null; className?: string }) {
   const c = charts ?? EMPTY_CHARTS;
@@ -48,7 +49,6 @@ export function Confirmations({ charts, className = "" }: { charts: Charts | nul
   return (
     <Tile
       className={className}
-      tone={majorityLevel(charts)}
       title="Confirmations to wait"
       readout={
         <ExternalLink
@@ -64,9 +64,9 @@ export function Confirmations({ charts, className = "" }: { charts: Charts | nul
           : !judged
             ? "Too early"
             : majority
-              ? "None is safe"
+              ? <Verdict grade="critical">None is safe</Verdict>
               : headline === null
-                ? `Over ${formatInt(MAX_CONFIRMATIONS)}`
+                ? <Verdict grade="warn">Over {formatInt(MAX_CONFIRMATIONS)}</Verdict>
                 : `${formatInt(headline)} blocks`
       }
       qualifier={
@@ -83,28 +83,16 @@ export function Confirmations({ charts, className = "" }: { charts: Charts | nul
     >
       {share === null ? (
         <Waiting />
-      ) : !judged ? null : majority ? (
-        // Why no wait is safe: the largest miner's share against the line it has crossed
-        <div className="mt-auto flex flex-col gap-2 text-xs">
-          <div className="flex justify-between gap-3">
-            <span className="truncate text-muted-foreground">largest miner, {name}</span>
-            <span className="tabular-nums">{pct}%</span>
-          </div>
-          <div className="relative h-2 rounded-sm bg-foreground/10">
-            <div className="h-full rounded-sm bg-critical" style={{ width: `${Math.min(100, share * 100)}%` }} />
-            <div aria-hidden className="absolute -inset-y-1 left-1/2 w-px bg-foreground" />
-          </div>
-          <div className="relative h-3 font-mono text-[10px] text-muted-foreground">
-            <span className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap">50%, a majority</span>
-          </div>
-        </div>
-      ) : (
+      ) : !judged ? null : (
         <dl className="mt-auto divide-y divide-border/60 text-xs">
           {CONFIDENCE.map((confidence, i) => (
             <div key={confidence} className="flex items-baseline justify-between gap-3 py-1.5">
               <dt className="text-muted-foreground">{percent(confidence)} safe</dt>
               <dd className="tabular-nums">
-                {needed[i] === null ? (
+                {majority ? (
+                  // No number of blocks is enough: the wait is unbounded
+                  <span aria-label="no wait is enough">∞</span>
+                ) : needed[i] === null ? (
                   `over ${formatInt(MAX_CONFIRMATIONS)} blocks`
                 ) : (
                   <>

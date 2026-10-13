@@ -2,9 +2,9 @@
 
 import { createContext, use, useEffect, useState, type PointerEvent, type ReactNode, type RefObject } from "react";
 import { blockReward, WEI_PER_LAX } from "@/lib/emission";
-import { formatBlockTime, formatCompact, formatInt, formatMs, formatPercent, gradeAvgBlockTime, shortHash } from "@/lib/format";
+import { formatBlockTime, formatCompact, formatInt, formatMs, formatPercent, gradeAvgBlockTime, shortHash, type Grade } from "@/lib/format";
 import { HISTORY_BINS, TARGET_BLOCK_TIME, TREND_SLICE_S, type Charts, type MinerCount, type PropagationStats } from "@/lib/protocol";
-import { majorityLevel, spreadLevel, type Level } from "@/lib/alert-levels";
+import { majority as majorityHeld, majorityLevel, spreadLevel, type Level } from "@/lib/alert-levels";
 import { DECENTRALIZATION_MIN_BLOCKS, gradeDecentralization, majorityHolders } from "@/lib/decentralization";
 import { Indicator } from "./indicator";
 import { Label, Plate } from "./plate";
@@ -58,7 +58,8 @@ export function Tile({
         // A fixed height, whatever they say, so hovering a chart never resizes it: one line
         // for the figure and two for its note, enough for the longest readouts
         <p className="flex min-w-0 flex-col gap-1">
-          <span className="truncate text-3xl tabular-nums">{value}</span>
+          {/* Its clipping box reaches a little past each side, so a verdict's pulsing dot is never cut off */}
+          <span className="-mx-2 truncate px-2 text-3xl tabular-nums">{value}</span>
           <span className="line-clamp-2 min-h-10 text-sm leading-5 text-muted-foreground">{qualifier}</span>
         </p>
       )}
@@ -875,6 +876,53 @@ export function Fees({ c, block }: { c: Charts; block: (i: number) => string }) 
 
 const MINING_POOL_STATS = "https://miningpoolstats.stream/parallax";
 
+/**
+ * MinerCall heads the mining section while one miner holds a majority of
+ * the last week's blocks: miners are the only ones who can fix that, so it
+ * asks them plainly, with the way to do it one click away.
+ */
+export function MinerCall({ charts }: { charts: Charts | null }) {
+  const held = majorityHeld(charts);
+
+  if (!held) return null;
+
+  const { miner: top, share } = held;
+  const who = top.pool?.name ?? `Miner ${shortHash(top.miner)}`;
+
+  return (
+    <section
+      aria-labelledby="miner-call"
+      className="relative flex flex-col gap-4 border border-critical/35 bg-linear-to-r from-critical/[0.11] via-critical/[0.04] to-transparent px-5 py-5 sm:flex-row sm:items-center sm:gap-8 sm:px-6"
+    >
+      <span aria-hidden className="absolute inset-y-0 left-0 w-[3px] bg-critical" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+        <p className="font-mono text-[10px] tracking-[0.15em] text-critical-ink uppercase">
+          Critical <span className="text-muted-foreground/60">·</span> For miners
+        </p>
+        <h3 id="miner-call" className="text-lg leading-6 font-semibold text-balance sm:text-xl">
+          If you mine LAX, move your hashrate to a smaller pool.
+        </h3>
+        <p className="text-sm leading-5 text-muted-foreground">
+          {who} found {Math.round(share * 100)}% of the last week&apos;s blocks. With most of the hashrate, one{" "}
+          {top.pool ? "pool" : "miner"} could reverse payments or censor transactions, and only miners moving elsewhere can
+          change that.
+        </p>
+      </div>
+      <a
+        href={MINING_POOL_STATS}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="inline-flex h-10 shrink-0 items-center justify-center gap-2 bg-foreground px-4 text-sm font-semibold whitespace-nowrap text-background transition-opacity hover:opacity-90 active:translate-y-px"
+      >
+        Find a smaller pool
+        <svg viewBox="0 0 16 16" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+          <path d="M6 3.5h6.5V10M12.5 3.5 4 12" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </a>
+    </section>
+  );
+}
+
 /** Miners named in the chart; the rest are drawn together as other miners. */
 const SHOWN_MINERS = 7;
 
@@ -885,11 +933,31 @@ const SHOWN_MINERS = 7;
  */
 const SLICE_STRENGTH = [100, 68, 46, 33, 25, 19, 15];
 
-/** The note to miners: amber while two miners hold a majority, red with its tile when one does. */
-const NOTE_TONE: Record<Level, string> = {
+/** A warning's ink, for what causes it and the note to act on it: amber for a warning, red for a critical one. */
+export const ALERT_INK: Record<Level, string> = {
   warn: "text-warn-ink",
   critical: "text-critical-ink",
 };
+/** The row of what causes a warning, tinted and outlined in its color. */
+export const CAUSE_ROW: Record<Level, string> = {
+  warn: "bg-warn/[0.12] ring-1 ring-inset ring-warn/35",
+  critical: "bg-critical/[0.12] ring-1 ring-inset ring-critical/35",
+};
+/** The verdict's dot pulses for any grade short of healthy. */
+const PING: Partial<Record<Grade, string>> = { warn: "bg-warn", serious: "bg-serious", critical: "bg-critical" };
+
+/** Verdict is a tile's graded figure: its status dot, pulsing when it is short of healthy, then the words. */
+export function Verdict({ grade, children }: { grade: Grade; children: ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-2.5">
+      <span className="relative inline-flex size-2.5">
+        {PING[grade] && <span aria-hidden className={`absolute inline-flex size-full animate-ping rounded-full opacity-60 motion-reduce:hidden ${PING[grade]}`} />}
+        <Indicator grade={grade} label="" className="relative size-2.5" />
+      </span>
+      {children}
+    </span>
+  );
+}
 
 /** MinerAddress shortens an address to its ends, short enough for the list never to cut it again. */
 function MinerAddress({ address, muted }: { address: string; muted: boolean }) {
@@ -922,7 +990,20 @@ interface Slice {
 }
 
 /** Donut draws each slice as an arc of one ring, with a surface gap between slices. */
-function Donut({ slices, total, active, onActive }: { slices: Slice[]; total: number; active: string | null; onActive: (key: string | null) => void }) {
+function Donut({
+  slices,
+  total,
+  active,
+  onActive,
+  half = null,
+}: {
+  slices: Slice[];
+  total: number;
+  active: string | null;
+  onActive: (key: string | null) => void;
+  /** Marks the halfway point across the ring, in the warning's color, while the largest miners hold a majority. */
+  half?: Level | null;
+}) {
   const radius = 46;
   const circumference = 2 * Math.PI * radius;
   const gap = slices.length > 1 ? 1.5 : 0;
@@ -953,6 +1034,15 @@ function Donut({ slices, total, active, onActive }: { slices: Slice[]; total: nu
           </Tooltip>
         );
       })}
+      {half && (
+        // Halfway round from the top is the bottom: the ring is drawn turned a quarter back, so that is its left
+        <g className={ALERT_INK[half]} aria-hidden>
+          <line x1={60 - radius + 12} y1="60" x2={60 - radius - 10} y2="60" stroke="currentColor" strokeWidth="1.5" strokeDasharray="2.5 1.5" />
+          <text x={60 - radius + 15} y="60" fill="currentColor" fontSize="7" textAnchor="middle" dominantBaseline="central" transform={`rotate(90 ${60 - radius + 15} 60)`} className="font-mono">
+            50%
+          </text>
+        </g>
+      )}
     </svg>
   );
 }
@@ -971,8 +1061,11 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
   const majority = majorityHolders(c.miners, total);
   const judged = total >= DECENTRALIZATION_MIN_BLOCKS;
   const { grade, verdict } = gradeDecentralization(majority);
-  // The tile, and its note to miners, take the warning's color while one miner holds a majority
+  // One miner holding a majority is the alert's; two together, a warning here. Either way the miners holding it,
+  // and the halfway mark they cross, take its color, so the verdict shows its cause
   const tone = majorityLevel(charts);
+  const concern: Level | null = tone ?? (judged && majority === 2 ? "warn" : null);
+  const holders = concern && majority !== null ? majority : 0;
   const [active, setActive] = useState<string | null>(null);
 
   const shown = c.miners.slice(0, SHOWN_MINERS);
@@ -1001,15 +1094,11 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
   return (
     <Tile
       className={className}
-      tone={tone}
       title="Decentralization"
       readout={total ? (fullWeek ? "last 7 days" : `last ${formatInt(total)} blocks`) : undefined}
       value={
         total === 0 ? undefined : judged ? (
-          <span className="inline-flex items-center gap-2.5">
-            <Indicator grade={grade} label="" className="size-2.5" />
-            {verdict}
-          </span>
+          <Verdict grade={grade}>{verdict}</Verdict>
         ) : (
           "Too early"
         )
@@ -1031,7 +1120,7 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
           {/* Beside the donut, and under it on wide screens, where the tile spans two rows */}
           <div className="flex items-center gap-5 xl:flex-col xl:items-stretch xl:gap-6">
             <div className="relative xl:self-center">
-              <Donut slices={slices} total={total} active={active} onActive={setActive} />
+              <Donut slices={slices} total={total} active={active} onActive={setActive} half={concern} />
               <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-2xl leading-none tabular-nums">{formatInt(c.minerCount)}</span>
                 <span className="mt-1 text-[10px] tracking-wider text-muted-foreground uppercase">
@@ -1041,12 +1130,13 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
             </div>
 
             <ol className="flex min-w-0 flex-1 flex-col gap-0.5">
-              {slices.map((slice) => (
+              {slices.map((slice, i) => (
                 <li
                   key={slice.key}
                   className={`-mx-2 grid grid-cols-[0.625rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-sm px-2 py-1 text-xs transition-[background-color,opacity] duration-150 ${
-                    active === slice.key ? "bg-foreground/8 text-foreground" : active === null ? "" : "opacity-35"
-                  }`}
+                    // A holder's row keeps its tint under the pointer; the others light up as before
+                    concern && i < holders ? CAUSE_ROW[concern] : active === slice.key ? "bg-foreground/8" : ""
+                  } ${active === slice.key ? "text-foreground" : active === null ? "" : "opacity-35"}`}
                   onPointerEnter={() => setActive(slice.key)}
                   onPointerLeave={() => setActive(null)}
                 >
@@ -1076,7 +1166,7 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
                   <Tooltip content={`${slice.blocks} of ${total} blocks`}>
                     <span className="text-right tabular-nums">
                       {active === slice.key && <span className="mr-2 text-muted-foreground">{slice.blocks} blocks</span>}
-                      {share(slice.blocks, total)}
+                      <span className={concern && i < holders ? `font-semibold ${ALERT_INK[concern]}` : ""}>{share(slice.blocks, total)}</span>
                     </span>
                   </Tooltip>
                 </li>
@@ -1085,15 +1175,16 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
           </div>
 
           <div className="mt-auto flex flex-wrap items-center justify-between gap-x-4 gap-y-1 border-t border-border pt-3 text-xs text-muted-foreground">
-            {/* The banner above says why; here it is a reminder, in the warning's color */}
-            {judged && majority !== null && majority <= 2 ? (
+            {/* The banner above says why; here it is a reminder, in the warning's color. With one miner
+                holding a majority, the call at the top of the section asks instead */}
+            {judged && majority !== null && majority <= 2 && !tone ? (
               // Worded as the alert's ask: who can act, in the warning's color, then what to do
               <span>
-                <span className={`font-semibold ${NOTE_TONE[tone ?? "warn"]}`}>If you mine LAX:</span>{" "}
+                <span className={`font-semibold ${ALERT_INK[tone ?? "warn"]}`}>If you mine LAX:</span>{" "}
                 <span className="text-foreground">move some or all of your hashrate to a smaller pool.</span>
               </span>
             ) : (
-              <span>Healthy when at least 4 miners are needed for a majority.</span>
+              <span>Healthy when at least 4 miners are needed for a majority{tone && majority !== null ? `, not ${majority}` : ""}.</span>
             )}
             <a
               href={MINING_POOL_STATS}

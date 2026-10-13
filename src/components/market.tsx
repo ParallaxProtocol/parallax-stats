@@ -1,7 +1,6 @@
 "use client";
 
 import { formatAgo, formatCompact, formatPercent } from "@/lib/format";
-import type { Level } from "@/lib/alert-levels";
 import type { Market } from "@/lib/protocol";
 import { Waiting } from "./charts";
 import { ExternalLink } from "./external-link";
@@ -40,39 +39,31 @@ function Depth({ dollars }: { dollars: number | null }) {
 
 /**
  * Exchanges lists where LAX trades and how well: each pair's share of the
- * volume, its spread and the orders near its price. Below, the orders it
- * takes to push the price 2% down against what miners bring to sell in a
- * day, which is whether the market can take the new coins.
+ * volume, its spread and the orders near its price, and at its foot why
+ * the price is only a rough guide, while it is.
  */
 export function Exchanges({
   markets,
-  dailyNewCoins,
   priceUrl,
-  tone,
+  warning = null,
   className = "",
 }: {
   markets: Market[] | null;
-  /** New coins a day, in dollars; null while unknown. */
-  dailyNewCoins: number | null;
   /** The coin's CoinGecko page, credited in the heading. */
   priceUrl: string | null;
-  /** Tints the tile while the market is thin. */
-  tone?: Level | null;
+  /** Why the price is only a rough guide, while it is: said at the foot of the card. */
+  warning?: string | null;
   className?: string;
 }) {
   const now = useServerNow();
   const list = markets ?? [];
   const total = list.reduce((sum, m) => sum + m.volume24h, 0);
-  // An exchange with no orders within 2% below the price takes no selling there
-  const sellers = list.filter((m) => m.depthDown !== null && m.depthDown > 0);
-  const noSellers = sellers.length === 0 && list.some((m) => m.depthDown === 0);
-  const sellDepth = sellers.reduce((sum, m) => sum + m.depthDown!, 0);
 
   return (
-    <Plate as="section" aria-labelledby="exchanges-title" tone={tone} className={`flex min-w-0 flex-col gap-4 p-5 ${className}`}>
+    <Plate as="section" aria-labelledby="exchanges-title" className={`flex min-w-0 flex-col gap-4 p-5 ${className}`}>
       <Heading
         id="exchanges-title"
-        title="Where LAX trades"
+        title="Exchanges"
         readout={priceUrl ? <ExternalLink href={`${priceUrl}#markets`}>CoinGecko</ExternalLink> : undefined}
       />
       {list.length === 0 ? (
@@ -130,20 +121,16 @@ export function Exchanges({
               </tbody>
             </table>
           </div>
-          {sellers.length > 0 && (
-            <p className="mt-auto text-sm text-muted-foreground">
-              Selling <span className="text-foreground tabular-nums">{usd(sellDepth)}</span> would push the price 2% down
-              {sellers.length === 2 ? " on both exchanges" : sellers.length > 2 ? ` on all ${sellers.length} exchanges` : ""}
-              {dailyNewCoins !== null && (
-                <>
-                  ; miners bring <span className="text-foreground tabular-nums">{usd(dailyNewCoins)}</span> of new coins a day
-                  {sellDepth > 0 && dailyNewCoins > sellDepth && `, ${significant.format(dailyNewCoins / sellDepth)}× as much`}
-                </>
-              )}
-              .
+          {warning && (
+            // At the foot of the card
+            <p className="mt-auto flex items-center gap-2.5 border-t border-border pt-3 text-xs">
+              <span aria-hidden className="relative flex size-2 shrink-0">
+                <span className="absolute inline-flex size-full animate-ping rounded-full bg-warn opacity-60 motion-reduce:hidden" />
+                <span className="relative inline-flex size-2 rounded-full bg-warn" />
+              </span>
+              {warning}
             </p>
           )}
-          {noSellers && <p className="mt-auto text-sm text-muted-foreground">No exchange has orders within 2% below the price: any sale moves it further.</p>}
         </>
       )}
     </Plate>
