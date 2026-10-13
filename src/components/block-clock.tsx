@@ -7,6 +7,7 @@ import { TARGET_BLOCK_TIME } from "@/lib/protocol";
 import { Indicator } from "./indicator";
 import { useServerNow } from "./live/provider";
 import { Label, Plate } from "./plate";
+import { Rolling } from "./rolling";
 
 const VERDICT: Record<Grade, string> = {
   good: "On schedule",
@@ -64,7 +65,7 @@ export function BlockClock({ bestBlock, foundAt }: { bestBlock: number; foundAt:
           <span id="clock-title">Best block</span>
         </Label>
         <p className="font-sans text-5xl font-semibold tracking-tight tabular-nums sm:text-7xl">
-          {bestBlock ? <RollingNumber value={formatInt(bestBlock)} /> : "—"}
+          {bestBlock ? <Rolling value={formatInt(bestBlock)} /> : "—"}
         </p>
       </div>
 
@@ -122,26 +123,6 @@ export function BlockClock({ bestBlock, foundAt }: { bestBlock: number; foundAt:
         </div>
       </div>
     </section>
-  );
-}
-
-/**
- * RollingNumber rolls each digit that changes up into place. Digits are
- * keyed from the right, so a number gaining a digit only animates the new
- * one and the digits that changed.
- */
-function RollingNumber({ value }: { value: string }) {
-  const chars = [...value];
-
-  return (
-    <span>
-      <span className="sr-only">{value}</span>
-      {chars.map((char, i) => (
-        <span key={`${chars.length - i}:${char}`} aria-hidden className="digit-in">
-          {char}
-        </span>
-      ))}
-    </span>
   );
 }
 

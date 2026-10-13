@@ -1,13 +1,16 @@
 "use client";
 
-import { createContext, use, useEffect, useState, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { createContext, use, useCallback, useEffect, useId, useRef, useState, type CSSProperties, type PointerEvent, type ReactNode, type RefObject } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { blockReward, WEI_PER_LAX } from "@/lib/emission";
 import { formatBlockTime, formatCompact, formatInt, formatMs, formatPercent, gradeAvgBlockTime, shortHash, type Grade } from "@/lib/format";
 import { HISTORY_BINS, TARGET_BLOCK_TIME, TREND_SLICE_S, type Charts, type MinerCount, type PropagationStats } from "@/lib/protocol";
 import { majority as majorityHeld, majorityLevel, spreadLevel, type Level } from "@/lib/alert-levels";
 import { DECENTRALIZATION_MIN_BLOCKS, gradeDecentralization, majorityHolders } from "@/lib/decentralization";
 import { Indicator } from "./indicator";
+import { REVEAL } from "./motion";
 import { Label, Plate } from "./plate";
+import { Rolling } from "./rolling";
 import { Tooltip } from "./tooltip";
 import { useSize } from "./use-size";
 
@@ -28,6 +31,7 @@ export function Tile({
   value,
   qualifier,
   tone,
+  roll = true,
   className = "",
   children,
 }: {
@@ -35,6 +39,8 @@ export function Tile({
   readout?: ReactNode;
   value?: ReactNode;
   qualifier?: ReactNode;
+  /** Rolls a figure's digits as it changes; off while it shows a point hovered in the chart, which changes too fast. */
+  roll?: boolean;
   /** Tints the tile while a warning about it applies. */
   tone?: Level | null;
   /** Placement classes, for a tile in a grid. */
@@ -59,7 +65,7 @@ export function Tile({
         // for the figure and two for its note, enough for the longest readouts
         <p className="flex min-w-0 flex-col gap-1">
           {/* Its clipping box reaches a little past each side, so a verdict's pulsing dot is never cut off */}
-          <span className="-mx-2 truncate px-2 text-3xl tabular-nums">{value}</span>
+          <span className="-mx-2 truncate px-2 text-3xl tabular-nums">{roll && typeof value === "string" ? <Rolling value={value} /> : value}</span>
           <span className="line-clamp-2 min-h-10 text-sm leading-5 text-muted-foreground">{qualifier}</span>
         </p>
       )}
@@ -73,6 +79,41 @@ export const BestBlock = createContext(0);
 
 export function Waiting({ children = "Waiting for blocks" }: { children?: ReactNode }) {
   return <p className="flex flex-1 items-center text-sm text-muted-foreground">{children}</p>;
+}
+
+/**
+ * RingSweep draws a donut's slices in around the ring, from the top, the
+ * first time it scrolls into view, as the charts sweep in. `width` must
+ * cover the widest a slice's stroke gets.
+ */
+export function RingSweep({ center, radius, width, children }: { center: number; radius: number; width: number; children: ReactNode }) {
+  const ref = useRef<SVGGElement>(null);
+  const seen = useSeen(ref);
+  // Not a transform, so the reduced motion setting would not stop it on its own: it then appears at once.
+  // Only the timing changes, as the server cannot know the setting
+  const still = useReducedMotion() ?? false;
+  const id = `ring-${useId().replace(/[^\w-]/g, "")}`;
+
+  return (
+    <>
+      <mask id={id}>
+        <motion.circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke="white"
+          strokeWidth={width}
+          initial={false}
+          animate={{ pathLength: seen ? 1 : 0 }}
+          transition={still ? { duration: 0 } : REVEAL}
+        />
+      </mask>
+      <g ref={ref} mask={`url(#${id})`}>
+        {children}
+      </g>
+    </>
+  );
 }
 
 /** barPath draws a column with a rounded data end and a square base. */
@@ -107,6 +148,33 @@ export function useSeen(ref: RefObject<Element | null>): boolean {
   }, [ref, seen]);
 
   return seen;
+}
+
+/**
+ * Grow is a meter's fill that grows out from the left the first time its
+ * track scrolls into view, as the charts sweep in; after that its width
+ * changes as its own classes say. It watches the track, which has its full
+ * size from the start. `delay` staggers the fills in a list.
+ */
+export function Grow({ className, style, delay = 0 }: { className: string; style: CSSProperties; delay?: number }) {
+  const track = useRef<Element | null>(null);
+  // Set as the fill mounts, before the observer starts
+  const fill = useCallback((el: HTMLSpanElement | null) => {
+    track.current = el?.parentElement ?? null;
+  }, []);
+  const seen = useSeen(track);
+
+  return (
+    <motion.span
+      ref={fill}
+      aria-hidden
+      className={className}
+      style={{ ...style, originX: 0 }}
+      initial={false}
+      animate={{ scaleX: seen ? 1 : 0 }}
+      transition={{ ...REVEAL, delay }}
+    />
+  );
 }
 
 /**
@@ -497,6 +565,7 @@ export function BlockTime({ c, block }: { c: Charts; block: (i: number) => strin
       }
       readout={<PeriodSwitch value={view} onChange={choose} />}
       value={value}
+      roll={active === null}
       qualifier={qualifier}
     >
       {view === "week" ? (
@@ -566,6 +635,7 @@ export function Transactions({ c, block }: { c: Charts; block: (i: number) => st
       title="Transactions"
       readout={<PeriodSwitch value={view} onChange={choose} />}
       value={value}
+      roll={active === null}
       qualifier={qualifier}
     >
       {view === "week" ? (
@@ -628,7 +698,7 @@ export function Fullness({ c, block }: { c: Charts; block: (i: number) => string
   }
 
   return (
-    <Tile title="Block fullness" readout={<PeriodSwitch value={view} onChange={choose} />} value={value} qualifier={qualifier}>
+    <Tile title="Block fullness" readout={<PeriodSwitch value={view} onChange={choose} />} value={value} roll={active === null} qualifier={qualifier}>
       {view === "week" ? (
         knownTrend.length === 0 ? (
           <Waiting />
@@ -694,6 +764,8 @@ export function Propagation({ stats }: { stats: PropagationStats }) {
   const minWidth = 3;
   // A band hovered in the bar or the list lights up in both, as in the decentralization donut
   const [active, setActive] = useState<number | null>(null);
+  const bar = useRef<HTMLDivElement>(null);
+  const seen = useSeen(bar);
 
   return (
     <Tile
@@ -707,10 +779,12 @@ export function Propagation({ stats }: { stats: PropagationStats }) {
         <Waiting>Waiting for blocks to reach a second verified node</Waiting>
       ) : (
         <div className="flex flex-1 flex-col justify-between gap-3">
+          {/* Sweeps in from the left on first view, as the charts do */}
           <div
+            ref={bar}
             role="img"
             aria-label={BANDS.map((band, i) => `${band.label}: ${bands[i]} reports`).join(", ")}
-            className="flex h-3.5 w-full items-center gap-0.5"
+            className={`flex h-3.5 w-full items-center gap-0.5 ${seen ? "chart-reveal" : "chart-pending"}`}
           >
             {BANDS.map((band, i) =>
               bands[i] > 0 ? (
@@ -850,7 +924,7 @@ export function Fees({ c, block }: { c: Charts; block: (i: number) => string }) 
   }
 
   return (
-    <Tile title="Fees" readout={<PeriodSwitch value={view} onChange={choose} />} value={value} qualifier={qualifier}>
+    <Tile title="Fees" readout={<PeriodSwitch value={view} onChange={choose} />} value={value} roll={active === null} qualifier={qualifier}>
       {waiting ? (
         <Waiting>Fees appear once nodes run a parallaxd version that reports them</Waiting>
       ) : view === "week" ? (
@@ -1012,28 +1086,30 @@ function Donut({
 
   return (
     <svg viewBox="0 0 120 120" className="size-32 shrink-0 -rotate-90 sm:size-36 xl:size-44" role="img" aria-label="Share of recent blocks by miner">
-      {slices.map((slice, i) => {
-        const length = (slice.blocks / total) * circumference;
+      <RingSweep center={60} radius={radius} width={24}>
+        {slices.map((slice, i) => {
+          const length = (slice.blocks / total) * circumference;
 
-        return (
-          <Tooltip key={slice.key} content={`${slice.label}: ${slice.blocks} of ${total} blocks`}>
-            <circle
-              cx="60"
-              cy="60"
-              r={radius}
-              fill="none"
-              stroke={slice.color}
-              strokeWidth={active === slice.key ? 20 : 16}
-              strokeDasharray={`${Math.max(0, length - gap)} ${circumference}`}
-              strokeDashoffset={-starts[i]}
-              className="transition-[stroke-width,opacity] duration-150"
-              opacity={active === null || active === slice.key ? 1 : 0.35}
-              onPointerEnter={() => onActive(slice.key)}
-              onPointerLeave={() => onActive(null)}
-            />
-          </Tooltip>
-        );
-      })}
+          return (
+            <Tooltip key={slice.key} content={`${slice.label}: ${slice.blocks} of ${total} blocks`}>
+              <circle
+                cx="60"
+                cy="60"
+                r={radius}
+                fill="none"
+                stroke={slice.color}
+                strokeWidth={active === slice.key ? 20 : 16}
+                strokeDasharray={`${Math.max(0, length - gap)} ${circumference}`}
+                strokeDashoffset={-starts[i]}
+                className="transition-[stroke-width,opacity] duration-150"
+                opacity={active === null || active === slice.key ? 1 : 0.35}
+                onPointerEnter={() => onActive(slice.key)}
+                onPointerLeave={() => onActive(null)}
+              />
+            </Tooltip>
+          );
+        })}
+      </RingSweep>
       {half && (
         // Halfway round from the top is the bottom: the ring is drawn turned a quarter back, so that is its left
         <g className={ALERT_INK[half]} aria-hidden>

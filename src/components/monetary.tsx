@@ -14,7 +14,8 @@ import { formatInt } from "@/lib/format";
 import { TARGET_BLOCK_TIME } from "@/lib/protocol";
 import { useServerNow } from "./live/provider";
 import { Label, Plate } from "./plate";
-import { scrubIndex } from "./charts";
+import { Grow, scrubIndex } from "./charts";
+import { Rolling } from "./rolling";
 import { useSize } from "./use-size";
 import { Tooltip } from "./tooltip";
 
@@ -78,7 +79,9 @@ function Halving({ height }: { height: number }) {
       </div>
 
       <p className="flex flex-wrap items-baseline gap-x-2">
-        <span className="text-3xl tabular-nums">{formatInt(state.blocksToHalving)}</span>
+        <span className="text-3xl tabular-nums">
+          <Rolling value={formatInt(state.blocksToHalving)} />
+        </span>
         <span className="text-sm text-muted-foreground">blocks to go</span>
       </p>
 
@@ -96,7 +99,7 @@ function Halving({ height }: { height: number }) {
           aria-valuemax={100}
           aria-valuenow={Math.round(state.eraProgress * 100)}
         >
-          <div
+          <Grow
             className="brand-gradient-mark absolute inset-y-0 left-0 transition-[width] duration-700 ease-out"
             style={{ width: `${state.eraProgress * 100}%` }}
           />
@@ -283,7 +286,9 @@ function Emission({ height }: { height: number }) {
       </div>
 
       <p className="flex flex-wrap items-baseline gap-x-2">
-        <span className="text-3xl tabular-nums">{formatInt(Math.floor(toLax(state.issued)))}</span>
+        <span className="text-3xl tabular-nums">
+          <Rolling value={formatInt(Math.floor(toLax(state.issued)))} />
+        </span>
         <span className="text-sm text-muted-foreground">
           LAX issued, {(state.issuedShare * 100).toFixed(1)}% of the maximum
         </span>

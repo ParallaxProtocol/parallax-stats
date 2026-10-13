@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
-import { MotionConfig } from "motion/react";
+import { useEffect, useMemo, useRef, type ReactNode } from "react";
+import { animate, MotionConfig, stagger } from "motion/react";
 import { miningDifficulty } from "@/lib/asert";
 import { onMainnet, summarize } from "@/lib/derive";
 import { majorityLevel, spreadLevel, thinMarket } from "@/lib/alert-levels";
@@ -21,6 +21,7 @@ import { NetworkStatus } from "./incidents";
 import { ClientVersions, StaleBlocks } from "./health";
 import { LatestBlocks } from "./latest-blocks";
 import { LiveProvider, useLive, useServerNow } from "./live/provider";
+import { SPRING } from "./motion";
 import { Exchanges } from "./market";
 import { Supply } from "./monetary";
 import { NodeMap } from "./node-map";
@@ -208,11 +209,55 @@ const SECTIONS: SectionLink[] = [
   { id: "nodes", title: "Nodes", description: "Where the network runs, and how well it keeps up" },
 ];
 
+/** How far a section's tiles rise as they come into view, and how far apart they start. */
+const RISE = 12;
+const STAGGER = 0.05;
+
+/**
+ * useTilesEnter has a section's tiles fade and rise into place, one after
+ * another, the first time it scrolls into view. Sections already on screen
+ * when the page opens are left as they are, so nothing moves on arrival,
+ * and so is everything when the viewer asks for reduced motion.
+ */
+function useTilesEnter() {
+  const ref = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    const section = ref.current;
+
+    if (!section || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    if (section.getBoundingClientRect().top < window.innerHeight) return;
+
+    // The section's plates, not ones inside another plate
+    const tiles = [...section.querySelectorAll<HTMLElement>(".group\\/plate")].filter((tile) => !tile.parentElement?.closest(".group\\/plate"));
+
+    animate(tiles, { opacity: 0, y: RISE }, { duration: 0 });
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry.isIntersecting) return;
+
+        observer.disconnect();
+        // Back to no transform at all, which Motion writes as none, so no tile is left a containing block
+        // for what is positioned inside it
+        animate(tiles, { opacity: 1, y: 0 }, { ...SPRING, delay: stagger(STAGGER) });
+      },
+      { rootMargin: "0px 0px -10% 0px" },
+    );
+
+    observer.observe(section);
+
+    return () => observer.disconnect();
+  }, []);
+
+  return ref;
+}
+
 /**
  * Section is a numbered, titled group of tiles on one topic; it scrolls into
  * view clear of the section bar. Its heading reads like an instrument's
  * scale: a bracketed index, the title, and a ruled line out to any warning
- * about the section.
+ * about the section. Its tiles rise into place as it first comes into view.
  */
 function Section({
   id,
@@ -228,9 +273,10 @@ function Section({
 }) {
   const index = sections.findIndex((section) => section.id === id);
   const { title, description, status } = sections[index];
+  const ref = useTilesEnter();
 
   return (
-    <section id={id} aria-labelledby={`${id}-title`} className="mt-10 flex scroll-mt-16 flex-col gap-4 first-of-type:mt-6">
+    <section ref={ref} id={id} aria-labelledby={`${id}-title`} className="mt-10 flex scroll-mt-16 flex-col gap-4 first-of-type:mt-6">
       <header className="flex flex-wrap items-end gap-x-4 gap-y-1 px-1">
         <h2 id={`${id}-title`} className="flex items-center gap-3">
           <span className="section-index font-mono text-[11px] text-brand tabular-nums">{sectionNumber(index)}</span>

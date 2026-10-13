@@ -5,6 +5,7 @@ import { countryName, gradeBehind, type Grade } from "@/lib/format";
 import { geoMiller } from "@/lib/projection";
 import type { PublicNode } from "@/lib/protocol";
 import type { WorldMap } from "@/lib/world";
+import { Grow } from "./charts";
 import { Indicator } from "./indicator";
 import { Label, Plate } from "./plate";
 
@@ -112,7 +113,7 @@ function Countries({
   return (
     <div className="border-t border-border pt-3">
       <ol className="flex flex-col gap-0.5" onPointerLeave={() => onFocus(null)}>
-        {rows.map(([code, place]) => (
+        {rows.map(([code, place], i) => (
           <li
             key={code}
             onPointerEnter={() => onFocus(code)}
@@ -127,9 +128,10 @@ function Countries({
               {countryName(code)}
             </span>
             <span className="relative h-1 bg-border/60">
-              <span
+              <Grow
                 className="absolute inset-y-0 left-0 bg-brand-mark transition-[width] duration-700 ease-out"
                 style={{ width: `${(place.count / located) * 100}%` }}
+                delay={i * 0.05}
               />
             </span>
             <span className="text-right tabular-nums">{place.count}</span>

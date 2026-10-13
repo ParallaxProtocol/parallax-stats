@@ -286,20 +286,6 @@
   }
 }
 
-/* Digits that change roll up into place */
-@keyframes digit-in {
-  from {
-    opacity: 0;
-    transform: translateY(0.45em);
-    filter: blur(2px);
-  }
-}
-
-.digit-in {
-  display: inline-block;
-  animation: digit-in 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
 /* Dialogs fade and rise in; the page behind stops scrolling */
 @keyframes dialog-in {
   from {

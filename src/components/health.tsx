@@ -7,7 +7,9 @@ import type { PublishedRelease, Release } from "@/lib/releases";
 import { chainLevel, DEEP_REORG, staleChance, VERY_DEEP_REORG } from "@/lib/alert-levels";
 import { compareParts, parsePlatform, parseVersion } from "@/lib/version";
 import { useServerNow } from "./live/provider";
+import { Grow, RingSweep } from "./charts";
 import { Label, Plate } from "./plate";
+import { Rolling } from "./rolling";
 import { Tooltip } from "./tooltip";
 import { useSize } from "./use-size";
 
@@ -375,7 +377,9 @@ export function StaleBlocks({
         // Stacked, or the rate, the strip and the facts side by side across the page on wide screens
         <div className="flex flex-col gap-5 xl:grid xl:grid-cols-[11rem_minmax(0,1fr)_15rem] xl:items-start xl:gap-10">
           <p className="flex flex-col gap-1">
-            <span className="text-3xl tabular-nums">{formatRate(window > 0 ? staleBlocks / window : 0)}</span>
+            <span className="text-3xl tabular-nums">
+              <Rolling value={formatRate(window > 0 ? staleBlocks / window : 0)} />
+            </span>
             <span className="text-sm text-muted-foreground">
               stale, {formatInt(staleBlocks)} of {formatInt(window)} blocks lost
             </span>
@@ -591,24 +595,26 @@ function VersionDonut({
     <div className="flex items-center gap-3 sm:gap-4">
       <div className="relative size-32 shrink-0">
         <svg viewBox="0 0 100 100" className="size-full -rotate-90" role="img" aria-label="Online nodes by client version">
-          {painted.map((arc) => (
-            <Tooltip key={arc.label} content={`${arc.label}: ${formatInt(arc.nodes)} of ${formatInt(total)} nodes`}>
-              <circle
-                cx="50"
-                cy="50"
-                r={radius}
-                fill="none"
-                stroke={arc.color}
-                strokeWidth={arc.on ? 13 : 10}
-                strokeDasharray={`${Math.max(0, arc.length - gap)} ${circumference}`}
-                strokeDashoffset={-arc.start}
-                className="transition-[stroke-width,opacity] duration-150"
-                opacity={hover === null || arc.on ? 1 : 0.35}
-                onPointerEnter={enter(arc)}
-                onPointerLeave={() => onHover(null)}
-              />
-            </Tooltip>
-          ))}
+          <RingSweep center={50} radius={radius} width={16}>
+            {painted.map((arc) => (
+              <Tooltip key={arc.label} content={`${arc.label}: ${formatInt(arc.nodes)} of ${formatInt(total)} nodes`}>
+                <circle
+                  cx="50"
+                  cy="50"
+                  r={radius}
+                  fill="none"
+                  stroke={arc.color}
+                  strokeWidth={arc.on ? 13 : 10}
+                  strokeDasharray={`${Math.max(0, arc.length - gap)} ${circumference}`}
+                  strokeDashoffset={-arc.start}
+                  className="transition-[stroke-width,opacity] duration-150"
+                  opacity={hover === null || arc.on ? 1 : 0.35}
+                  onPointerEnter={enter(arc)}
+                  onPointerLeave={() => onHover(null)}
+                />
+              </Tooltip>
+            ))}
+          </RingSweep>
         </svg>
         <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
           <span className="text-2xl leading-none tabular-nums">{hover ? pct(focused) : formatInt(versions)}</span>
@@ -808,11 +814,11 @@ export function ClientVersions({
           <div className="flex flex-col gap-4">
             <dl className="flex flex-col gap-2">
               <dt className="font-mono text-[10px] tracking-wider text-muted-foreground uppercase">Platforms</dt>
-              {shownPlatforms.map(([platform, count]) => (
+              {shownPlatforms.map(([platform, count], i) => (
                 <dd key={platform} className="grid grid-cols-[minmax(0,7rem)_1fr_1.5rem] items-center gap-3 text-xs">
                   <span className="truncate">{platform}</span>
                   <span className="h-1.5 rounded-full bg-foreground/10">
-                    <span className="block h-full rounded-full bg-brand-mark/70" style={{ width: `${(count / total) * 100}%` }} />
+                    <Grow className="block h-full rounded-full bg-brand-mark/70" style={{ width: `${(count / total) * 100}%` }} delay={i * 0.05} />
                   </span>
                   <span className="text-right tabular-nums">{count}</span>
                 </dd>

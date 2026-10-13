@@ -23,6 +23,7 @@ import { TREND_SLICE_S, type Charts, type Price, type Trends } from "@/lib/proto
 import { sliceTime, Tile, TrendLine, Waiting } from "./charts";
 import { ExternalLink } from "./external-link";
 import { Indicator } from "./indicator";
+import { Rolling } from "./rolling";
 import { Tooltip } from "./tooltip";
 
 export interface Figure {
@@ -111,7 +112,7 @@ export function FigureTile({ figure, start, className = "" }: { figure: Figure; 
       }
       value={
         <>
-          {active === null ? figure.value : hovered === null ? "n/a" : figure.format(hovered)}
+          {active === null ? <Rolling value={figure.value} /> : hovered === null ? "n/a" : figure.format(hovered)}
           {figure.unit && (active === null ? figure.value !== "n/a" : hovered !== null) && (
             <span className="text-base text-muted-foreground"> {figure.unit}</span>
           )}
