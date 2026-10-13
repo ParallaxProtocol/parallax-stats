@@ -1324,7 +1324,7 @@ export function Decentralization({ charts, className = "" }: { charts: Charts | 
                 <span className="text-foreground">move some or all of your hashrate to a smaller pool.</span>
               </span>
             ) : (
-              <span>Healthy when at least 4 miners are needed for a majority{tone && majority !== null ? `, not ${majority}` : ""}.</span>
+              <span>Healthy when at least 4 miners are needed for a majority.</span>
             )}
             <a
               href={MINING_POOL_STATS}
