@@ -2,7 +2,7 @@
 // page and the sections they are about are tinted by the same rules.
 
 import { STALL_MS } from "./format.ts";
-import { PROPAGATION_BANDS, TARGET_BLOCK_TIME, type Charts, type ChainHealth, type PropagationStats } from "./protocol.ts";
+import { PROPAGATION_BANDS, TARGET_BLOCK_TIME, type Charts, type ChainHealth, type Market, type PropagationStats } from "./protocol.ts";
 
 export type Level = "warn" | "critical";
 
@@ -82,6 +82,31 @@ export function spreadLevel(propagation: PropagationStats | null | undefined): L
   if (!spread) return null;
   if (spread.median > VERY_SLOW_SPREAD_MS) return "critical";
   if (spread.median > SLOW_SPREAD_MS || spread.slowMiner) return "warn";
+
+  return null;
+}
+
+/** Spreads wider than this, weighted by volume, leave the price a rough guide: a trade could land this far off it. */
+export const WIDE_SPREAD_PCT = 5;
+/** One exchange with this share of the volume or more sets the price on its own. */
+export const ONE_EXCHANGE_SHARE = 0.8;
+
+/**
+ * thinMarket says why the price cannot be taken at its word: wide spreads
+ * where most of the trading happens, or nearly all of it on one exchange.
+ * Null while the market looks sound, or nothing trades.
+ */
+export function thinMarket(markets: Market[] | null): string | null {
+  const total = (markets ?? []).reduce((sum, m) => sum + m.volume24h, 0);
+
+  if (!markets || total <= 0) return null;
+
+  const quoted = markets.filter((m) => m.spread !== null);
+  const quotedVolume = quoted.reduce((sum, m) => sum + m.volume24h, 0);
+  const spread = quotedVolume > 0 ? quoted.reduce((sum, m) => sum + m.spread! * m.volume24h, 0) / quotedVolume : 0;
+
+  if (spread > WIDE_SPREAD_PCT) return "Wide spreads: the price is a rough guide";
+  if (markets[0].volume24h / total >= ONE_EXCHANGE_SHARE) return `Most trading on ${markets[0].exchange}`;
 
   return null;
 }

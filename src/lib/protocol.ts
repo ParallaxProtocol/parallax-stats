@@ -55,6 +55,8 @@ export interface Trends {
   pending: (number | null)[];
   /** LAX price in US dollars, from CoinGecko. */
   price: (number | null)[];
+  /** US dollars of LAX traded over the 24 hours to each reading, from CoinGecko. */
+  volume: (number | null)[];
 }
 
 /** trendStarts gives the start of each trend slice at `now` (ms), oldest first. */
@@ -259,13 +261,37 @@ export interface Charts {
   trends: Trends;
 }
 
-/** The LAX price, as CoinGecko last reported it. */
+/** The LAX price, as CoinGecko last reported it, with its market. */
 export interface Price {
   usd: number;
+  /** The price in bitcoin; null when CoinGecko gave none. */
+  btc: number | null;
+  /** US dollars traded over the last 24 hours, on every exchange CoinGecko tracks; null when unknown. */
+  volume24h: number | null;
+  /** How the US dollar price moved over the last 24 hours, in percent; null when unknown. */
+  change24h: number | null;
   /** When CoinGecko last updated it, ms. */
   at: number;
   /** The coin's page on CoinGecko, which its free API asks to be credited with a link. */
   url: string;
+}
+
+/** One pair LAX trades in on one exchange, as CoinGecko last reported it. */
+export interface Market {
+  exchange: string;
+  /** The pair's page on the exchange; null when CoinGecko gave none. */
+  url: string | null;
+  /** LAX/USDT. */
+  pair: string;
+  /** US dollars traded over the last 24 hours. */
+  volume24h: number;
+  /** The gap between the best bid and the best ask, in percent of the price; null when unknown. */
+  spread: number | null;
+  /** US dollars of orders it takes to move the price 2% up (buying) and down (selling); null when unknown. */
+  depthUp: number | null;
+  depthDown: number | null;
+  /** When it last traded, ms; null when unknown. */
+  lastTrade: number | null;
 }
 
 /** The kinds of incident the dashboard records: what its alerts warn of, kept once they pass. */
@@ -308,6 +334,8 @@ export interface Snapshot {
   explorer: string | null;
   /** The LAX price; null while unknown, or with COINGECKO_ID set empty. */
   price: Price | null;
+  /** Where LAX trades, most volume first; null while unknown, or with COINGECKO_ID set empty. */
+  markets: Market[] | null;
   /** What went wrong and when; null from a server that records none. */
   incidents: IncidentLog | null;
 }
@@ -322,6 +350,7 @@ export type ServerMessage =
   | { type: "charts"; charts: Charts }
   | { type: "fee"; gasPrice: string | null }
   | { type: "price"; price: Price | null }
+  | { type: "markets"; markets: Market[] }
   | { type: "incidents"; incidents: IncidentLog }
   | { type: "pong"; t: number; serverTime: number };
 

@@ -13,6 +13,7 @@ import {
   type Charts,
   type ClientMessage,
   type Geo,
+  type Market,
   type Price,
   type ServerMessage,
   type Snapshot,
@@ -35,6 +36,8 @@ const INCIDENT_CHECK_MS = 60_000;
 const INCIDENT_GRACE_MS = 2 * 60_000;
 /** CoinGecko refreshes its prices every minute or so; every 5 minutes is plenty, and far inside its free limit. */
 const PRICE_POLL_MS = 5 * 60_000;
+/** Where LAX trades changes slowly, and the call weighs more against the free limit. */
+const MARKETS_POLL_MS = 15 * 60_000;
 /** How often the node list's figures are read for the trends. */
 const READING_MS = 5 * 60 * 1000;
 
@@ -52,6 +55,8 @@ export interface HubOptions {
   fetchGasPrice?: () => Promise<bigint | null>;
   /** Reads the LAX price; polled every PRICE_POLL_MS. */
   fetchPrice?: () => Promise<Price | null>;
+  /** Reads where LAX trades; polled every MARKETS_POLL_MS. */
+  fetchMarkets?: () => Promise<Market[] | null>;
   /** Where state is saved across restarts; without one it lives in memory only. */
   store?: Store;
 }
@@ -170,6 +175,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
       pools,
       explorer: settings.explorerUrl,
       price,
+      markets,
       incidents: registry.incidentLog(),
     };
   }
@@ -204,9 +210,24 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
 
   void pollPrice();
   const pricePoll = options.fetchPrice ? setInterval(() => void pollPrice(), PRICE_POLL_MS) : null;
+
+  // Where LAX trades, the same way
+  let markets: Market[] | null = null;
+
+  async function pollMarkets(): Promise<void> {
+    const next = await options.fetchMarkets?.();
+
+    if (!next || JSON.stringify(next) === JSON.stringify(markets)) return;
+
+    markets = next;
+    broadcast({ type: "markets", markets });
+  }
+
+  void pollMarkets();
+  const marketsPoll = options.fetchMarkets ? setInterval(() => void pollMarkets(), MARKETS_POLL_MS) : null;
   // Not at startup: restored nodes are offline until they report again, which would read as an outage
   const reading = setInterval(() => {
-    registry.recordReading(gasPrice, Date.now(), price?.usd ?? null);
+    registry.recordReading(gasPrice, Date.now(), price?.usd ?? null, price?.volume24h ?? null);
     // The readings' trends would otherwise wait for the next block to reach viewers
     scheduleCharts();
   }, READING_MS);
@@ -570,6 +591,7 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
 
       if (gasPricePoll) clearInterval(gasPricePoll);
       if (pricePoll) clearInterval(pricePoll);
+      if (marketsPoll) clearInterval(marketsPoll);
       clearInterval(incidentCheck);
       clearInterval(reading);
       clearInterval(heartbeat);

@@ -6,6 +6,7 @@ import {
   VIEWER_PATH,
   type Charts,
   type IncidentLog,
+  type Market,
   type MiningPool,
   type Price,
   type PublicNode,
@@ -26,6 +27,8 @@ export interface LiveState {
   explorer: string | null;
   /** The LAX price; null while unknown. */
   price: Price | null;
+  /** Where LAX trades, most volume first; null while unknown. */
+  markets: Market[] | null;
   /** What went wrong and when; null from a server that records none. */
   incidents: IncidentLog | null;
   connection: Connection;
@@ -56,6 +59,7 @@ export class LiveStore {
       pools: initial.pools ?? {},
       explorer: initial.explorer ?? null,
       price: initial.price ?? null,
+      markets: initial.markets ?? null,
       incidents: initial.incidents ?? null,
       connection: "connecting",
       latency: null,
@@ -148,6 +152,7 @@ export class LiveStore {
           pools: msg.pools ?? {},
           explorer: msg.explorer ?? null,
           price: msg.price ?? null,
+          markets: msg.markets ?? null,
           incidents: msg.incidents ?? null,
           connection: "live",
           clockOffset: this.state.latency === null ? msg.serverTime - Date.now() : this.state.clockOffset,
@@ -172,6 +177,10 @@ export class LiveStore {
 
       case "price":
         this.set({ price: msg.price });
+        break;
+
+      case "markets":
+        this.set({ markets: msg.markets });
         break;
 
       case "incidents":

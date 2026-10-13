@@ -3,7 +3,8 @@
 import { useMemo, type ReactNode } from "react";
 import { miningDifficulty } from "@/lib/asert";
 import { onMainnet, summarize } from "@/lib/derive";
-import { majorityLevel, spreadLevel } from "@/lib/alert-levels";
+import { majorityLevel, spreadLevel, thinMarket } from "@/lib/alert-levels";
+import { latestPace, newCoins } from "@/lib/earnings";
 import { formatInt } from "@/lib/format";
 import type { Snapshot } from "@/lib/protocol";
 import type { PublishedRelease, Release, ReleaseCommits } from "@/lib/releases";
@@ -19,6 +20,7 @@ import { NetworkStatus } from "./incidents";
 import { ClientVersions, StaleBlocks } from "./health";
 import { LatestBlocks } from "./latest-blocks";
 import { LiveProvider, useLive } from "./live/provider";
+import { Exchanges } from "./market";
 import { Supply } from "./monetary";
 import { NodeMap } from "./node-map";
 import { NodeTable } from "./node-table";
@@ -60,7 +62,7 @@ function Live({
   releaseCommits: ReleaseCommits;
   releases: PublishedRelease[];
 }) {
-  const { nodes, charts, gasPrice, pools, explorer, price, incidents, connection, latency } = useLive();
+  const { nodes, charts, gasPrice, pools, explorer, price, markets, incidents, connection, latency } = useLive();
   const summary = useMemo(() => summarize(nodes), [nodes]);
   const mainnet = useMemo(() => onMainnet(nodes), [nodes]);
   const best = summary.bestStats?.block ?? null;
@@ -71,6 +73,10 @@ function Live({
   const figure = figures({ summary, charts, mining, gasPrice, explorer, price });
   const start = c.trends?.start ?? [];
   const foundAt = (summary.bestStats?.block.timestamp ?? 0) * 1000;
+  // What miners bring to sell in a day, in dollars, for the market's depth to be read against
+  const pace = latestPace(c.trends?.blocktime ?? []);
+  const dailyNewCoins = pace !== null && price && summary.bestBlock > 0 ? newCoins(summary.bestBlock, pace) * price.usd : null;
+  const thin = thinMarket(markets);
   const alerts = useAlerts({ bestBlock: summary.bestBlock, foundAt, charts, nodes, latestRelease });
   // Warnings that stand whether or not their banner was dismissed, marked on their sections
   const sections = useMemo(() => {
@@ -85,10 +91,11 @@ function Live({
 
         return level && { level, label: "Blocks reach nodes slowly" };
       })(),
+      market: thin ? { level: "warn", label: thin } : null,
     };
 
     return SECTIONS.map((section) => ({ ...section, status: status[section.id] ?? null }));
-  }, [charts]);
+  }, [charts, thin]);
 
   return (
     <BestBlock value={summary.bestBlock}>
@@ -144,6 +151,24 @@ function Live({
       <Section id="supply" sections={sections}>
         <Supply bestBlock={summary.bestBlock} />
       </Section>
+      <Section id="market" sections={sections}>
+        <div className={FOUR}>
+          <FigureTile figure={figure.price} start={start} />
+          <FigureTile figure={figure.marketCap} start={start} />
+          <FigureTile figure={figure.volume} start={start} />
+          {/* Last: what miners bring to market each day, read against the volume beside it */}
+          <FigureTile figure={figure.issuance} start={start} />
+          {/* Whether the price above can be trusted, and whether the market can take the new coins */}
+          <Exchanges
+            markets={markets}
+            dailyNewCoins={dailyNewCoins}
+            priceUrl={price?.url ?? null}
+            tone={thin ? "warn" : null}
+            className="sm:col-span-2 xl:col-span-3"
+          />
+          <FigureTile figure={figure.securityShare} start={start} className="sm:col-span-2 xl:col-span-1" />
+        </div>
+      </Section>
       {/* Last: the node list grows with the network, and would push anything below it out of reach */}
       <Section id="nodes" sections={sections}>
         {/* The four tiles beside the map share one row height: equal fractions settle at the tallest. On
@@ -171,6 +196,7 @@ const SECTIONS: SectionLink[] = [
   { id: "mining", title: "Mining", description: "Hashrate, difficulty, who finds the blocks and how long to wait" },
   { id: "blocks", title: "Blocks & fees", description: "What recent blocks carried, what is waiting, and what sending costs" },
   { id: "supply", title: "Supply", description: "Issuance, halvings and the 21 million cap" },
+  { id: "market", title: "Market", description: "What LAX trades at, how much of it trades, and what miners bring to sell" },
   { id: "nodes", title: "Nodes", description: "Where the network runs, and how well it keeps up" },
 ];
 

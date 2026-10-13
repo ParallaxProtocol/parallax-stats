@@ -31,7 +31,7 @@ test("the v2 stats carry the dashboard's figures and alerts", () => {
   // 20 blocks, 10 minutes apart, 15 of them by one pool
   for (let n = 1; n <= 20; n++) nodes.addBlock("seed", block(n, n <= 15 ? pool : solo));
 
-  const snapshot = { serverTime: 1, nodes: nodes.all(), charts: nodes.charts(), gasPrice: "1000000000", pools: { [pool]: { name: "Big Pool", url: "https://pool.example/" } }, explorer: null, price: null, incidents: null };
+  const snapshot = { serverTime: 1, nodes: nodes.all(), charts: nodes.charts(), gasPrice: "1000000000", pools: { [pool]: { name: "Big Pool", url: "https://pool.example/" } }, explorer: null, price: null, markets: null, incidents: null };
   const stats = publicStats(snapshot, { tag: "v2.1.3", url: "https://example.org/v2.1.3" }, 20 * 600 * 1000 + 60_000);
 
   assert.equal(stats.bestBlock?.number, 20);

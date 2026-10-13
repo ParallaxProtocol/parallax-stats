@@ -1,6 +1,6 @@
 // Readings of the network figures that come from the node list rather
 // than from blocks: active and synced nodes, the recommended fee, latency,
-// uptime, the mempool and the LAX price. The hub takes one every few minutes; each trend slice keeps
+// uptime, the mempool, and the LAX price and trading volume. The hub takes one every few minutes; each trend slice keeps
 // the sums of its readings, so a slice shows their mean.
 
 import type { Summary } from "../lib/derive.ts";
@@ -19,12 +19,13 @@ interface Slice {
   uptime: Mean;
   pending: Mean;
   price: Mean;
+  volume: Mean;
 }
 
-const FIELDS = ["active", "synced", "gasPrice", "peerLatency", "uptime", "pending", "price"] as const;
+const FIELDS = ["active", "synced", "gasPrice", "peerLatency", "uptime", "pending", "price", "volume"] as const;
 
 /** Fields added after readings were first saved: a slice saved before them gets an empty mean. */
-const LATER_FIELDS = ["pending", "price"] as const;
+const LATER_FIELDS = ["pending", "price", "volume"] as const;
 
 export type ReadingFields = Pick<Trends, (typeof FIELDS)[number]>;
 
@@ -46,14 +47,14 @@ export class Readings {
 
   /**
    * record adds a reading to the slice in progress. Latency counts only
-   * when some node measured it, and the fee, uptime and price only when known.
+   * when some node measured it, and the fee, uptime, price and volume only when known.
    */
-  record(summary: Summary, gasPrice: string | null, now = Date.now(), usd: number | null = null): void {
+  record(summary: Summary, gasPrice: string | null, now = Date.now(), usd: number | null = null, volume: number | null = null): void {
     const start = Math.floor(now / 1000 / TREND_SLICE_S) * TREND_SLICE_S;
     let slice = this.slices.at(-1);
 
     if (!slice || slice.start !== start) {
-      slice = { start, active: [0, 0], synced: [0, 0], gasPrice: [0, 0], peerLatency: [0, 0], uptime: [0, 0], pending: [0, 0], price: [0, 0] };
+      slice = { start, active: [0, 0], synced: [0, 0], gasPrice: [0, 0], peerLatency: [0, 0], uptime: [0, 0], pending: [0, 0], price: [0, 0], volume: [0, 0] };
       this.slices.push(slice);
       this.slices = this.slices.filter((s) => s.start > start - TREND_SLICES * TREND_SLICE_S);
     }
@@ -65,6 +66,7 @@ export class Readings {
     add(slice.uptime, summary.uptime);
     add(slice.pending, summary.pending);
     add(slice.price, usd);
+    add(slice.volume, volume);
   }
 
   /** series gives each field's mean for the slices starting at `starts`, null where there was no reading. */
@@ -85,6 +87,7 @@ export class Readings {
       uptime: mean("uptime"),
       pending: mean("pending"),
       price: mean("price"),
+      volume: mean("volume"),
     };
   }
 

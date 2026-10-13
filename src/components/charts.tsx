@@ -1134,5 +1134,5 @@ export const EMPTY_CHARTS: Charts = {
   propagation: { samples: 0, avg: 0, p50: 0, p90: 0, p99: 0, bands: [0, 0, 0, 0] },
   health: { window: 0, staleBlocks: 0, recentStale: [], reorgs: 0, since: 0, lastReorg: null, lastDeepReorg: null, split: null },
   avgHashrate: 0,
-  trends: { start: [], blocktime: [], hashrate: [], difficulty: [], transactions: [], fullness: [], fees: [], active: [], synced: [], gasPrice: [], peerLatency: [], uptime: [], pending: [], price: [] },
+  trends: { start: [], blocktime: [], hashrate: [], difficulty: [], transactions: [], fullness: [], fees: [], active: [], synced: [], gasPrice: [], peerLatency: [], uptime: [], pending: [], price: [], volume: [] },
 };

@@ -100,3 +100,20 @@ test("the price is read with the rest, and readings saved before it still restor
   assert.equal(restored.series([T0]).pending[0], 5);
   assert.equal(restored.series([T0]).price[0], null);
 });
+
+test("the trading volume is read with the price, and readings saved before it still restore", () => {
+  const readings = new Readings();
+
+  readings.record(summary(2, 2, 100, 99), null, T0 * 1000, 0.01, 400);
+  readings.record(summary(2, 2, 100, 99), null, T0 * 1000 + HOUR, 0.01, 800);
+  readings.record(summary(2, 2, 100, 99), null, T0 * 1000 + 2 * HOUR, null, null);
+
+  assert.equal(readings.series([T0]).volume[0], 600);
+
+  const old = { slices: [{ start: T0, active: [2, 1], synced: [2, 1], gasPrice: [0, 0], peerLatency: [100, 1], uptime: [99, 1], pending: [5, 1], price: [0.02, 1] }] };
+  const restored = new Readings();
+
+  restored.restore(old as never);
+  assert.equal(restored.series([T0]).price[0], 0.02);
+  assert.equal(restored.series([T0]).volume[0], null);
+});

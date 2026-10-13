@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 import type { Summary } from "@/lib/derive";
-import { blockPay, dailyPay, hashprice, latestPace, pressureOf, scheduledPay } from "@/lib/earnings";
+import { blockPay, dailyPay, hashprice, latestPace, newCoins, pressureOf, scheduledPay } from "@/lib/earnings";
+import { issuedThrough, SUPPLY_CAP, toLax } from "@/lib/emission";
 import {
+  formatCompact,
   formatDifficulty,
   formatGasPrice,
   formatInt,
@@ -44,14 +46,39 @@ export interface Figure {
   link?: { href: string; label: string };
 }
 
-export type FigureKey = "hashrate" | "difficulty" | "hashprice" | "security" | "active" | "fee" | "mempool" | "latency" | "uptime";
+export type FigureKey =
+  | "hashrate"
+  | "difficulty"
+  | "hashprice"
+  | "security"
+  | "active"
+  | "fee"
+  | "mempool"
+  | "latency"
+  | "uptime"
+  | "price"
+  | "marketCap"
+  | "volume"
+  | "issuance"
+  | "securityShare";
 
 /** Gas a plain LAX transfer uses. */
 const TRANSFER_GAS = 21_000n;
 
 const significant = new Intl.NumberFormat("en-US", { maximumSignificantDigits: 3 });
 
-const NO_TRENDS: Trends = { start: [], blocktime: [], hashrate: [], difficulty: [], transactions: [], fullness: [], fees: [], active: [], synced: [], gasPrice: [], peerLatency: [], uptime: [], pending: [], price: [] };
+/** Satoshis in a bitcoin, for the price in sats. */
+const SATS = 1e8;
+
+/** Days in a year, for yearly figures from daily ones. */
+const YEAR_DAYS = 365.25;
+
+/** dollars shows an amount the way a market quotes it: $0.0149, $627, $44.5K, $1.2M. */
+function dollars(v: number): string {
+  return v >= 10_000 ? `$${formatCompact(v)}` : `$${significant.format(v)}`;
+}
+
+const NO_TRENDS: Trends = { start: [], blocktime: [], hashrate: [], difficulty: [], transactions: [], fullness: [], fees: [], active: [], synced: [], gasPrice: [], peerLatency: [], uptime: [], pending: [], price: [], volume: [] };
 
 /** FigureTile is a headline figure over its last 7 days; hovering a slice puts its value in the figure's place. */
 export function FigureTile({ figure, start, className = "" }: { figure: Figure; start: number[]; className?: string }) {
@@ -161,6 +188,16 @@ export function figures({
   const pressure = pressureOf(summary.pending, charts);
   // The CoinGecko credit its free API asks for, on each figure in dollars
   const priceLink = price ? { href: price.url, label: "CoinGecko" } : undefined;
+  // The market: coins issued so far on chain, rather than CoinGecko's circulating figure, so the
+  // cap follows the chain. Each slice is valued at today's supply: a week adds well under 2% to it
+  const supply = summary.bestBlock > 0 ? toLax(issuedThrough(summary.bestBlock)) : null;
+  const cap = supply !== null && usd !== null ? supply * usd : null;
+  const volume = price?.volume24h ?? null;
+  // New coins a day at today's pace of blocks, before fees: what miners have to sell
+  const coins = (blocktime: number) => newCoins(summary.bestBlock, blocktime);
+  const issued = pace !== null && summary.bestBlock > 0 ? coins(pace) : null;
+  const issuedValue = issued !== null && usd !== null ? issued * usd : null;
+  const change = price?.change24h ?? null;
 
   return {
     hashrate: {
@@ -292,6 +329,87 @@ export function figures({
       format: (v) => `${Math.round(v)} ms`,
       detail: () => "mean, median to peers",
       waiting: "Collecting readings",
+    },
+    price: {
+      label: "LAX price",
+      value: usd !== null ? dollars(usd) : "n/a",
+      note:
+        price === null
+          ? undefined
+          : [
+              change !== null && `${change >= 0 ? "+" : "−"}${Math.abs(change).toFixed(1)}% in 24 hours`,
+              price.btc !== null && `${significant.format(price.btc * SATS)} sats`,
+            ]
+              .filter(Boolean)
+              .join(", ") || undefined,
+      trend: trends.price ?? [],
+      format: dollars,
+      detail: () => "mean",
+      waiting: "Collecting prices",
+      link: priceLink,
+    },
+    marketCap: {
+      label: "Market cap",
+      value: cap !== null ? dollars(cap) : "n/a",
+      note: usd !== null && supply !== null ? `${formatInt(Math.round(supply))} LAX issued; ${dollars(toLax(SUPPLY_CAP) * usd)} at all 21 million` : undefined,
+      trend: (trends.price ?? []).map((p) => (p === null || supply === null ? null : p * supply)),
+      format: dollars,
+      detail: () => "at the mean price and today's supply",
+      waiting: "Collecting prices",
+      link: priceLink,
+    },
+    volume: {
+      label: "Trading volume",
+      value: volume !== null ? dollars(volume) : "n/a",
+      unit: "in 24 hours",
+      note: volume !== null && cap ? `${formatPercent(volume / cap)} of the market cap changed hands` : undefined,
+      // A server from before the volume readings sends none
+      trend: trends.volume ?? [],
+      format: dollars,
+      detail: () => "mean of the 24 hour volume",
+      waiting: "Collecting prices",
+      link: priceLink,
+    },
+    issuance: {
+      label: "New coins",
+      value: issuedValue !== null ? dollars(issuedValue) : issued !== null ? `${formatInt(Math.round(issued))} LAX` : "n/a",
+      unit: "per day",
+      note:
+        issued === null
+          ? undefined
+          : `${formatInt(Math.round(issued))} LAX at today's pace${
+              issuedValue !== null && volume ? `, ${formatPercent(issuedValue / volume)} of the day's trading` : ""
+            }`,
+      // Each slice at its own pace of blocks and its own mean price
+      trend: trends.blocktime.map((t, i) => {
+        if (t === null) return null;
+        if (usd === null) return coins(t);
+
+        const slicePrice = trends.price?.[i] ?? null;
+
+        return slicePrice === null ? null : coins(t) * slicePrice;
+      }),
+      format: usd !== null ? dollars : (v) => `${formatInt(Math.round(v))} LAX`,
+      detail: () => `over the 24 hours to its end${usd !== null ? ", at the mean price" : ""}`,
+      waiting: usd !== null ? "Collecting prices" : "Waiting for blocks",
+      link: priceLink,
+    },
+    securityShare: {
+      // What miners are paid in a year against what the coins are worth. Both are in LAX at heart,
+      // so the price cancels: it is the year's pay over the supply, and needs no price to show
+      label: "Security spend",
+      value: earned !== null && supply ? `${significant.format(((earned * YEAR_DAYS) / supply) * 100)}%` : "n/a",
+      unit: "of the market cap a year",
+      note:
+        earned === null || !supply
+          ? undefined
+          : cap !== null
+            ? `${dollars(earned * YEAR_DAYS * usd!)} a year to miners, against a ${dollars(cap)} market cap`
+            : `${formatCompact(earned * YEAR_DAYS)} LAX a year to miners, of ${formatCompact(supply)} issued`,
+      trend: trends.blocktime.map((t) => (t === null || !supply ? null : ((daily(t) * YEAR_DAYS) / supply) * 100)),
+      format: (v) => `${significant.format(v)}%`,
+      detail: () => "at the pace of blocks over the 24 hours to its end",
+      waiting: "Waiting for blocks",
     },
     uptime: {
       label: "Uptime",

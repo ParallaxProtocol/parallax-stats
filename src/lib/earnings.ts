@@ -35,6 +35,11 @@ export function scheduledPay(pay: number): number {
   return dailyPay(pay, TARGET_BLOCK_TIME);
 }
 
+/** newCoins is the LAX issued in a day at one block every `blocktime` seconds, before fees: what miners have to sell. */
+export function newCoins(bestBlock: number, blocktime: number): number {
+  return dailyPay(Number(blockReward(bestBlock + 1)) / Number(WEI_PER_LAX), blocktime);
+}
+
 /** latestPace is the newest slice of the block time trend: today's pace of blocks. */
 export function latestPace(blocktime: (number | null)[]): number | null {
   return [...blocktime].reverse().find((t) => t !== null) ?? null;

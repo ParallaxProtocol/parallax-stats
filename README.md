@@ -22,6 +22,9 @@ live:
 - **Nodes:** where they run, active nodes in sync, latency and uptime over
   the last 7 days, propagation, client versions and stale blocks
 - **Supply:** the next halving and coins issued against the 21 million cap
+- **Market:** the LAX price, market cap, trading volume and the dollar value
+  of new coins over the last 7 days, where it trades with each exchange's
+  spread and depth, and what securing the chain costs against its value
 - **Decentralization:** who found recent blocks, graded by how few miners
   hold a majority, with each one's share and known pools by name
 - **Chain health:** stale blocks and reorganizations, and which client

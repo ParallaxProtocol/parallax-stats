@@ -25,5 +25,5 @@ export function getPublicNodes(): boolean {
 
 /** getSnapshot returns the live state, or an empty one when no hub runs (e.g. `next dev` alone). */
 export function getSnapshot(): Snapshot {
-  return (globalThis as HubGlobal)[KEY]?.snapshot() ?? { serverTime: Date.now(), nodes: [], charts: null, gasPrice: null, pools: {}, explorer: null, price: null, incidents: null };
+  return (globalThis as HubGlobal)[KEY]?.snapshot() ?? { serverTime: Date.now(), nodes: [], charts: null, gasPrice: null, pools: {}, explorer: null, price: null, markets: null, incidents: null };
 }
