@@ -179,7 +179,9 @@ export class NodeRecord {
   /** setBlock records a new head and propagation history; false when nothing changed. */
   setBlock(block: Block, history: number[]): boolean {
     const sameHistory = history.every((value, i) => value === this.history[i]);
-    const sameBlock = block.number === this.stats.block.number && block.hash === this.stats.block.hash;
+    // The same head can come back with new timing: reported again after reconnecting, or restored from a save
+    const sameBlock =
+      block.number === this.stats.block.number && block.hash === this.stats.block.hash && block.propagation === this.stats.block.propagation;
 
     if (sameHistory && sameBlock) return false;
 

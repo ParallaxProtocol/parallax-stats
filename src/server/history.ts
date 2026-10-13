@@ -246,7 +246,8 @@ export class History {
 
   /**
    * add records that node `id` reported `reported`. It returns the block
-   * with its timing fields filled in, or null when the block was not
+   * with its timing fields filled in, its propagation -1 when the node's
+   * report of it was catch-up rather than timed, or null when the block was not
    * recorded (genesis, a height no trusted node has seen while one is
    * online, or one past the fork limit).
    */
@@ -312,10 +313,10 @@ export class History {
         this.save(item);
         this.fillChildTimes(item.height);
 
-        if (early.length > 0) return { ...block, received: now, propagation: now - first };
+        if (early.length > 0) return { ...block, received: now, propagation: counted ? now - first : -1 };
       }
 
-      return block;
+      return counted ? block : { ...block, propagation: -1 };
     }
 
     const propIndex = height.propagTimes.findIndex((p) => p.node === id);
@@ -372,7 +373,10 @@ export class History {
 
     block.fork = forkIndex;
 
-    return block;
+    // A catch-up report times nothing, however often the node reports that head again
+    const own = height.propagTimes.find((p) => p.node === id);
+
+    return own?.counted === false ? { ...block, propagation: -1 } : block;
   }
 
   /** holdEarly keeps node `id`'s early report in place of any before it, and drops ones gone stale. */

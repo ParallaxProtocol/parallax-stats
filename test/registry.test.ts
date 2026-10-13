@@ -584,6 +584,19 @@ test("a head a node caught up to on connecting is shown untimed, not as late as 
 
   assert.equal(nodes.get("fresh")!.stats.block.propagation, -1);
 
+  // Reporting that head again once settled still times nothing
+  settle(nodes, "fresh");
+  nodes.addBlock("fresh", block(10));
+
+  assert.equal(nodes.get("fresh")!.stats.block.propagation, -1);
+
+  // Nor does a head kept from before a reconnect, such as one timed by an older version
+  nodes.get("fresh")!.stats.block = { ...nodes.get("fresh")!.stats.block, propagation: 960_000 };
+  login(nodes, "fresh", "10.3.0.2");
+  nodes.addBlock("fresh", block(10));
+
+  assert.equal(nodes.get("fresh")!.stats.block.propagation, -1);
+
   // Settled, the next block is timed
   settle(nodes, "fresh");
   nodes.addBlock("verified", block(11));
