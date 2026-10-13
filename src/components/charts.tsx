@@ -616,7 +616,7 @@ export function Fullness({ c, block }: { c: Charts; block: (i: number) => string
     value = active !== null ? (hovered === null ? "n/a" : pct(hovered)) : c.minerBlocks ? pct(c.weekFullness ?? 0) : undefined;
     qualifier =
       active !== null && start[active] !== undefined
-        ? `${sliceTime(start[active])}, ${hovered === null ? "no data" : "full on average"}`
+        ? `${sliceTime(start[active])}, ${hovered === null ? "no data" : `full on average${active === trend.length - 1 ? " so far" : ""}`}`
         : `full on average over ${lastWeek(c)}`;
   } else {
     value = active !== null ? pct(fullness[active]) : c.height.length ? pct(average(fullness)) : undefined;
@@ -637,7 +637,8 @@ export function Fullness({ c, block }: { c: Charts; block: (i: number) => string
             active={active}
             onActive={setActive}
             format={pct}
-            label={`Mean share of the gas limit used by the blocks of each ${TREND_SLICE_S / 3600} hour slice of the last 7 days, from ${pct(Math.min(...knownTrend))} to ${pct(Math.max(...knownTrend))}`}
+            partial
+            label={`Mean share of the gas limit used by the blocks of each ${TREND_SLICE_S / 3600} hour slice of the last 7 days, the last still in progress, from ${pct(Math.min(...knownTrend))} to ${pct(Math.max(...knownTrend))}`}
           />
         )
       ) : c.height.length === 0 ? (
@@ -824,7 +825,7 @@ export function Fees({ c, block }: { c: Charts; block: (i: number) => string }) 
       active !== null && start[active] !== undefined
         ? hovered === null
           ? `${sliceTime(start[active])}, not reported`
-          : `LAX per block, ${sliceTime(start[active])}`
+          : `LAX per block, ${sliceTime(start[active])}${active === trend.length - 1 ? " so far" : ""}`
         : weekFees !== null
           ? `LAX per block over ${lastWeek(c)}, ${ofReward(toLax(weekFees), reward)}${
               reported < c.minerBlocks ? `, ${formatInt(reported)} of ${formatInt(c.minerBlocks)} blocks reported` : ""
@@ -857,7 +858,8 @@ export function Fees({ c, block }: { c: Charts; block: (i: number) => string }) 
           active={active}
           onActive={setActive}
           format={formatSmallLax}
-          label={`Mean transaction fees per block paid to miners in each ${TREND_SLICE_S / 3600} hour slice of the last 7 days, from ${formatSmallLax(Math.min(...knownTrend))} to ${formatSmallLax(Math.max(...knownTrend))} LAX`}
+          partial
+          label={`Mean transaction fees per block paid to miners in each ${TREND_SLICE_S / 3600} hour slice of the last 7 days, the last still in progress, from ${formatSmallLax(Math.min(...knownTrend))} to ${formatSmallLax(Math.max(...knownTrend))} LAX`}
         />
       ) : (
         <Bars
