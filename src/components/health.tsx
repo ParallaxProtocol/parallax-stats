@@ -8,6 +8,7 @@ import { chainLevel, DEEP_REORG, staleChance, VERY_DEEP_REORG } from "@/lib/aler
 import { compareParts, parsePlatform, parseVersion } from "@/lib/version";
 import { useServerNow } from "./live/provider";
 import { Label, Plate } from "./plate";
+import { Tooltip } from "./tooltip";
 import { useSize } from "./use-size";
 
 export function Heading({ id, title, readout }: { id: string; title: string; readout?: ReactNode }) {
@@ -499,37 +500,160 @@ function ladder(online: PublicNode[], releases: PublishedRelease[], latestTag: s
   return stations;
 }
 
-/** AdoptionRing is the share of nodes on the latest release or newer, as a ring around the figure. */
-function AdoptionRing({ share }: { share: number }) {
+/** A slice of the version donut: every node on one exact version, and the ladder station it stands on. */
+interface VersionSlice {
+  label: string;
+  station: string;
+  kind: StationKind;
+  nodes: number;
+}
+
+/**
+ * versionSlices splits each station's nodes by the exact version they run,
+ * newest first, with nodes reporting no version last.
+ */
+function versionSlices(stations: Station[]): VersionSlice[] {
+  return stations.toReversed().flatMap((station) => {
+    const counts = new Map<string, number>();
+
+    for (const node of station.nodes) {
+      const { label } = parseVersion(node.info.node);
+
+      counts.set(label, (counts.get(label) ?? 0) + 1);
+    }
+
+    return [...counts]
+      .sort(([a], [b]) => compareParts(parseVersion(`/${b}`).parts, parseVersion(`/${a}`).parts))
+      .map(([label, nodes]) => ({ label, station: station.key, kind: station.kind, nodes }));
+  });
+}
+
+/** Older versions step from the brand teal toward the card, the oldest faintest, as the miners' donut does by rank. */
+const OLDER_STRENGTH = [68, 46, 33, 25, 19, 15];
+
+/**
+ * sliceColor paints the latest release in the full brand teal, older
+ * versions in teal that fades the further behind they are, unreleased
+ * builds in info, and nodes reporting no version in grey.
+ */
+function sliceColor(kind: StationKind, olderRank: number): string {
+  if (kind === "latest") return "var(--brand-mark)";
+  if (kind === "development") return "var(--info)";
+  if (kind === "unknown") return "color-mix(in oklch, var(--muted-foreground) 30%, var(--card))";
+
+  return `color-mix(in oklch, var(--brand-mark) ${OLDER_STRENGTH[Math.min(olderRank, OLDER_STRENGTH.length - 1)]}%, var(--card))`;
+}
+
+/** What the pointer is on: a station of the ladder, or one version of the donut and the station it stands on. */
+type VersionHover = { station: string; version: string | null } | null;
+
+/**
+ * VersionDonut splits the online nodes by the version they run, with how
+ * many versions are in use in the middle, or the share of what the pointer
+ * is on, here or on the ladder, and a legend of every version beside it.
+ */
+function VersionDonut({
+  slices,
+  total,
+  hover,
+  hoverLabel,
+  onHover,
+}: {
+  slices: VersionSlice[];
+  total: number;
+  hover: VersionHover;
+  hoverLabel: string | null;
+  onHover: (hover: VersionHover) => void;
+}) {
   const radius = 42;
   const circumference = 2 * Math.PI * radius;
-  // Most of the network current is the healthy state; amber once a third or more lag
-  const stroke = share >= 2 / 3 ? "stroke-brand-mark" : "stroke-warn";
+  // A surface gap between slices, so neighbours never run together
+  const gap = slices.length > 1 ? 1.5 : 0;
+  const isOn = (slice: VersionSlice) => hover !== null && (hover.version ? hover.version === slice.label : hover.station === slice.station);
+  const painted = slices.map((slice, i) => {
+    const before = slices.slice(0, i);
+
+    return {
+      ...slice,
+      on: isOn(slice),
+      color: sliceColor(slice.kind, before.filter((s) => s.kind === "older").length),
+      start: (before.reduce((sum, s) => sum + s.nodes, 0) / total) * circumference,
+      length: (slice.nodes / total) * circumference,
+    };
+  });
+  const focused = painted.filter((arc) => arc.on).reduce((sum, arc) => sum + arc.nodes, 0);
+  const pct = (nodes: number) => `${Math.round((nodes / total) * 100)}%`;
+  // Nodes reporting no version are a slice, not a version in use
+  const versions = slices.filter((s) => s.kind !== "unknown").length;
+  const enter = (slice: VersionSlice) => () => onHover({ station: slice.station, version: slice.label });
 
   return (
-    <div className="relative size-28 shrink-0">
-      <svg viewBox="0 0 100 100" className="size-full -rotate-90" aria-hidden>
-        <circle cx="50" cy="50" r={radius} fill="none" className="stroke-foreground/10" strokeWidth="8" />
-        <circle
-          cx="50"
-          cy="50"
-          r={radius}
-          fill="none"
-          className={`${stroke} transition-[stroke-dasharray] duration-700 ease-out`}
-          strokeWidth="8"
-          strokeLinecap="round"
-          strokeDasharray={`${share * circumference} ${circumference}`}
-        />
-      </svg>
-      <span className="absolute inset-0 flex items-center justify-center text-2xl tabular-nums">{Math.round(share * 100)}%</span>
+    <div className="flex items-center gap-3 sm:gap-4">
+      <div className="relative size-32 shrink-0">
+        <svg viewBox="0 0 100 100" className="size-full -rotate-90" role="img" aria-label="Online nodes by client version">
+          {painted.map((arc) => (
+            <Tooltip key={arc.label} content={`${arc.label}: ${formatInt(arc.nodes)} of ${formatInt(total)} nodes`}>
+              <circle
+                cx="50"
+                cy="50"
+                r={radius}
+                fill="none"
+                stroke={arc.color}
+                strokeWidth={arc.on ? 13 : 10}
+                strokeDasharray={`${Math.max(0, arc.length - gap)} ${circumference}`}
+                strokeDashoffset={-arc.start}
+                className="transition-[stroke-width,opacity] duration-150"
+                opacity={hover === null || arc.on ? 1 : 0.35}
+                onPointerEnter={enter(arc)}
+                onPointerLeave={() => onHover(null)}
+              />
+            </Tooltip>
+          ))}
+        </svg>
+        <span className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl leading-none tabular-nums">{hover ? pct(focused) : formatInt(versions)}</span>
+          <span className="mt-1 max-w-20 truncate text-[10px] tracking-wider text-muted-foreground uppercase">
+            {hover ? hoverLabel : versions === 1 ? "version" : "versions"}
+          </span>
+        </span>
+      </div>
+
+      {/* Every version, newest first; scrolls past six. The rows stay inside it, as a scrolling list would scroll sideways for any that stick out */}
+      <ol className="flex max-h-40 min-w-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+        {painted.map((arc) => (
+          <li
+            key={arc.label}
+            className={`grid grid-cols-[0.625rem_minmax(0,1fr)_auto] items-center gap-2.5 rounded-sm px-2 py-1 text-xs transition-[background-color,opacity] duration-150 ${
+              arc.on ? "bg-foreground/8 text-foreground" : hover === null ? "" : "opacity-35"
+            }`}
+            onPointerEnter={enter(arc)}
+            onPointerLeave={() => onHover(null)}
+          >
+            <span className={`size-2.5 rounded-sm transition-transform duration-150 ${arc.on ? "scale-125" : ""}`} style={{ background: arc.color }} aria-hidden />
+            <span className="truncate">
+              <span className="font-mono">{arc.label}</span>
+              {arc.kind === "latest" && <span className="ml-1.5 text-[10px] text-brand">latest</span>}
+              {arc.kind === "development" && <span className="ml-1.5 text-[10px] text-info-ink">unreleased</span>}
+            </span>
+            <span className="text-right tabular-nums">
+              {arc.on && (
+                <span className="mr-2 text-muted-foreground">
+                  {formatInt(arc.nodes)} {arc.nodes === 1 ? "node" : "nodes"}
+                </span>
+              )}
+              {pct(arc.nodes)}
+            </span>
+          </li>
+        ))}
+      </ol>
     </div>
   );
 }
 
 /**
- * ClientVersions shows how up to date the network is: the share of online
- * nodes on the latest release or newer, a ladder of releases with each node
- * standing on the one it runs, and the platforms they run on.
+ * ClientVersions shows how up to date the network is: a donut of the
+ * versions online nodes run and how many are on the latest release, a ladder of releases with each node standing on the one it runs, and the
+ * platforms they run on.
  */
 export function ClientVersions({
   nodes,
@@ -543,7 +667,8 @@ export function ClientVersions({
   className?: string;
 }) {
   const now = useServerNow();
-  const [hovered, setHovered] = useState<string | null>(null);
+  const [hover, setHover] = useState<VersionHover>(null);
+  const hovered = hover?.station ?? null;
   const online = nodes.filter((node) => node.stats.active);
   const total = online.length;
   // Without the release list, the latest release alone makes a one-stop ladder
@@ -552,11 +677,14 @@ export function ClientVersions({
   const current = stations.filter((s) => s.kind === "latest" || s.kind === "development").reduce((sum, s) => sum + s.nodes.length, 0);
   const behind = stations.filter((s) => s.kind === "older").reduce((sum, s) => sum + s.nodes.length, 0);
   const latestLabel = latestRelease ? parseVersion(`/${latestRelease.tag}`).label : null;
+  const slices = versionSlices(stations);
   const platforms = [...online.reduce((counts, node) => counts.set(parsePlatform(node.info.node), (counts.get(parsePlatform(node.info.node)) ?? 0) + 1), new Map<string, number>())].sort(
     (a, b) => b[1] - a[1],
   );
   const shownPlatforms = platforms.length > MAX_PLATFORMS ? [...platforms.slice(0, MAX_PLATFORMS - 1), ["other", platforms.slice(MAX_PLATFORMS - 1).reduce((sum, [, n]) => sum + n, 0)] as [string, number]] : platforms;
   const focus = stations.find((s) => s.key === hovered) ?? null;
+  const latestStation = stations.find((s) => s.kind === "latest") ?? null;
+  const released = latestStation?.release && latestStation.release.publishedAt > 0 ? age(now - latestStation.release.publishedAt) : null;
   // The newest releases matter most: when the ladder scrolls, it starts at that end
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -571,22 +699,37 @@ export function ClientVersions({
       {total === 0 ? (
         <p className="text-sm text-muted-foreground">Waiting for nodes</p>
       ) : (
-        // Stacked, or the ring, the ladder and the platforms side by side across the page on wide screens
-        <div className="flex flex-col gap-6 xl:grid xl:grid-cols-[13rem_minmax(0,1fr)_15rem] xl:items-center xl:gap-10">
-          <div className="flex items-center gap-4">
-            <AdoptionRing share={latestLabel ? current / total : 0} />
-            <p className="flex flex-col gap-1 text-sm">
-              <span>{latestLabel ? "up to date" : "release unknown"}</span>
-              <span className="text-muted-foreground">
-                {latestLabel ? `${formatInt(current)} of ${formatInt(total)} on ${latestLabel} or newer` : "GitHub could not be reached"}
-              </span>
+        // Stacked, or the donut, the ladder and the platforms side by side across the page on wide screens
+        <div className="flex flex-col gap-6 xl:grid xl:grid-cols-[21rem_minmax(0,1fr)_15rem] xl:items-center xl:gap-10">
+          <div className="flex min-w-0 flex-col gap-4">
+            <VersionDonut slices={slices} total={total} hover={hover} hoverLabel={hover?.version ?? focus?.label ?? null} onHover={setHover} />
+            {/* How far the network has moved to the latest release */}
+            <p className="text-xs text-muted-foreground">
+              {!latestLabel ? (
+                "Latest release unknown: GitHub could not be reached"
+              ) : current === total ? (
+                <>
+                  All nodes on <span className="font-mono text-brand">{latestLabel}</span> or newer
+                </>
+              ) : current === 0 ? (
+                <>
+                  No nodes on <span className="font-mono text-brand">{latestLabel}</span> yet{released && ` · released ${released}`}
+                </>
+              ) : (
+                <>
+                  <span className="text-foreground tabular-nums">
+                    {formatInt(current)} of {formatInt(total)}
+                  </span>{" "}
+                  nodes on <span className="font-mono text-brand">{latestLabel}</span> or newer
+                </>
+              )}
             </p>
           </div>
 
           <div className="flex min-w-0 flex-col gap-3">
             {/* Scrolls sideways when the releases outgrow the room */}
             <div ref={scroller} className="-mx-1 overflow-x-auto px-1">
-              <ol className="grid min-w-max" style={{ gridTemplateColumns: `repeat(${stations.length}, minmax(4.5rem, 1fr))` }} onPointerLeave={() => setHovered(null)}>
+              <ol className="grid min-w-max" style={{ gridTemplateColumns: `repeat(${stations.length}, minmax(4.5rem, 1fr))` }} onPointerLeave={() => setHover(null)}>
                 {stations.map((station, i) => {
                   const Tag = station.release ? "a" : "div";
                   // The hovered release's marker fills and its text brightens
@@ -596,8 +739,8 @@ export function ClientVersions({
                     <li key={station.key}>
                       <Tag
                         {...(station.release ? { href: station.release.url, target: "_blank", rel: "noopener noreferrer" } : {})}
-                        onPointerEnter={() => setHovered(station.key)}
-                        onFocus={() => setHovered(station.key)}
+                        onPointerEnter={() => setHover({ station: station.key, version: null })}
+                        onFocus={() => setHover({ station: station.key, version: null })}
                         className={`flex flex-col items-center gap-2 pb-1 transition-opacity duration-150 ${station.nodes.length === 0 && !on ? "opacity-45" : ""}`}
                       >
                         {/* How many nodes run it */}
