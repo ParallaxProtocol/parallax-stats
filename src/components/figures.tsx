@@ -241,10 +241,10 @@ export function figures({
         ? `${Math.round((summary.synced / summary.active) * 100)}% of active nodes are in sync. 90% or more is healthy.`
         : undefined,
       note: "in sync",
-      trend: trends.active,
-      // A slice's mean is fractional when a node was off for part of it: the figure counts whole nodes
-      format: (v) => formatInt(Math.round(v)),
-      detail: (v) => (Number.isInteger(v) ? "active nodes" : `mean ${v.toFixed(1)} active nodes`),
+      // A slice's mean is fractional when a node was off for part of it: the chart counts whole nodes
+      trend: trends.active.map((v) => (v === null ? null : Math.round(v))),
+      format: formatInt,
+      detail: () => "mean active nodes, rounded",
       waiting: "Collecting readings",
     },
     fee: {
