@@ -728,7 +728,7 @@ export function NodeTable({
                           </span>
                         )}
                       </td>
-                      <Cell className={fade}>{active ? <MempoolSize pending={stats.pending} /> : "—"}</Cell>
+                      <Cell className={`text-muted-foreground ${fade}`}>{active ? <MempoolSize pending={stats.pending} /> : "—"}</Cell>
                       <Cell grade={active ? gradeUptime(stats.uptime) : undefined} className={fade}>
                         {stats.uptime}%
                       </Cell>
