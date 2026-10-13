@@ -134,9 +134,9 @@ function Live({
         {/* While one miner holds a majority, the section opens with what miners can do about it */}
         <MinerCall charts={charts} />
         <div className={FOUR}>
+          <BlockTime c={c} block={block} />
           <FigureTile figure={figure.hashrate} start={start} />
           <FigureTile figure={figure.difficulty} start={start} />
-          <BlockTime c={c} block={block} />
           {/* Both rows on wide screens, so the miner list has room */}
           <Decentralization charts={charts} className="xl:row-span-2" />
           {/* What a hash earns, what all of them earn, and what that means for a payment */}
@@ -203,7 +203,7 @@ const FOUR = "grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4";
 
 /** The page's sections, in order: the bar under the block clock links to each. */
 const SECTIONS: SectionLink[] = [
-  { id: "mining", title: "Mining", description: "Hashrate, difficulty, who finds the blocks and how long to wait" },
+  { id: "mining", title: "Mining", description: "Block time, hashrate, difficulty, who finds the blocks and recommended confirmations" },
   { id: "blocks", title: "Blocks & fees", description: "What recent blocks carried, what is waiting, and what sending costs" },
   { id: "supply", title: "Supply", description: "Issuance, halvings and the 21 million cap" },
   { id: "market", title: "Market", description: "What LAX trades at, how much of it trades, and what miners bring to sell" },
