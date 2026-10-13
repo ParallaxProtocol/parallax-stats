@@ -232,6 +232,9 @@ function useTilesEnter() {
     // The section's plates, not ones inside another plate
     const tiles = [...section.querySelectorAll<HTMLElement>(".group\\/plate")].filter((tile) => !tile.parentElement?.closest(".group\\/plate"));
 
+    // Motion throws on an empty list, as for a section with nothing to show yet
+    if (tiles.length === 0) return;
+
     animate(tiles, { opacity: 0, y: RISE }, { duration: 0 });
 
     const observer = new IntersectionObserver(

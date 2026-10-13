@@ -20,7 +20,7 @@ import {
   type Grade,
 } from "@/lib/format";
 import { TREND_SLICE_S, type Charts, type Price, type Trends } from "@/lib/protocol";
-import { sliceTime, Tile, TrendLine, Waiting } from "./charts";
+import { Collecting, sliceTime, Tile, TrendLine, Waiting } from "./charts";
 import { ExternalLink } from "./external-link";
 import { Indicator } from "./indicator";
 import { Rolling } from "./rolling";
@@ -103,10 +103,10 @@ export function FigureTile({ figure, start, className = "" }: { figure: Figure; 
         figure.link ? (
           <>
             {/* Short beside a link, so both fit beside a long title */}
-            {known.length > 0 && "7 days · "}
+            {known.length > 1 && "7 days · "}
             <ExternalLink href={figure.link.href}>{figure.link.label}</ExternalLink>
           </>
-        ) : known.length > 0 ? (
+        ) : known.length > 1 ? (
           "last 7 days"
         ) : undefined
       }
@@ -125,10 +125,18 @@ export function FigureTile({ figure, start, className = "" }: { figure: Figure; 
       }
     >
       {known.length === 0 ? (
-        <Waiting>{figure.waiting}</Waiting>
+        // Recorded by the dashboard itself: centred where its trend will be, as a trend with one reading says it too
+        figure.waiting.startsWith("Collecting") ? (
+          <div className="flex flex-1 items-center justify-center">
+            <Collecting title={figure.waiting} note={`The first comes within minutes; the trend then gains a point every ${TREND_SLICE_S / 3600} hours`} />
+          </div>
+        ) : (
+          <Waiting>{figure.waiting}</Waiting>
+        )
       ) : (
         <TrendLine
           values={trend}
+          start={start}
           active={active}
           onActive={setActive}
           format={figure.format}

@@ -82,6 +82,19 @@ export function Waiting({ children = "Waiting for blocks" }: { children?: ReactN
 }
 
 /**
+ * Collecting stands in for a trend the dashboard is still recording: what
+ * it is collecting, in the tiles' small heading, and when the trend fills in.
+ */
+export function Collecting({ title, note, className = "" }: { title: string; note: string; className?: string }) {
+  return (
+    <p className={`pointer-events-none flex flex-col items-center gap-0.5 text-center ${className}`}>
+      <Label className="text-[10px]">{title}</Label>
+      <span className="text-xs text-muted-foreground">{note}</span>
+    </p>
+  );
+}
+
+/**
  * RingSweep draws a donut's slices in around the ring, from the top, the
  * first time it scrolls into view, as the charts sweep in. `width` must
  * cover the widest a slice's stroke gets.
@@ -310,8 +323,11 @@ export function TrendLine({
   label,
   format,
   partial = false,
+  start,
 }: Omit<PlotProps, "values"> & {
   values: (number | null)[];
+  /** When each slice starts, to say when a trend with one reading so far gains its second. */
+  start?: number[];
   /** Labels the scale's highest and lowest values at the plot's edge. */
   format?: (value: number) => string;
   /** The last value is still being counted: the line into it is dashed, and it is left out of the labelled range. */
@@ -337,9 +353,23 @@ export function TrendLine({
   });
 
   const latest = runs.at(-1)?.at(-1) ?? null;
+  // The second reading comes as the slice holding the first one ends
+  const next = sparse && latest !== null && start?.[latest] !== undefined ? start[latest] + TREND_SLICE_S : null;
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col">
+      {/* With one reading there is no line to show yet: say so under the level it stands at, and when it starts */}
+      {sparse && (
+        <Collecting
+          className="absolute inset-x-0 top-1/2 z-10 mt-2"
+          title="Collecting history"
+          note={
+            next !== null
+              ? `The trend starts at ${new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit" }).format(next * 1000)}, then gains a point every ${TREND_SLICE_S / 3600} hours`
+              : `The trend gains a point every ${TREND_SLICE_S / 3600} hours`
+          }
+        />
+      )}
       <Plot values={values} onActive={onActive} label={label}>
         {({ width, height }, slot) => {
           const x = (i: number) => i * slot + slot / 2;
@@ -574,6 +604,7 @@ export function BlockTime({ c, block }: { c: Charts; block: (i: number) => strin
         ) : (
           <TrendLine
             values={trend}
+            start={start}
             active={active}
             onActive={setActive}
             format={formatBlockTime}
@@ -644,6 +675,7 @@ export function Transactions({ c, block }: { c: Charts; block: (i: number) => st
         ) : (
           <TrendLine
             values={trend}
+            start={start}
             active={active}
             onActive={setActive}
             format={formatInt}
@@ -705,6 +737,7 @@ export function Fullness({ c, block }: { c: Charts; block: (i: number) => string
         ) : (
           <TrendLine
             values={trend}
+            start={start}
             active={active}
             onActive={setActive}
             format={pct}
@@ -930,6 +963,7 @@ export function Fees({ c, block }: { c: Charts; block: (i: number) => string }) 
       ) : view === "week" ? (
         <TrendLine
           values={trend}
+          start={start}
           active={active}
           onActive={setActive}
           format={formatSmallLax}
