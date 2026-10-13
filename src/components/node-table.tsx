@@ -175,6 +175,13 @@ function Dash() {
   );
 }
 
+/** MempoolSize counts a node's pending transactions, and says when there are none. */
+function MempoolSize({ pending }: { pending: number }) {
+  if (pending === 0) return <span className="italic">empty</span>;
+
+  return <>{`${formatInt(pending)} ${pending === 1 ? "txn" : "txns"}`}</>;
+}
+
 /** MiningStatus is a pickaxe for a mining node, with its hashrate on hover, and a dash otherwise. */
 function MiningStatus({ mining, hashrate, className = "" }: { mining: boolean; hashrate: number; className?: string }) {
   const label = mining ? `Mining at ${formatHashrate(hashrate)}` : "Not mining";
@@ -471,7 +478,7 @@ function Details({
                       ? [
                           ["Peers", formatInt(stats.peers), fewPeersHint(stats.active, stats.peers)],
                           ["Latency to peers", stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"],
-                          ["Mempool size", formatInt(stats.pending)],
+                          ["Mempool size", <MempoolSize key="pending" pending={stats.pending} />],
                           ["Mining", stats.mining ? formatHashrate(stats.hashrate) : "no"],
                           ["Gas price", formatGasPrice(stats.gasPrice)],
                         ]
@@ -721,7 +728,7 @@ export function NodeTable({
                           </span>
                         )}
                       </td>
-                      <Cell className={fade}>{active ? formatInt(stats.pending) : "—"}</Cell>
+                      <Cell className={fade}>{active ? <MempoolSize pending={stats.pending} /> : "—"}</Cell>
                       <Cell grade={active ? gradeUptime(stats.uptime) : undefined} className={fade}>
                         {stats.uptime}%
                       </Cell>
