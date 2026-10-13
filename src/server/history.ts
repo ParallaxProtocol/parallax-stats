@@ -305,7 +305,7 @@ export class History {
         for (const e of early) {
           item.forkReporters[0].ids.add(e.id);
           item.propagTimes.push({ node: e.id, trusted: false, fork: 0, received: e.received, propagation: e.received - first, counted: e.counted, latency: e.latency });
-          this.retimed.push({ id: e.id, block: { ...block, received: e.received, propagation: e.received - first } });
+          this.retimed.push({ id: e.id, block: { ...block, received: e.received, propagation: e.counted ? e.received - first : -1 } });
         }
 
         item.propagTimes.push({ node: id, trusted, fork: 0, received: now, propagation: now - first, counted, latency });

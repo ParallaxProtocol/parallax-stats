@@ -91,7 +91,7 @@ export interface Block {
   arrived: number;
   /** Server time this node reported it, ms. */
   received: number;
-  /** received - arrived, ms. */
+  /** received - arrived, ms; -1 for a catch-up report, from a node syncing or just connected, which times nothing. */
   propagation: number;
   /** Time since the parent block, ms. */
   time: number;

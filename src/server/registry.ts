@@ -208,13 +208,15 @@ export class Registry {
     // Only a settled node's report measures propagation: not one syncing or just
     // (re)connected and catching up. Its one-way latency to us is taken off.
     const timing = { counted: !node.stats.syncing && now - node.connectedAt >= PROPAGATION_WARMUP_MS, latency: node.stats.latency };
-    const block: Block = this.history.add(reported, id, node.trusted, false, timing) ?? {
+    const added: Block = this.history.add(reported, id, node.trusted, false, timing) ?? {
       ...reported,
       arrived: now,
       received: now,
       propagation: 0,
       time: 0,
     };
+    // A head it caught up to was not timed: how long ago the block arrived is not its propagation
+    const block = timing.counted ? added : { ...added, propagation: -1 };
 
     // Untrusted nodes that reported this block before it could be recorded now have their timing
     for (const early of this.history.takeRetimed()) {

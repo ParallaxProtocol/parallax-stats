@@ -181,6 +181,7 @@ test("a public node that had a block before any verified node is first, and the 
   login(nodes, "early", "2.2.2.2");
   login(nodes, "earlier", "3.3.3.3");
   login(nodes, "late", "4.4.4.4");
+  settle(nodes, "seed", "early", "earlier", "late");
   nodes.addBlock("seed", block(100));
 
   // Two public nodes hear of block 101 before the verified node: held, not recorded
@@ -216,6 +217,7 @@ test("an early report counts only for the block a verified node reports, and onl
   login(nodes, "seed", "1.1.1.1", true);
   login(nodes, "liar", "2.2.2.2");
   login(nodes, "slow", "3.3.3.3");
+  settle(nodes, "seed", "liar", "slow");
   nodes.addBlock("seed", block(100));
 
   // A made-up block at the next height is never timed
@@ -564,6 +566,31 @@ test("a node's own propagation history leaves out its catch-up after connecting"
 
   assert.ok(fresh.history.at(-1)! >= 0 && fresh.history.at(-1)! < 1000);
   assert.deepEqual(fresh.history.slice(0, -1).filter((p) => p !== -1), []);
+});
+
+test("a head a node caught up to on connecting is shown untimed, not as late as the block is old", (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 10_000_000 });
+
+  const nodes = new Registry(settings);
+
+  login(nodes, "verified", "10.3.0.1", true);
+  settle(nodes, "verified");
+  nodes.addBlock("verified", block(10));
+  t.mock.timers.tick(16 * 60_000);
+
+  // Connecting 16 minutes after the block, a node reports it as its head
+  login(nodes, "fresh", "10.3.0.2");
+  nodes.addBlock("fresh", block(10));
+
+  assert.equal(nodes.get("fresh")!.stats.block.propagation, -1);
+
+  // Settled, the next block is timed
+  settle(nodes, "fresh");
+  nodes.addBlock("verified", block(11));
+  t.mock.timers.tick(300);
+  nodes.addBlock("fresh", block(11));
+
+  assert.equal(nodes.get("fresh")!.stats.block.propagation, 300);
 });
 
 test("a syncing node is not late for the heights it has yet to reach", () => {

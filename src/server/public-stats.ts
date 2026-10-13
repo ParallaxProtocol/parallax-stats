@@ -314,7 +314,7 @@ function nodeRow(node: PublicNode) {
     peers: stats.peers,
     peerLatencyMs: stats.peerLatency || null,
     block: stats.block.number,
-    propagationMs: stats.block.propagation,
+    propagationMs: stats.block.propagation >= 0 ? stats.block.propagation : null,
     propagationAvgMs: stats.propagationAvg,
     pending: stats.pending,
     uptimePercent: stats.uptime,

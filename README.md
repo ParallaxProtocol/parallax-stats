@@ -336,10 +336,11 @@ Tells the caller whether they can report under a node name: `available`,
   that are synced and have been connected for 2 minutes count, so a node
   catching up after a restart or reconnect does not look like a slow
   network, and its own propagation history and average in the node table
-  leave that catch-up out too. An unverified node that reports a block
-  before any verified node is held until a verified node reports that
-  same block, then timed from when it came: the node that really had it
-  first shows as first.
+  leave that catch-up out too. The head it caught up to shows its delay as
+  n/a (`propagationMs` is `null`) until the next block times it. An
+  unverified node that reports a block before any verified node is held
+  until a verified node reports that same block, then timed from when it
+  came: the node that really had it first shows as first.
   The speed bands and percentiles cover verified nodes only, timed from
   the first verified report, so unverified nodes cannot skew them.
   The alert uses how long recent blocks took to reach 90% of the

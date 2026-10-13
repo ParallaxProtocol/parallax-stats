@@ -18,7 +18,7 @@ import {
   shortVersion,
   type Grade,
 } from "@/lib/format";
-import { HISTORY_BINS, PROPAGATION_BANDS, type PublicNode } from "@/lib/protocol";
+import { HISTORY_BINS, PROPAGATION_BANDS, type Block, type PublicNode } from "@/lib/protocol";
 import { AddNode } from "./add-node";
 import { scrubIndex } from "./charts";
 import { CopyButton } from "./copy-button";
@@ -57,14 +57,22 @@ const SORT_VALUE: Record<SortKey, (n: PublicNode) => number | string> = {
   block: (n) => n.stats.block.number,
   // Miners first, by hashrate; offline nodes count as not mining
   mining: (n) => (n.stats.active && n.stats.mining ? 1 + n.stats.hashrate : 0),
-  propagation: (n) => n.stats.block.propagation,
+  propagation: (n) => shownPropagation(n.stats.block),
   propagationAvg: (n) => n.stats.propagationAvg,
   pending: (n) => n.stats.pending,
   uptime: (n) => n.stats.uptime,
 };
 
 function compare(a: number | string, b: number | string): number {
-  return typeof a === "string" ? a.localeCompare(String(b)) : a - (b as number);
+  if (typeof a === "string") return a.localeCompare(String(b));
+
+  // Untimed values (Infinity) tie with each other rather than give NaN
+  return a === b ? 0 : a - (b as number);
+}
+
+/** shownPropagation sorts an untimed head, one the node caught up to, after every timed one. */
+function shownPropagation(block: Block): number {
+  return block.propagation < 0 ? Infinity : block.propagation;
 }
 
 const byName = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
@@ -89,7 +97,7 @@ function sortNodes(nodes: PublicNode[], sort: Sort | null, pins: string[]): Publ
     if (sort && value) return compare(value(a), value(b)) * (sort.desc ? -1 : 1) || byNodeName(a, b);
     if (a.trusted) return byNodeName(a, b);
 
-    return b.stats.block.number - a.stats.block.number || a.stats.block.propagation - b.stats.block.propagation || byNodeName(a, b);
+    return b.stats.block.number - a.stats.block.number || compare(shownPropagation(a.stats.block), shownPropagation(b.stats.block)) || byNodeName(a, b);
   });
 }
 
@@ -572,6 +580,7 @@ export function NodeTable({
                 const pinned = pins.includes(node.id);
                 const expanded = open === node.id;
                 const atHead = behind <= 0;
+                const timed = stats.block.propagation >= 0;
                 const version = clientVersion(node.info.node);
 
                 return (
@@ -654,8 +663,12 @@ export function NodeTable({
                         )}
                       </Cell>
                       <MiningStatus mining={active && stats.mining} hashrate={stats.hashrate} className={fade} />
-                      <Cell grade={active && atHead ? gradePropagation(stats.block.propagation) : undefined} className={fade}>
-                        {!active ? "—" : atHead ? (stats.block.propagation ? `+${formatMs(stats.block.propagation)}` : "first") : "n/a"}
+                      <Cell
+                        grade={active && atHead && timed ? gradePropagation(stats.block.propagation) : undefined}
+                        title={active && atHead && !timed ? "Caught up to after connecting: timed from the next block" : undefined}
+                        className={fade}
+                      >
+                        {!active ? "—" : atHead && timed ? (stats.block.propagation ? `+${formatMs(stats.block.propagation)}` : "first") : "n/a"}
                       </Cell>
                       <td className={`px-3 py-3 ${fade}`}>
                         {nodes.length < 2 ? (
