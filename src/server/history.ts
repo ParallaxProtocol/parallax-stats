@@ -15,6 +15,7 @@ import {
   type Trends,
 } from "../lib/protocol.ts";
 import { DEEP_REORG } from "../lib/alert-levels.ts";
+import { WATCH_BLOCKS } from "../lib/withholding.ts";
 import { median } from "../lib/derive.ts";
 import type { TimelineBlock } from "./incidents.ts";
 import type { ReportedBlock } from "./sanitize.ts";
@@ -1003,6 +1004,18 @@ export class History {
     return miners;
   }
 
+  /** minerBlocks lists a miner's blocks in the window, newest first, up to WATCH_BLOCKS: a known pool's from any of its addresses. */
+  private minerBlocks(window: Height[], miner: MinerCount | undefined): { height: number; timestamp: number }[] {
+    if (!miner) return [];
+
+    const own = (address: string) => (miner.pool ? this.pools.get(address)?.name === miner.pool.name : address === miner.miner);
+
+    return window
+      .filter((item) => own(item.block.miner))
+      .slice(0, WATCH_BLOCKS)
+      .map((item) => ({ height: item.height, timestamp: item.block.timestamp }));
+  }
+
   private miners(counts: Map<string, MinerCount>): MinerCount[] {
     return [...counts.values()]
       .sort((a, b) => b.blocks - a.blocks || (a.pool?.name ?? a.miner).localeCompare(b.pool?.name ?? b.miner))
@@ -1014,6 +1027,7 @@ export class History {
     const recent = this.latest(HISTORY_BINS).reverse();
     const minerWindow = this.minerWindow();
     const minerCounts = this.minerCounts(minerWindow);
+    const miners = this.miners(minerCounts);
     const weekFees = minerWindow.flatMap((item) => (item.block.fees === null ? [] : [Number(item.block.fees)]));
 
     return {
@@ -1032,10 +1046,11 @@ export class History {
       gasSpending: recent.map((item) => item.block.gasUsed),
       gasLimit: recent.map((item) => item.block.gasLimit),
       fees: recent.map((item) => item.block.fees),
-      miners: this.miners(minerCounts),
+      miners,
       minerCount: minerCounts.size,
       minerBlocks: minerWindow.length,
       minerSpan: minerWindow.length > 1 ? minerWindow[0].block.timestamp - minerWindow[minerWindow.length - 1].block.timestamp : 0,
+      topMinerBlocks: this.minerBlocks(minerWindow, miners[0]),
       propagation: this.blockPropagation(),
       health: this.health(heads),
       avgHashrate: this.avgHashrate(),

@@ -7,6 +7,7 @@ import { majorityLevel, spreadLevel, thinMarket } from "@/lib/alert-levels";
 import { formatInt } from "@/lib/format";
 import type { Snapshot } from "@/lib/protocol";
 import type { PublishedRelease, Release, ReleaseCommits } from "@/lib/releases";
+import { watch } from "@/lib/withholding";
 import type { WorldMap } from "@/lib/world";
 import { About } from "./about";
 import { AlertCount, useAlerts } from "./alerts";
@@ -18,7 +19,7 @@ import { FigureTile, figures } from "./figures";
 import { NetworkStatus } from "./incidents";
 import { ClientVersions, StaleBlocks } from "./health";
 import { LatestBlocks } from "./latest-blocks";
-import { LiveProvider, useLive } from "./live/provider";
+import { LiveProvider, useLive, useServerNow } from "./live/provider";
 import { Exchanges } from "./market";
 import { Supply } from "./monetary";
 import { NodeMap } from "./node-map";
@@ -74,10 +75,14 @@ function Live({
   const foundAt = (summary.bestStats?.block.timestamp ?? 0) * 1000;
   const thin = thinMarket(markets);
   const alerts = useAlerts({ bestBlock: summary.bestBlock, foundAt, charts, nodes, latestRelease });
+  const quiet = watch(charts, useServerNow())?.level ?? null;
   // Warnings marked on their sections
   const sections = useMemo(() => {
     const status: Record<string, SectionLink["status"]> = {
       mining: (() => {
+        // The largest miner gone quiet first: it is what to act on now
+        if (quiet) return { level: quiet, label: "The largest miner has stopped publishing" };
+
         const level = majorityLevel(charts);
 
         return level && { level, label: level === "critical" ? "One miner holds a majority" : "Two miners hold a majority" };
@@ -91,7 +96,7 @@ function Live({
     };
 
     return SECTIONS.map((section) => ({ ...section, status: status[section.id] ?? null }));
-  }, [charts, thin]);
+  }, [charts, thin, quiet]);
 
   return (
     <BestBlock value={summary.bestBlock}>
@@ -131,7 +136,7 @@ function Live({
           {/* What a hash earns, what all of them earn, and what that means for a payment */}
           <FigureTile figure={figure.hashprice} start={start} />
           <FigureTile figure={figure.security} start={start} />
-          <Confirmations charts={charts} className="sm:col-span-2 xl:col-span-1" />
+          <Confirmations charts={charts} price={price} bestBlock={summary.bestBlock} className="sm:col-span-2 xl:col-span-1" />
           {/* Beside how long to wait: whether confirmed blocks have been undone */}
           <StaleBlocks health={charts?.health ?? null} propagation={charts?.propagation} className="sm:col-span-2 xl:col-span-4" />
         </div>

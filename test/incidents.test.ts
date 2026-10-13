@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { Incidents, KEEP_MS, type Observation, type TimelineBlock } from "../src/server/incidents.ts";
+import type { Charts } from "../src/lib/protocol.ts";
+import { Incidents, KEEP_MS, observe, type Observation, type TimelineBlock } from "../src/server/incidents.ts";
 
 const MIN = 60_000;
 const T0 = 1_800_000_000_000;
@@ -130,6 +131,50 @@ test("a majority still holding when rebuilt carries on in the live record", () =
 
   assert.equal(incidents.log().list.filter((i) => i.kind === "majority").length, 1);
   assert.equal(incidents.log().list[0].end, null);
+});
+
+test("the largest miner going quiet opens at once, dated from its last block, and ends when it publishes again", () => {
+  const last = T0 / 1000 - 90 * 60;
+  const charts = {
+    miners: [{ miner: "0xabc", pool: { name: "rplant.xyz", url: null }, blocks: 940 }],
+    minerBlocks: 1000,
+    avgBlocktime: 500,
+    topMinerBlocks: [{ height: 500, timestamp: last }],
+    health: { split: null },
+    propagation: { spread: null },
+  } as unknown as Charts;
+  const seen = observe(charts, T0 - 30 * MIN, 501, T0);
+  const incidents = new Incidents(T0);
+
+  assert.equal(seen.withholding?.level, "warn");
+  assert.equal(seen.withholding?.detail, "rplant.xyz published no block after #500 for 1 h 30 min");
+  assert.equal(incidents.update(seen, T0), true);
+  assert.equal(incidents.log().list[0].start, last * 1000);
+
+  incidents.update({}, T0 + MIN);
+  assert.equal(incidents.log().list[0].end, T0 + MIN);
+});
+
+test("past quiet spells of the largest miner are rebuilt from the gaps between its blocks", () => {
+  const pool = "0x" + "a".repeat(40);
+  const other = "0x" + "b".repeat(40);
+  // A pool finding every block for 2 days, but for 15 in a row by someone else, 2.5 hours of them
+  const blocks: TimelineBlock[] = Array.from({ length: 288 }, (_, i) => ({
+    height: i + 1,
+    timestamp: 1_700_000_000 + i * 600,
+    miner: i >= 200 && i < 215 ? other : pool,
+  }));
+  const incidents = new Incidents(T0);
+
+  incidents.rebuild(blocks, new Map([[pool, { name: "Big Pool", url: null }]]));
+
+  const quiet = incidents.log().list.filter((i) => i.kind === "withholding");
+
+  assert.equal(quiet.length, 1);
+  assert.equal(quiet[0].level, "critical");
+  assert.equal(quiet[0].start, blocks[199].timestamp * 1000);
+  assert.equal(quiet[0].end, blocks[215].timestamp * 1000);
+  assert.equal(quiet[0].detail, "Big Pool published no block after #200 for 2 h 40 min");
 });
 
 test("incidents survive a save and restore, and those ended more than 90 days ago are forgotten", () => {

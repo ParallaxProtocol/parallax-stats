@@ -82,7 +82,9 @@ export function formatMs(ms: number): string {
   if (ms < 3_600_000) return `${Math.round(ms / 60_000)} min`;
   if (ms < 86_400_000) return `${Math.round(ms / 3_600_000)} h`;
 
-  return `${Math.round(ms / 86_400_000)} days`;
+  const days = Math.round(ms / 86_400_000);
+
+  return `${days} ${days === 1 ? "day" : "days"}`;
 }
 
 /** formatClock renders elapsed time precisely: 42 s, 4 min 07 s, 1 h 12 min. */

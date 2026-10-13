@@ -65,7 +65,10 @@ to the `.env` file too, so the simulated nodes get map locations and are
 not all counted as one address. By default one simulated miner finds 60% of
 blocks, so the mining majority alert shows; `SIM_MAJORITY=0` spreads blocks
 out, `SIM_SKEW=1` shares the rest evenly so decentralization grades healthy,
-and `SIM_BLOCK_MS` sets the block interval (default 20 s).
+`SIM_BLOCK_MS` sets the block interval (default 20 s), and `SIM_QUIET=240`
+has the largest miner stop publishing 240 minutes before the simulation
+starts, as it would to mine a chain in secret, so the hidden mining alert
+shows (at 60% of blocks, amber from about 2.6 hours and red from 3.8).
 
 ## Adding a node
 
@@ -240,7 +243,7 @@ numbers; shares are fractions from 0 to 1.
 | `hashprice` | what a hash earns in a day, in LAX, fees included: `laxPerHashPerSecondPerDay`, the same per the page's `unit` (such as `MH/s`) as `laxPerUnitPerDay`, which `difficulty` it uses (`next` or `latest`), and `blockPayLax`: the next block's reward plus recent blocks' mean fees |
 | `securityBudget` | what miners earn in a day at the last 24 hours' pace of blocks: `laxPerDay`, `scheduledLaxPerDay` (at the 10 minute target), and that pace as `blockTimeSeconds` |
 | `mempool` | `pending` (the median of synced nodes), `pressure` (the room the waiting transactions need, as a share of a block) and `blocksToClear` |
-| `confirmations` | the wait to recommend against the largest miner of the last 7 days: `largestMiner` (`name`, `address`, `share`), `judged` (false with too few blocks to judge), `majority` (no wait is safe), and `levels`: `blocks` and `waitSeconds` for each `confidence` (0.99, 0.999, 0.9999), `null` past 1,000 blocks |
+| `confirmations` | the wait to recommend against the largest miner of the last 7 days: `largestMiner` (`name`, `address`, `share`), `judged` (false with too few blocks to judge), `majority` (no wait is certain), `levels`: `blocks` and `waitSeconds` for each `confidence` (0.99, 0.999, 0.9999), `null` past 1,000 blocks; `openLevels`, the same for a payment accepted while the miner is seen mining in the open; `reversalCost`: what replacing a payment with `blocks` confirmations (6, 12, 24) costs the miner, in `lax` and `usd` (`null` without a price); and `watch`, whether it still mines in the open (`null` under a 25% share): `lastBlock` (`height`, `timestamp`), its quietest recent stretch from `fromHeight` and `since` with `found` of `expected` blocks, the `chance` of that while mining openly, `open` (the chance is 0.01 or more: the page shows `openLevels`), and `level` (`warn`, `critical` or `null`) |
 | `latestBlocks` | the last 40 blocks: `transactions` (`total`, `perBlock`), `averageFullness`, `fees` (`reportedBlocks`, `averageLax`, `shareOfReward`), and `list`, newest first: `number`, `timestamp`, `miner`, `pool`, `transactions`, `gasUsed`, `gasLimit`, `feesWei`, `blockTimeSeconds` |
 | `supply` | `issuedLax`, `issuedShare`, `capLax`, `leftToMineLax`, `blockRewardLax`, `dailyIssuanceLax`, and `halving`: `era`, `nextAt`, `blocksToGo`, `eraProgress`, `leftThisEraLax`, `nextRewardLax`, and when it is `expected` at the target block time |
 | `uptime` | `verifiedAveragePercent`: verified nodes' average uptime |
@@ -249,8 +252,8 @@ numbers; shares are fractions from 0 to 1.
 | `propagation` | `reports` (from verified nodes only, as are the percentiles and bands), `medianMs`, `p90Ms`, `p99Ms`, `reach90`: how long recent blocks took to reach 90% of verified nodes, with any consistently slow miner, and `bands`: reports by speed (`fromMs`, `toMs`, `null` for no limit, `reports`) |
 | `clientVersions` | the online nodes: `online`, the `latest` release (`version`, `url`), how many are `upToDate` on it or newer and how many `behind` (`null` while GitHub cannot be reached), and counts by `versions` and `platforms` |
 | `nodeList` | every node the table lists: `name`, `verified`, `client`, `version`, `active`, `offlineSince` (when it was last known connected, `null` while it is), `syncing`, `mining`, `hashesPerSecond`, `peers`, `peerLatencyMs`, `block`, `propagationMs`, `propagationAvgMs`, `pending`, `uptimePercent`, `country` |
-| `alerts` | the alerts showing on the page, most severe first: `type` (`split`, `stall`, `reorg`, `majority`, `propagation`, `slow-miner`, `release`), `level` (`critical`, `warn`, `info`), `since` where it applies, and `details` |
-| `incidents` | the network status card's record: `since` (when recording began), `rebuiltFrom`, and `list`, the last 90 days newest first: `kind` (`majority`, `spread`, `split`, `stall`, `reorg`), `level`, `start`, `startKnown`, `end` (`null` while it lasts) and `detail` |
+| `alerts` | the alerts showing on the page, most severe first: `type` (`split`, `stall`, `reorg`, `majority`, `withholding`, `propagation`, `slow-miner`, `release`), `level` (`critical`, `warn`, `info`), `since` where it applies, and `details` |
+| `incidents` | the network status card's record: `since` (when recording began), `rebuiltFrom`, and `list`, the last 90 days newest first: `kind` (`majority`, `withholding`, `spread`, `split`, `stall`, `reorg`), `level`, `start`, `startKnown`, `end` (`null` while it lasts) and `detail` |
 | `trends` | each figure over the last 7 days, in 4 hour slices, oldest first, `null` where there was nothing to measure: `start`, `blockTimeSeconds`, `hashesPerSecond`, `difficulty`, `hashpriceLax` and `securityBudgetLax` (at today's block pay), `activeNodes`, `syncedNodes`, `recommendedFeeWei`, `latencyMs`, `uptimePercent`, `pending`, `mempoolPressure` |
 
 The figures cover the nodes reporting to this dashboard, not the whole
@@ -302,11 +305,38 @@ Tells the caller whether they can report under a node name: `available`,
   most of the last 7 days of blocks, which is how many would have to collude to
   rewrite the chain: 4 or more is healthy, 3 fair, 2 concentrated and 1
   critical.
-- **Confirmations to wait** is the fewest blocks after which the largest
+- **Recommended confirmations** is the fewest blocks after which the largest
   miner of the last 7 days, at its share of their blocks, has less than a
-  1%, 0.1% or 0.01% chance of replacing a payment by mining in secret: the
-  calculation in section 11 of the Bitcoin paper. A pool counts as one
-  miner. With a majority, no number is safe.
+  1%, 0.1% or 0.01% chance of replacing a payment by mining in secret,
+  worked out exactly (Rosenfeld, 2014) rather than by the Bitcoin paper's
+  approximation, which understates the chance: 32 blocks against 30% of the
+  hashrate at 0.1%, where the paper says 24. That assumes the miner mined
+  in secret all the while the payment was confirmed. While it is seen
+  mining in the open (the tile's green dot, below) it cannot have, beyond
+  what could pass for bad luck, and needs far fewer: the tile then allows
+  for the most of its share it could hide while the dot stays green, about
+  a quarter, and asks for 19 blocks against 30%, 51 against 45% and 205
+  against 49%, for payments accepted while the dot is green. A pool counts
+  as one miner.
+  With a majority no number is certain, so the tile shows what replacing a
+  payment would cost that miner instead: about its share of the rewards of
+  the blocks replaced, its own, at 6, 12 and 24 confirmations, in dollars
+  at the current price. Wait until that is more than the payment. It
+  leaves out what cannot be counted, such as the pool's miners leaving.
+- **Hidden mining**: to replace payments the largest miner has to mine a
+  chain in secret, and the hashrate it gives that chain goes missing from
+  the public one. So the tile also watches, for a miner with 25% of the
+  blocks or more, how long since its last block, and over its last 144
+  blocks, the stretch it published fewest in for its share (allowing for
+  the stretches looked at). The dot is green while that is ordinary luck,
+  grey once a miner mining openly would show it less than once in 100
+  times, amber at once in 10,000, with an alert, and red at once in a
+  million, with payments on hold: at 94% of the blocks, about 1 h 20 min
+  and 2 h without one of its blocks. Colour on the tile only ever means
+  this, what is happening now; what the largest miner could do is the
+  decentralization tile's and the majority alert's. A miner that
+  is merely down looks the same, and is flagged the same: the blocks after
+  its last one are the ones a secret chain would replace.
 - **Mempool pressure** is the room the transactions waiting in the
   mempool need, as a share of a block: the median of synced nodes' pending
   transactions (syncing nodes lag the network's, so they are left out),
@@ -360,13 +390,14 @@ Tells the caller whether they can report under a node name: `available`,
   are an ordinary block race.
 - **Incidents** are the alerts' conditions, recorded by the server with
   when each started and ended, and saved with the rest of the state for 90
-  days: a mining majority, slow propagation, a chain split and a possible
-  stall, each from when it first applied, once
-  it has held for 10 minutes (a stall at once), until it has been gone for
-  as long; and deep reorganizations, as moments. The page shows the last 30
-  days. When recording begins, past stalls and majorities are rebuilt from
-  the saved blocks; a majority already holding then is shown as starting
-  before that.
+  days: a mining majority, hidden mining, slow propagation, a chain split
+  and a possible stall, each from when it first applied, once it has held
+  for 10 minutes (a stall and hidden mining at once, from the last block),
+  until it has been gone for as long (those two, until the next block);
+  and deep reorganizations, as moments. The page shows the last 30 days.
+  When recording begins, past stalls, quiet spells of the largest miner
+  and majorities are rebuilt from the saved blocks; a majority already
+  holding then is shown as starting before that.
 - **Possible stall** shows after 2 hours without a block. Block intervals
   vary with luck: an hour happens, two hours is a one-in-160,000 wait at
   steady hashrate.

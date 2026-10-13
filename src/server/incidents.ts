@@ -5,8 +5,9 @@
 // one, so a figure hovering around a threshold does not leave dozens.
 
 import { DEEP_REORG, majority, reorgLevel, SLOW_SPREAD_MS, spreadLevel, stallLevel } from "../lib/alert-levels.ts";
-import { formatInt, formatMs, shortHash, STALL_MS } from "../lib/format.ts";
+import { formatClock, formatInt, formatMs, shortHash, STALL_MS } from "../lib/format.ts";
 import type { Charts, Incident, IncidentKind, IncidentLog, MiningPool } from "../lib/protocol.ts";
+import { HIDDEN_CHANCE, UNUSUAL_CHANCE, watch, WATCH_MIN_BLOCKS, WATCH_MIN_SHARE } from "../lib/withholding.ts";
 
 /** Incidents kept, by when they ended: the page shows 30 days of them. */
 export const KEEP_MS = 90 * 86_400_000;
@@ -16,7 +17,9 @@ const MAX_INCIDENTS = 500;
 const CONFIRM_MS = 10 * 60_000;
 /**
  * A stall needs no confirming: it only applies after 2 hours without a block,
- * and ends with the next block.
+ * and ends with the next block. Nor does the largest miner going quiet: it
+ * only applies once the quiet is already unlikely, and ends with its next
+ * block.
  */
 const STALL_CONFIRM_MS = 0;
 
@@ -27,7 +30,7 @@ const MAJORITY_FULL_S = MAJORITY_WINDOW_S - 3_600;
 const RANK = { warn: 1, critical: 2 } as const;
 
 /** The kinds recorded; saved incidents of any other kind, from an earlier version, are dropped. */
-const KINDS = new Set<IncidentKind>(["majority", "spread", "split", "stall", "reorg"]);
+const KINDS = new Set<IncidentKind>(["majority", "withholding", "spread", "split", "stall", "reorg"]);
 
 type Level = Incident["level"];
 type SpanKind = Exclude<IncidentKind, "reorg">;
@@ -89,6 +92,10 @@ export function observe(charts: Charts | null, foundAt: number, bestBlock: numbe
     seen.majority = { level: "critical", peak: held.share, detail: `${name} mined ${Math.round(held.share * 100)}% of the week's blocks` };
   }
 
+  const quiet = watch(charts, now);
+
+  if (quiet?.level) seen.withholding = { level: quiet.level, peak: -Math.log10(quiet.chance), detail: quietDetail(quiet.name, quiet.stretch), since: quiet.stretch.timestamp * 1000 };
+
   const spread = charts?.propagation.spread ?? null;
   const spreadAt = spreadLevel(charts?.propagation);
 
@@ -104,6 +111,13 @@ export function observe(charts: Charts | null, foundAt: number, bestBlock: numbe
   }
 
   return seen;
+}
+
+/** quietDetail says how quiet the largest miner has been: rplant.xyz published no block after #59,663 for 2 h 05 min. */
+function quietDetail(name: string, stretch: { height: number; found: number; expected: number; seconds: number }): string {
+  return stretch.found === 0
+    ? `${name} published no block after #${formatInt(stretch.height)} for ${formatClock(stretch.seconds * 1000)}`
+    : `${name} published ${plural(stretch.found, "block")} after #${formatInt(stretch.height)} in ${formatClock(stretch.seconds * 1000)}, against ${formatInt(Math.round(stretch.expected))} expected`;
 }
 
 /** worse reports whether an observation is worse than what an incident has recorded. */
@@ -130,10 +144,10 @@ export class Incidents {
   update(seen: Partial<{ [K in SpanKind]: Observation }>, now: number): boolean {
     let changed = false;
 
-    for (const kind of ["majority", "spread", "split", "stall"] as const) {
+    for (const kind of ["majority", "withholding", "spread", "split", "stall"] as const) {
       const observation = seen[kind];
       const open = this.list.find((r) => r.kind === kind && r.end === null);
-      const confirm = kind === "stall" ? STALL_CONFIRM_MS : CONFIRM_MS;
+      const confirm = kind === "stall" || kind === "withholding" ? STALL_CONFIRM_MS : CONFIRM_MS;
 
       if (observation) {
         this.clear.delete(kind);
@@ -215,10 +229,12 @@ export class Incidents {
   /**
    * rebuild works out, once, the incidents saved blocks can tell of from
    * before recording began: stalls, from gaps of more than STALL_MS between
-   * blocks, and a mining majority, judged over 7 days as on the page. A
-   * majority holding from the first moment there are 7 days to judge began
-   * before then, so its start is not known. Others need what nodes reported
-   * at the time, which is gone. Pass no blocks to give up on rebuilding.
+   * blocks; a mining majority, judged over 7 days as on the page; and the
+   * largest miner going quiet, from gaps between its own blocks, judged by
+   * its share of the 7 days up to the block that ended the gap. A majority
+   * holding from the first moment there are 7 days to judge began before
+   * then, so its start is not known. Others need what nodes reported at the
+   * time, which is gone. Pass no blocks to give up on rebuilding.
    */
   rebuild(blocks: TimelineBlock[], pools: Map<string, MiningPool>): void {
     this.rebuilt = true;
@@ -256,6 +272,8 @@ export class Incidents {
     // Confirmed as the live record confirms: held, or gone, for CONFIRM_MS
     let pending: { since: number; startKnown: boolean } | null = null;
     let gone: number | null = null;
+    // Each miner's latest block so far, by its place in the chain, for the gaps between its blocks
+    const latest = new Map<string, number>();
 
     for (let i = 0; i < chain.length; i++) {
       const block = chain[i];
@@ -265,6 +283,37 @@ export class Incidents {
       while (chain[first].timestamp <= block.timestamp - MAJORITY_WINDOW_S) {
         counts.set(key(chain[first]), counts.get(key(chain[first]))! - 1);
         first++;
+      }
+
+      // The largest miner quiet since its previous block, as the live watch judges its newest gap
+      const place = latest.get(key(block));
+      const before = place !== undefined ? chain[place] : undefined;
+      // Only a gap whose every block is saved: a missing one could have been the miner's
+      const unbroken = before !== undefined && block.height - before.height === i - place!;
+      const windowBlocks = i - first + 1;
+      const own = counts.get(key(block))!;
+      let largest = true;
+
+      for (const count of counts.values()) if (count > own) largest = false;
+
+      latest.set(key(block), i);
+
+      if (before && unbroken && largest && windowBlocks >= WATCH_MIN_BLOCKS && own / windowBlocks >= WATCH_MIN_SHARE && block.timestamp > chain[first].timestamp) {
+        const interval = (block.timestamp - chain[first].timestamp) / (windowBlocks - 1) / (own / windowBlocks);
+        const seconds = block.timestamp - before.timestamp;
+        const chance = Math.exp(-seconds / interval);
+
+        if (chance < UNUSUAL_CHANCE) {
+          this.add({
+            kind: "withholding",
+            level: chance < HIDDEN_CHANCE ? "critical" : "warn",
+            peak: -Math.log10(chance),
+            detail: quietDetail(named(key(block)), { height: before.height, found: 0, expected: seconds / interval, seconds }),
+            start: before.timestamp * 1000,
+            startKnown: true,
+            end: block.timestamp * 1000,
+          });
+        }
       }
 
       // Judged only with a full week behind it, as the page does

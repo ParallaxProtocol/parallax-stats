@@ -256,7 +256,7 @@ export function NodeMap({
   return (
     <Plate as="figure" className={`flex min-w-0 flex-col gap-4 p-5 ${className}`}>
       <figcaption className="flex items-baseline justify-between gap-3">
-        <Label>Where nodes run</Label>
+        <Label>Node distribution</Label>
         <span className="truncate text-xs text-muted-foreground">
           {located > 0
             ? `${located} located of ${nodes.length}, in ${byCountry.size} ${byCountry.size === 1 ? "country" : "countries"}`

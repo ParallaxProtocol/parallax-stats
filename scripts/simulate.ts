@@ -10,7 +10,9 @@
 // count (locations on the map, and the per-address limits). SIM_BLOCK_MS
 // sets the average block interval (default 20 s; the real target is 10 min),
 // SIM_MAJORITY the share of blocks the largest miner finds (default 0.6),
-// and SIM_SKEW how unevenly the rest share theirs (default 2.5; 1 is even).
+// SIM_SKEW how unevenly the rest share theirs (default 2.5; 1 is even), and
+// SIM_QUIET, in minutes, how long ago the largest miner stopped publishing,
+// as it would to mine a chain in secret (default 0: it never stops).
 
 import nextEnv from "@next/env";
 import { WebSocket } from "ws";
@@ -60,8 +62,14 @@ const MINERS = Array.from({ length: 14 }, (_, i) => "0x" + (i + 1).toString(16).
 const majority = Math.min(1, Math.max(0, Number(process.env.SIM_MAJORITY ?? 0.6) || 0));
 const skew = Math.max(1, Number(process.env.SIM_SKEW ?? 2.5) || 1);
 
-function pickMiner(): string {
-  return Math.random() < majority ? MINERS[0] : MINERS[1 + Math.floor(Math.random() ** skew * (MINERS.length - 1))];
+// From this moment, unix seconds, the largest miner publishes nothing
+const quietMinutes = Math.max(0, Number(process.env.SIM_QUIET ?? 0) || 0);
+const quietFrom = quietMinutes > 0 ? Math.floor(Date.now() / 1000) - quietMinutes * 60 : Infinity;
+
+function pickMiner(timestamp: number): string {
+  const others = MINERS[1 + Math.floor(Math.random() ** skew * (MINERS.length - 1))];
+
+  return timestamp < quietFrom && Math.random() < majority ? MINERS[0] : others;
 }
 
 interface SimBlock {
@@ -98,7 +106,7 @@ function makeBlock(number: number, timestamp: number, parent: SimBlock | undefin
     hash: hash(number * 7919),
     parentHash: hash((number - 1) * 7919),
     timestamp,
-    miner: pickMiner(),
+    miner: pickMiner(timestamp),
     gasUsed,
     gasLimit: 30_000_000,
     difficulty: difficulty.toString(),

@@ -254,6 +254,12 @@ export interface Charts {
   minerBlocks: number;
   /** Seconds those blocks span, oldest to newest; under 7 days while the history is shorter. */
   minerSpan: number;
+  /**
+   * The newest blocks of the largest of those miners, newest first, up to
+   * WATCH_BLOCKS: whether it still mines in the open. Missing from servers
+   * before the watch.
+   */
+  topMinerBlocks?: { height: number; timestamp: number }[];
   propagation: PropagationStats;
   health: ChainHealth;
   avgHashrate: number;
@@ -294,7 +300,7 @@ export interface Market {
 }
 
 /** The kinds of incident the dashboard records: what its alerts warn of, kept once they pass. */
-export type IncidentKind = "majority" | "spread" | "split" | "stall" | "reorg";
+export type IncidentKind = "majority" | "withholding" | "spread" | "split" | "stall" | "reorg";
 
 /** Something that went wrong, from when it started to when it ended. */
 export interface Incident {

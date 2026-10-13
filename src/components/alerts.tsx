@@ -13,10 +13,11 @@ import {
   VERY_DEEP_REORG,
   VERY_SLOW_SPREAD_MS,
 } from "@/lib/alert-levels";
-import { formatAgo, formatClock, formatInt, formatMs, shortHash } from "@/lib/format";
+import { formatAgo, formatClock, formatCompact, formatInt, formatMs, shortHash } from "@/lib/format";
 import type { Charts, PublicNode } from "@/lib/protocol";
 import type { Release } from "@/lib/releases";
 import { compareParts, parseVersion } from "@/lib/version";
+import { watch } from "@/lib/withholding";
 import { SOUND_KEY } from "./block-toast";
 import { reorgChime } from "./chime";
 import { useServerNow } from "./live/provider";
@@ -64,6 +65,7 @@ const TOPIC: Record<keyof typeof ICON, string> = {
   reorg: "Deep reorg",
   split: "Chain split",
   majority: "Mining majority",
+  withholding: "Hidden mining",
   spread: "Slow propagation",
   release: "New release",
 };
@@ -91,6 +93,14 @@ const ICON = {
       <circle cx="12" cy="12" r="8.25" />
       {/* Most of the pie filled, from the top round to about 300°, so it never reads as a clock */}
       <path d="M12 12V3.75A8.25 8.25 0 1 1 4.86 7.88Z" fill="currentColor" fillOpacity="0.35" strokeLinejoin="round" />
+    </>
+  ),
+  // An eye struck through for a miner whose blocks have stopped showing
+  withholding: (
+    <>
+      <path d="M3 12s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6Z" strokeLinejoin="round" />
+      <circle cx="12" cy="12" r="2.5" />
+      <path d="M4.5 4.5l15 15" strokeLinecap="round" />
     </>
   ),
   // Ripples spreading slowly from a source, for slow propagation
@@ -382,6 +392,27 @@ export function useAlerts({
       ask: { who: "If you mine LAX", what: "move some or all of your hashrate to a smaller pool." },
       facts: [`${formatInt(top.blocks)} of ${formatInt(minerBlocks)} blocks`],
       action: { href: MINING_POOL_STATS, label: "Find a smaller pool", external: true },
+    });
+  }
+
+  // The largest miner's blocks stopping, or slowing, as they would while it mines a chain in secret
+  const quiet = watch(charts, now);
+
+  if (quiet?.level) {
+    const { name, share, stretch, chance } = quiet;
+
+    alerts.push({
+      key: "withholding",
+      tone: quiet.level,
+      icon: "withholding",
+      title:
+        stretch.found === 0
+          ? `${name} has published no block for ${formatClock(stretch.seconds * 1000)}.`
+          : `${name} published ${plural(stretch.found, "block")} in ${formatClock(stretch.seconds * 1000)}, against ${formatInt(Math.round(stretch.expected))} expected.`,
+      body: `It found ${Math.round(share * 100)}% of the week's blocks. A miner that stops publishing may be mining a chain in secret to replace recent payments, or may just be down: payments in blocks after #${formatInt(stretch.height)} are not settled until it is back.`,
+      ask: { who: "If you accept LAX", what: `hold off on payments confirmed after block #${formatInt(stretch.height)}.` },
+      facts: [`1 in ${formatCompact(1 / chance)} if mining openly`],
+      action: { href: "#mining", label: "Recommended confirmations" },
     });
   }
 

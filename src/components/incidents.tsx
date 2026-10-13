@@ -14,6 +14,7 @@ import { usePersistent } from "./use-persistent";
 /** Each kind of incident, in the timeline's order. */
 const KINDS: { kind: IncidentKind; label: string }[] = [
   { kind: "majority", label: "Mining majority" },
+  { kind: "withholding", label: "Hidden mining" },
   { kind: "spread", label: "Slow propagation" },
   { kind: "split", label: "Chain split" },
   { kind: "stall", label: "Block stall" },
@@ -192,10 +193,10 @@ function TimelineBody({ log }: { log: IncidentLog }) {
   const from = now - span;
   const recent = useMemo(() => log.list.filter((incident) => overlaps(incident, from, now, now)), [log, from, now]);
   const picked = recent.find((incident) => incident.id === chosen) ?? null;
-  // Since when each kind is on record: stalls and the majority were rebuilt from saved blocks
+  // Since when each kind is on record: stalls, quiet spells and the majority were rebuilt from saved blocks
   const recordedFrom = useCallback(
     (kind: IncidentKind) =>
-      log.rebuiltFrom === null ? log.since : kind === "stall" ? log.rebuiltFrom : kind === "majority" ? Math.min(log.since, log.rebuiltFrom + WEEK_MS) : log.since,
+      log.rebuiltFrom === null ? log.since : kind === "stall" || kind === "withholding" ? log.rebuiltFrom : kind === "majority" ? Math.min(log.since, log.rebuiltFrom + WEEK_MS) : log.since,
     [log],
   );
 

@@ -12,6 +12,9 @@ export function useSize<T extends HTMLElement>(initial: { width: number; height:
 
     if (!el) return;
 
+    // Measured at once, so the first paint already fits: the observer reports only later
+    setSize({ width: Math.round(el.clientWidth), height: Math.round(el.clientHeight) });
+
     const observer = new ResizeObserver(([entry]) =>
       setSize({ width: Math.round(entry.contentRect.width), height: Math.round(entry.contentRect.height) }),
     );

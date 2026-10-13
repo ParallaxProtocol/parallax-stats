@@ -15,7 +15,7 @@ import {
   type Level,
 } from "../lib/alert-levels.ts";
 import { miningDifficulty } from "../lib/asert.ts";
-import { CONFIDENCE, confirmationsFor } from "../lib/confirmations.ts";
+import { CONFIDENCE, confirmationsFor, COST_DEPTHS, reversalCost } from "../lib/confirmations.ts";
 import { DECENTRALIZATION_MIN_BLOCKS, gradeDecentralization, majorityHolders } from "../lib/decentralization.ts";
 import { onMainnet, summarize } from "../lib/derive.ts";
 import { blockPay, dailyPay, hashprice, latestPace, pressureOf, scheduledPay } from "../lib/earnings.ts";
@@ -24,6 +24,7 @@ import { hashpriceUnit } from "../lib/format.ts";
 import { HISTORY_BINS, PROPAGATION_BANDS, TARGET_BLOCK_TIME, type Charts, type PublicNode, type Snapshot } from "../lib/protocol.ts";
 import type { Release } from "../lib/releases.ts";
 import { compareParts, parsePlatform, parseVersion } from "../lib/version.ts";
+import { open, watch } from "../lib/withholding.ts";
 
 const WEEK_S = 7 * 86_400;
 /** Gas a plain transfer uses. */
@@ -32,7 +33,7 @@ const TRANSFER_GAS = 21_000;
 const POOL_UNIT = 2 ** 32;
 
 export interface ApiAlert {
-  type: "split" | "stall" | "reorg" | "majority" | "propagation" | "slow-miner" | "release";
+  type: "split" | "stall" | "reorg" | "majority" | "withholding" | "propagation" | "slow-miner" | "release";
   level: Level | "info";
   /** When the condition began, where it has a start. */
   since: number | null;
@@ -115,7 +116,7 @@ export function publicStats(snapshot: Snapshot, latestRelease: Release | null, n
       blocksToClear: pressure !== null ? Math.ceil(pressure) : null,
     },
 
-    confirmations: confirmations(charts),
+    confirmations: confirmations(charts, pay, snapshot.price?.usd ?? null, now),
 
     latestBlocks: latestBlocks(charts, pools),
 
@@ -183,8 +184,12 @@ export function publicStats(snapshot: Snapshot, latestRelease: Release | null, n
   };
 }
 
-/** confirmations is the wait the Confirmations tile recommends, against the largest miner of the last 7 days. */
-function confirmations(charts: Charts | null) {
+/**
+ * confirmations is what the Recommended confirmations tile shows, against
+ * the largest miner of the last 7 days: the wait for each confidence, what
+ * reversing a payment would cost it, and whether it still mines in the open.
+ */
+function confirmations(charts: Charts | null, pay: number, usd: number | null, now: number) {
   const total = charts?.minerBlocks ?? 0;
   const largest = charts?.miners[0] ?? null;
 
@@ -199,11 +204,45 @@ function confirmations(charts: Charts | null) {
     // While the largest miner holds a majority no wait is safe, and every count is null
     majority: share >= 0.5,
     // The fewest confirmations for each confidence; null when it takes more than 1,000
-    levels: CONFIDENCE.map((confidence) => {
-      const blocks = confirmationsFor(share, confidence);
+    levels: levels(share, false),
+    // The same for a payment accepted while the miner is seen mining in the open, as the page shows while it is
+    openLevels: levels(share, true),
+    // What the miner gives up to replace a payment with this many confirmations: its own blocks' rewards
+    reversalCost: COST_DEPTHS.map((blocks) => {
+      const lax = reversalCost(share, blocks, pay);
 
-      return { confidence, blocks, waitSeconds: blocks !== null ? blocks * TARGET_BLOCK_TIME : null };
+      return { blocks, lax, usd: usd !== null ? lax * usd : null };
     }),
+    watch: watchDetails(charts, now),
+  };
+}
+
+/** levels is the fewest confirmations for each confidence, against a miner with `share`, seen mining in the open or not. */
+function levels(share: number, open: boolean) {
+  return CONFIDENCE.map((confidence) => {
+    const blocks = confirmationsFor(share, confidence, open);
+
+    return { confidence, blocks, waitSeconds: blocks !== null ? blocks * TARGET_BLOCK_TIME : null };
+  });
+}
+
+/** watchDetails is the largest miner's quietest recent stretch, as the tile and the alert judge it; null while not watched. */
+function watchDetails(charts: Charts | null, now: number) {
+  const quiet = watch(charts, now);
+
+  if (!quiet) return null;
+
+  return {
+    lastBlock: { height: quiet.last.height, timestamp: quiet.last.timestamp * 1000 },
+    // Its blocks after `fromHeight`, against those its share leads to expect
+    fromHeight: quiet.stretch.height,
+    since: quiet.stretch.timestamp * 1000,
+    found: quiet.stretch.found,
+    expected: quiet.stretch.expected,
+    // The chance of a stretch that quiet while mining openly; at 0.01 or more it counts as mining in the open
+    chance: quiet.chance,
+    open: open(quiet),
+    level: quiet.level,
   };
 }
 
@@ -376,6 +415,15 @@ export function activeAlerts(snapshot: Snapshot, latestRelease: Release | null, 
       since: null,
       details: { name: held.miner.pool?.name ?? null, address: held.miner.miner, share: held.share, blocks: held.miner.blocks, of: held.blocks },
     });
+  }
+
+  const quiet = watchDetails(charts, now);
+
+  if (quiet?.level) {
+    const top = charts!.miners[0];
+    const { level, ...details } = quiet;
+
+    alerts.push({ type: "withholding", level, since: quiet.since, details: { name: top.pool?.name ?? null, address: top.miner, ...details } });
   }
 
   const spread = charts?.propagation.spread ?? null;

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { formatPercent, gradePressure, hashpriceUnit, mempoolPressure, shortVersion } from "../src/lib/format.ts";
+import { formatMs, formatPercent, gradePressure, hashpriceUnit, mempoolPressure, shortVersion } from "../src/lib/format.ts";
 import { parsePlatform } from "../src/lib/version.ts";
 
 const releases = { "v2.1.2": "1dea7a088142f54c80c41fd3ba3d617ca408bf18" };
@@ -49,4 +49,10 @@ test("a client string's platform is its operating system and processor", () => {
   assert.equal(parsePlatform("Parallax/v2.1.0/windows-386/go1.27"), "Windows x86");
   assert.equal(parsePlatform("Parallax/v2.1.0/plan9-mips/go1.27"), "plan9 mips");
   assert.equal(parsePlatform("something else"), "unknown");
+});
+
+test("formatMs counts a single day in the singular", () => {
+  assert.equal(formatMs(86_400_000), "1 day");
+  assert.equal(formatMs(2 * 86_400_000), "2 days");
+  assert.equal(formatMs(3 * 3_600_000), "3 h");
 });
