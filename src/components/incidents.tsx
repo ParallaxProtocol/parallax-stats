@@ -272,7 +272,7 @@ function Headline({ alerts }: { alerts: Alert[] }) {
 function Timeline({ log, headline, children }: { log: IncidentLog; headline: ReactNode; children: ReactNode }) {
   const now = useServerNow();
   const still = useReducedMotion() ?? false;
-  const [range, setRange] = usePersistent<Range>("incident-range", "day");
+  const [range, setRange] = usePersistent<Range>("incident-range", "month");
   const [chosen, setChosen] = useState<string | null>(null);
   const [all, setAll] = useState(false);
   // The status line alone until the viewer asks for the history. The section bar's alert panel opens it too,
@@ -290,7 +290,7 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
   // the browser lay the page out again before it could draw
   const measured = useRef<{ track: HTMLDivElement; left: number; width: number; height: number; x: number; y: number } | null>(null);
 
-  const { span, label: rangeLabel, heading } = RANGES[range in RANGES ? range : "day"];
+  const { span, label: rangeLabel, heading } = RANGES[range in RANGES ? range : "month"];
   const from = now - span;
   const recent = useMemo(() => log.list.filter((incident) => overlaps(incident, from, now, now)), [log, from, now]);
   // Drawn: everything over the longest period, so the bars a shorter one leaves out slide off the row
