@@ -113,6 +113,24 @@ test("state survives a restart through the store", () => {
   });
 });
 
+test("a restart does not keep a node offline for long in the list", () => {
+  const start = Date.now() - 5 * 3_600_000;
+  const before = new Registry(settings);
+
+  login(before, "home-node", "2.2.2.2", false, start);
+  before.get("home-node")!.setState(false, start);
+
+  // The dashboard restarts 3 hours into the node's downtime
+  const restarted = new Registry(settings);
+
+  restarted.restore(JSON.parse(JSON.stringify(before.toState())), 60_000, start + 3 * 3_600_000);
+  assert.ok(restarted.get("home-node"));
+
+  // Over 4 hours offline in all, it is forgotten, though only 2 since the restart
+  assert.equal(restarted.removeOldNodes(start + 4 * 3_600_000 + 60_000), 1);
+  assert.equal(restarted.get("home-node"), undefined);
+});
+
 test("a snapshot from another version is ignored", () => {
   withStore((dir) => {
     const store = openStore(dir);

@@ -271,6 +271,7 @@ export class NodeRecord {
   }
 
   isInactiveAndOld(now = Date.now()): boolean {
-    return !this.uptime.lastStatus && this.uptime.lastUpdate !== 0 && now - this.uptime.lastUpdate > MAX_INACTIVE_MS;
+    // From when it went offline, which a restart keeps, not its last update, which a restart moves
+    return this.offlineSince !== null && now - this.offlineSince > MAX_INACTIVE_MS;
   }
 }
