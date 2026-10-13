@@ -686,13 +686,16 @@ export class History {
    * reported the height, and otherwise how long it took to report a
    * later one (or how long ago the height arrived). A height is -1 when
    * there is nothing to measure: outside the history, arrived before the
-   * node's connection `since` (ms), or after its next report, as a height
-   * filled in from history does.
+   * node settled at `since` (ms), or after its next report, as a height
+   * filled in from history does. A catch-up report, one not counted
+   * toward propagation, measures neither its own height nor those it
+   * skipped, and a node still `syncing` is not late for heights it has
+   * yet to reach.
    */
-  nodePropagation(id: string, since = 0): number[] {
+  nodePropagation(id: string, since = 0, syncing = false): number[] {
     const propagation = new Array<number>(HISTORY_BINS).fill(-1);
     const best = this.bestBlockNumber();
-    let lastArrival = Date.now();
+    let lastArrival = syncing ? 0 : Date.now();
 
     for (const item of this.latest(HISTORY_BINS)) {
       const index = HISTORY_BINS - 1 - best + item.height;
@@ -702,8 +705,10 @@ export class History {
       const own = item.propagTimes.find((p) => p.node === id);
 
       if (own) {
-        propagation[index] = own.propagation;
-        lastArrival = item.block.arrived;
+        const counted = own.counted !== false;
+
+        if (counted) propagation[index] = own.propagation;
+        lastArrival = counted ? item.block.arrived : 0;
       } else if (item.block.arrived >= since && item.block.arrived <= lastArrival) {
         propagation[index] = lastArrival - item.block.arrived;
       }

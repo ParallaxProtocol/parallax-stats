@@ -290,6 +290,7 @@ test("the propagation strip and charts cover the newest blocks", () => {
   const nodes = new Registry(settings);
 
   login(nodes, "a", "1.1.1.1", true);
+  settle(nodes, "a");
   nodes.askedForHistory("a");
   nodes.addBlock("a", block(100));
   nodes.addHistory(
@@ -511,6 +512,53 @@ test("propagation ignores catching-up nodes and takes off each node's latency", 
 
   assert.equal(propagation.samples, 1);
   assert.equal(propagation.p50, 100);
+});
+
+test("a node's own propagation history leaves out its catch-up after connecting", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "verified", "10.3.0.1", true);
+  settle(nodes, "verified");
+  nodes.addBlock("verified", block(10));
+  nodes.addBlock("verified", block(11));
+  nodes.addBlock("verified", block(12));
+
+  // The heights arrived an hour ago
+  for (const height of [10, 11, 12]) nodes.history.search(height)!.block.arrived -= 3_600_000;
+  nodes.history.search(10)!.propagTimes[0].received -= 3_600_000;
+
+  // A node connects and reports 10, then jumps to 12: catch-up, an hour late
+  login(nodes, "fresh", "10.3.0.2");
+  nodes.addBlock("fresh", block(10));
+  nodes.addBlock("fresh", block(12));
+
+  const fresh = nodes.get("fresh")!;
+
+  assert.ok(fresh.history.every((p) => p === -1));
+  assert.equal(fresh.stats.propagationAvg, 0);
+
+  // Settled, it is timed again
+  settle(nodes, "fresh");
+  nodes.addBlock("verified", block(13));
+  nodes.addBlock("fresh", block(13));
+
+  assert.ok(fresh.history.at(-1)! >= 0 && fresh.history.at(-1)! < 1000);
+  assert.deepEqual(fresh.history.slice(0, -1).filter((p) => p !== -1), []);
+});
+
+test("a syncing node is not late for the heights it has yet to reach", () => {
+  const nodes = new Registry(settings);
+
+  login(nodes, "verified", "10.4.0.1", true);
+  login(nodes, "behind", "10.4.0.2", true);
+  settle(nodes, "verified", "behind");
+  nodes.addBlock("verified", block(10));
+  nodes.addBlock("verified", block(11));
+  nodes.history.search(11)!.block.arrived -= 600_000;
+  nodes.get("behind")!.stats.syncing = true;
+  nodes.addBlock("behind", block(10));
+
+  assert.equal(nodes.get("behind")!.history.at(-1), -1);
 });
 
 test("block spread is how long blocks take to reach most verified nodes", () => {

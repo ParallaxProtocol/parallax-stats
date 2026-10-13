@@ -224,11 +224,16 @@ export class Registry {
 
       // The same block as its head, so setBlock would keep the stand-in it had: replace it outright
       other.stats.block = early.block;
-      other.setBlock(early.block, this.history.nodePropagation(early.id, other.connectedAt));
+      other.setBlock(early.block, this.nodePropagation(other));
       this.retimed.push(other);
     }
 
-    return node.setBlock(block, this.history.nodePropagation(id, node.connectedAt)) ? node : null;
+    return node.setBlock(block, this.nodePropagation(node)) ? node : null;
+  }
+
+  /** nodePropagation is how late `node` was to each recent height, from when it settled after connecting. */
+  private nodePropagation(node: NodeRecord): number[] {
+    return this.history.nodePropagation(node.id, node.connectedAt + PROPAGATION_WARMUP_MS, node.stats.syncing);
   }
 
   /** takeRetimed returns, once, the other nodes the last addBlock calls gave a new head timing. */
