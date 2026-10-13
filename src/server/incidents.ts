@@ -356,14 +356,39 @@ export class Incidents {
     this.since = state.since;
     this.rebuiltFrom = typeof state.rebuiltFrom === "number" ? state.rebuiltFrom : null;
     this.rebuilt = state.rebuilt === true;
-    this.list = (Array.isArray(state.list) ? state.list : [])
-      .filter((r) => r && KINDS.has(r.kind) && typeof r.id === "string" && typeof r.start === "number" && (r.end === null || typeof r.end === "number"))
-      .sort((a, b) => b.start - a.start);
+    // Through add, so incidents saved overlapping their own kind are taken in together
+    const saved = (Array.isArray(state.list) ? state.list : []).filter(
+      (r) => r && KINDS.has(r.kind) && typeof r.id === "string" && typeof r.start === "number" && (r.end === null || typeof r.end === "number"),
+    );
+
+    this.list = [];
+
+    for (const record of saved) this.add(record);
   }
 
+  /**
+   * add records an incident. One spanning time takes in any of its kind it
+   * overlaps: a quiet spell found to have begun before an incident that
+   * closed takes that incident in, rather than being drawn over it.
+   */
   private add(record: Omit<Record, "id"> & { id?: string }): void {
-    const incident: Record = { ...record, id: record.kind === "reorg" ? `reorg:${record.start}` : `${record.kind}:${record.start}` };
+    const incident = { ...record } as Record;
 
+    if (incident.kind !== "reorg") {
+      const overlapping = this.list.filter((r) => r.kind === incident.kind && r.start <= (incident.end ?? Infinity) && (r.end ?? Infinity) >= incident.start);
+
+      for (const other of overlapping) {
+        if (other.start < incident.start) Object.assign(incident, { start: other.start, startKnown: other.startKnown });
+
+        incident.end = incident.end === null || other.end === null ? null : Math.max(incident.end, other.end);
+
+        if (worse(other, incident)) Object.assign(incident, { level: other.level, peak: other.peak, detail: other.detail });
+      }
+
+      this.list = this.list.filter((r) => !overlapping.includes(r));
+    }
+
+    incident.id = `${incident.kind}:${incident.start}`;
     this.list.push(incident);
     this.list.sort((a, b) => b.start - a.start);
   }

@@ -141,6 +141,52 @@ test("the largest miner going quiet opens at once, dated from its last block, an
   assert.equal(incidents.log().list[0].end, T0 + MIN);
 });
 
+test("a quiet spell found to have begun before one that closed takes that one in, rather than overlapping it", () => {
+  const quiet = (since: number, detail: string, peak: number): Observation => ({ level: "warn", peak, detail, since });
+  const incidents = new Incidents(T0);
+
+  // Quiet from a block at T0, eased an hour later; then judged quietest from a block before it
+  incidents.update({ withholding: quiet(T0, "after #59,688", 4.5) }, T0 + 4 * 60 * MIN);
+  incidents.update({}, T0 + 5 * 60 * MIN);
+  incidents.update({ withholding: quiet(T0 - 6 * 60 * MIN, "after #59,658", 4.2) }, T0 + 6 * 60 * MIN);
+
+  const list = incidents.log().list.filter((i) => i.kind === "withholding");
+
+  assert.equal(list.length, 1);
+  assert.deepEqual(list[0], {
+    id: `withholding:${T0 - 6 * 60 * MIN}`,
+    kind: "withholding",
+    level: "warn",
+    start: T0 - 6 * 60 * MIN,
+    startKnown: true,
+    end: null,
+    detail: "after #59,688",
+  });
+});
+
+test("incidents saved overlapping their own kind are taken in together on restore", () => {
+  const incidents = new Incidents();
+
+  incidents.restore({
+    since: T0,
+    rebuiltFrom: null,
+    rebuilt: true,
+    list: [
+      { id: `withholding:${T0}`, kind: "withholding", level: "warn", start: T0, startKnown: true, end: T0 + 60 * MIN, detail: "inner", peak: 4 },
+      { id: `withholding:${T0 - 60 * MIN}`, kind: "withholding", level: "critical", start: T0 - 60 * MIN, startKnown: true, end: null, detail: "outer", peak: 6 },
+      { id: `reorg:${T0}`, kind: "reorg", level: "warn", start: T0, startKnown: true, end: T0, detail: "3 blocks replaced", peak: 3 },
+    ],
+  });
+
+  assert.deepEqual(
+    incidents.log().list.map(({ id, end, detail }) => ({ id, end, detail })),
+    [
+      { id: `reorg:${T0}`, end: T0, detail: "3 blocks replaced" },
+      { id: `withholding:${T0 - 60 * MIN}`, end: null, detail: "outer" },
+    ],
+  );
+});
+
 test("past quiet spells of the largest miner are rebuilt from the gaps between its blocks", () => {
   const pool = "0x" + "a".repeat(40);
   const other = "0x" + "b".repeat(40);
