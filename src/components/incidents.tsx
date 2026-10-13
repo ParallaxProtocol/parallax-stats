@@ -3,7 +3,7 @@
 import { useCallback, useId, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore, type PointerEvent, type ReactNode } from "react";
 import { formatMs } from "@/lib/format";
 import type { Incident, IncidentKind, IncidentLog } from "@/lib/protocol";
-import { AnimatePresence, motion, MotionConfig } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import { Alerts, WARNING_DOT, type Alert } from "./alerts";
 import { Switch } from "./charts";
 import { useServerNow } from "./live/provider";
@@ -422,62 +422,60 @@ function Timeline({ log, headline, children }: { log: IncidentLog; headline: Rea
         {/* Not positioned, so the cursor still measures each row against the whole area. Its space opens and
             closes on a spring, the rows following one after another; the gap before it is inside, so it
             eases too */}
-        <MotionConfig reducedMotion="user">
-          <AnimatePresence initial={false}>
-            {open && (
-              <motion.div
-                key="history"
-                id={history}
-                // Clipped only while it moves, so a chosen incident's ring is never cut off once open
-                initial={{ height: 0, opacity: 0, overflow: "hidden" }}
-                animate={{ height: "auto", opacity: 1, transitionEnd: { overflow: "visible" } }}
-                exit={{ height: 0, opacity: 0, overflow: "hidden" }}
-                transition={SPRING}
-              >
-                <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
-                  <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-                    <Label as="h3" className="text-[10px]">
-                      By kind
-                    </Label>
-                    <Switch
-                      label="Period"
-                      options={(Object.keys(RANGES) as Range[]).map((key) => [key, RANGES[key].label])}
-                      value={range}
-                      onChange={(next) => {
-                        setRange(next);
-                        leave();
-                      }}
-                    />
-                  </div>
-                  {KINDS.map(({ kind, label }, i) => (
-                    <motion.div key={kind} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING, delay: i * 0.04 }}>
-                      {row([kind], <span className="truncate text-xs text-muted-foreground">{label}</span>, label)}
-                    </motion.div>
-                  ))}
-
-                  {/* The axis, under the rows' timelines */}
-                  <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)_11rem] sm:gap-x-4">
-                    <div className="relative h-3 font-mono text-[10px] text-muted-foreground sm:col-start-2">
-                      {marks
-                        // Too near an end, a centred label would be cut off
-                        .filter((mark) => mark.label !== null && x(mark.at) > 4 && x(mark.at) < 96)
-                        .map((mark) => (
-                          <span
-                            key={mark.at}
-                            className={`absolute -translate-x-1/2 whitespace-nowrap ${mark.minor ? "max-sm:hidden" : ""}`}
-                            style={{ left: `${x(mark.at)}%` }}
-                          >
-                            {mark.label}
-                          </span>
-                        ))}
-                    </div>
-                  </div>
-                  {list}
+        <AnimatePresence initial={false}>
+          {open && (
+            <motion.div
+              key="history"
+              id={history}
+              // Clipped only while it moves, so a chosen incident's ring is never cut off once open
+              initial={{ height: 0, opacity: 0, overflow: "hidden" }}
+              animate={{ height: "auto", opacity: 1, transitionEnd: { overflow: "visible" } }}
+              exit={{ height: 0, opacity: 0, overflow: "hidden" }}
+              transition={SPRING}
+            >
+              <div className="mt-4 flex flex-col gap-3 border-t border-border pt-4">
+                <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                  <Label as="h3" className="text-[10px]">
+                    By kind
+                  </Label>
+                  <Switch
+                    label="Period"
+                    options={(Object.keys(RANGES) as Range[]).map((key) => [key, RANGES[key].label])}
+                    value={range}
+                    onChange={(next) => {
+                      setRange(next);
+                      leave();
+                    }}
+                  />
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </MotionConfig>
+                {KINDS.map(({ kind, label }, i) => (
+                  <motion.div key={kind} initial={{ opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ ...SPRING, delay: i * 0.04 }}>
+                    {row([kind], <span className="truncate text-xs text-muted-foreground">{label}</span>, label)}
+                  </motion.div>
+                ))}
+
+                {/* The axis, under the rows' timelines */}
+                <div className="grid grid-cols-[minmax(0,1fr)] sm:grid-cols-[9rem_minmax(0,1fr)_11rem] sm:gap-x-4">
+                  <div className="relative h-3 font-mono text-[10px] text-muted-foreground sm:col-start-2">
+                    {marks
+                      // Too near an end, a centred label would be cut off
+                      .filter((mark) => mark.label !== null && x(mark.at) > 4 && x(mark.at) < 96)
+                      .map((mark) => (
+                        <span
+                          key={mark.at}
+                          className={`absolute -translate-x-1/2 whitespace-nowrap ${mark.minor ? "max-sm:hidden" : ""}`}
+                          style={{ left: `${x(mark.at)}%` }}
+                        >
+                          {mark.label}
+                        </span>
+                      ))}
+                  </div>
+                </div>
+                {list}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </>
     );
   }, [recent, from, now, span, range, rangeLabel, heading, picked, recordedFrom, point, leave, open, setOpen, history, headline, children, list, setRange]);

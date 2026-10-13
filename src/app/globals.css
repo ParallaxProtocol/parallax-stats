@@ -344,33 +344,11 @@
   animation: alert-pulse 1.4s ease-out 0.4s 3;
 }
 
-/* New block toasts slide in, count down along their bottom edge, and fade out */
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateX(16px) scale(0.97);
-  }
-}
-
-@keyframes toast-leave {
-  to {
-    opacity: 0;
-    transform: translateX(16px) scale(0.97);
-  }
-}
-
+/* New block toasts count down along their bottom edge; Motion moves the toasts themselves */
 @keyframes toast-countdown {
   to {
     transform: scaleX(0);
   }
-}
-
-.block-toast {
-  animation: toast-in 0.35s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.block-toast-leave {
-  animation: toast-leave 0.2s ease-in forwards;
 }
 
 .block-toast-countdown {

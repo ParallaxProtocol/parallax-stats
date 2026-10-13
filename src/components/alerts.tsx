@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { AnimatePresence, motion, MotionConfig } from "motion/react";
+import { AnimatePresence, motion } from "motion/react";
 import {
   DEEP_REORG,
   deepReorg,
@@ -179,22 +179,26 @@ function AlertItem({ alert, open, onToggle }: { alert: Alert; open: boolean; onT
       {/* The line holds the alert's place; the band lies over it, the two crossfading */}
       <div ref={line} className={open ? "pointer-events-none" : ""} inert={open}>
         <motion.div
-          className="flex flex-wrap items-center gap-x-2.5 gap-y-1 px-5 py-[3px] text-sm"
+          className="flex gap-2.5 px-5 py-[3px] text-sm leading-5"
           initial={false}
           animate={open ? { opacity: 0, y: -4 } : { opacity: 1, y: 0 }}
           transition={open ? FADE_OUT : FADE_IN}
         >
-          <span aria-hidden className={`size-2 shrink-0 rounded-full ${WARNING_DOT[tone]}`} />
-          <span>{title}</span>
-          <button
-            ref={expand}
-            type="button"
-            onClick={toggle}
-            aria-expanded={false}
-            className="text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
-          >
-            Expand
-          </button>
+          {/* Centred on the first line, so a title that wraps on a narrow screen keeps its dot beside it */}
+          <span aria-hidden className={`mt-1.5 size-2 shrink-0 rounded-full ${WARNING_DOT[tone]}`} />
+          {/* Expand runs on after the title like a word, wrapping with it */}
+          <p className="min-w-0">
+            {title}{" "}
+            <button
+              ref={expand}
+              type="button"
+              onClick={toggle}
+              aria-expanded={false}
+              className="ml-1 text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              Expand
+            </button>
+          </p>
         </motion.div>
       </div>
 
@@ -475,30 +479,27 @@ export function Alerts({ alerts, className = "" }: { alerts: Alert[]; className?
   const [expanded, setExpanded] = useState<string[]>([]);
 
   return (
-    // Motion follows the viewer's reduced motion setting: transforms and heights jump, fades stay
-    <MotionConfig reducedMotion="user">
-      <div className={`flex flex-col ${className}`}>
-        <AnimatePresence initial={false}>
-          {alerts.map((alert, i) => (
-            <motion.div
-              key={alert.key}
-              className="-mx-5 overflow-hidden"
-              initial={{ height: 0, opacity: 0, y: -8 }}
-              animate={{ height: "auto", opacity: 1, y: 0, transition: { ...SPRING, delay: i * 0.06 } }}
-              exit={{ height: 0, opacity: 0, transition: SPRING }}
-            >
-              <AlertItem
-                alert={alert}
-                open={expanded.includes(alert.key)}
-                onToggle={() =>
-                  setExpanded((keys) => (keys.includes(alert.key) ? keys.filter((k) => k !== alert.key) : [...keys, alert.key]))
-                }
-              />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-    </MotionConfig>
+    <div className={`flex flex-col ${className}`}>
+      <AnimatePresence initial={false}>
+        {alerts.map((alert, i) => (
+          <motion.div
+            key={alert.key}
+            className="-mx-5 overflow-hidden"
+            initial={{ height: 0, opacity: 0, y: -8 }}
+            animate={{ height: "auto", opacity: 1, y: 0, transition: { ...SPRING, delay: i * 0.06 } }}
+            exit={{ height: 0, opacity: 0, transition: SPRING }}
+          >
+            <AlertItem
+              alert={alert}
+              open={expanded.includes(alert.key)}
+              onToggle={() =>
+                setExpanded((keys) => (keys.includes(alert.key) ? keys.filter((k) => k !== alert.key) : [...keys, alert.key]))
+              }
+            />
+          </motion.div>
+        ))}
+      </AnimatePresence>
+    </div>
   );
 }
 

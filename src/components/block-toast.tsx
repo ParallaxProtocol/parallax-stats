@@ -3,11 +3,13 @@
 // A toast for each new best block, with who mined it, how long it took and
 // what it carried, and a chime unless the viewer turned sound off.
 
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore, type Ref } from "react";
+import { animate, AnimatePresence, motion, useMotionValue, type PanInfo } from "motion/react";
 import { toLax } from "@/lib/emission";
 import { formatBlockTime, formatInt, shortHash } from "@/lib/format";
 import type { Block, MiningPool } from "@/lib/protocol";
 import { audioUnlocked, chime, subscribeAudio, unlockAudio } from "./chime";
+import { FADE_OUT, SPRING } from "./motion";
 import { usePersistent } from "./use-persistent";
 import { Tooltip } from "./tooltip";
 
@@ -17,6 +19,9 @@ const SHOW_MS = 10_000;
 const MAX_TOASTS = 3;
 /** A jump of more blocks than this is catching up (a reconnect), not news. */
 const MAX_JUMP = 3;
+/** How far, or how fast, a toast is swiped right before it goes rather than springing back. */
+const SWIPE_PX = 80;
+const SWIPE_SPEED = 500;
 
 export const SOUND_KEY = "sound";
 
@@ -36,23 +41,34 @@ function formatFees(fees: string | null): string {
   return lax === 0 ? "none" : `${lax >= 1 ? lax.toFixed(2) : significant.format(lax)} LAX`;
 }
 
+/**
+ * BlockToast slides in from the right; a toast leaving fades in place while
+ * the ones below it close the gap. Swiped right, it is flung off the screen.
+ */
 function BlockToast({
   toast,
   pools,
   onDismiss,
+  ref,
 }: {
   toast: Toast;
   pools: Record<string, MiningPool>;
   onDismiss: (hash: string) => void;
+  /** Set by AnimatePresence, to lift a leaving toast out of the stack. */
+  ref?: Ref<HTMLLIElement>;
 }) {
   const { block, took } = toast;
   const pool = pools[block.miner] ?? null;
-  const [leaving, setLeaving] = useState(false);
-  // Fade out, or go at once when animations are off and would never end
-  const leave = useCallback(() => {
-    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) onDismiss(block.hash);
-    else setLeaving(true);
-  }, [onDismiss, block.hash]);
+  const leave = useCallback(() => onDismiss(block.hash), [onDismiss, block.hash]);
+  const x = useMotionValue(0);
+
+  // Far or fast enough to the right, it carries on off the screen, fading as it goes; short of that, it springs back
+  function onDragEnd(_: unknown, { offset, velocity }: PanInfo) {
+    if (offset.x < SWIPE_PX && velocity.x < SWIPE_SPEED) return;
+
+    animate(x, window.innerWidth, { ...SPRING, velocity: velocity.x });
+    leave();
+  }
 
   // The countdown bar's end dismisses the toast, so hovering pauses both.
   // Without animations (reduced motion) a timer does it instead.
@@ -71,11 +87,20 @@ function BlockToast({
   ];
 
   return (
-    <li
-      className={`block-toast group pointer-events-auto relative overflow-hidden rounded-lg border border-border bg-surface-elevated/90 shadow-[0_8px_24px_oklch(0_0_0/0.35),0_2px_6px_oklch(0_0_0/0.25)] backdrop-blur-md ${leaving ? "block-toast-leave" : ""}`}
-      onAnimationEnd={(e) => {
-        if (e.animationName === "toast-leave") onDismiss(block.hash);
-      }}
+    <motion.li
+      ref={ref}
+      layout
+      className="group pointer-events-auto relative cursor-grab overflow-hidden rounded-lg border border-border bg-surface-elevated/90 shadow-[0_8px_24px_oklch(0_0_0/0.35),0_2px_6px_oklch(0_0_0/0.25)] backdrop-blur-md active:cursor-grabbing"
+      style={{ x }}
+      initial={{ opacity: 0, x: 24, scale: 0.97 }}
+      animate={{ opacity: 1, x: 0, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.97, transition: FADE_OUT }}
+      transition={SPRING}
+      // Only rightwards, with some give, so it reads as pushing the toast away
+      drag="x"
+      dragConstraints={{ left: 0, right: 0 }}
+      dragElastic={{ left: 0, right: 0.9 }}
+      onDragEnd={onDragEnd}
     >
       <span aria-hidden className="brand-gradient absolute inset-x-0 top-0 h-0.5" />
 
@@ -124,7 +149,7 @@ function BlockToast({
           leave();
         }}
       />
-    </li>
+    </motion.li>
   );
 }
 
@@ -157,9 +182,12 @@ export function BlockToasts({ best, pools, live }: { best: Block | null; pools: 
       aria-label="New blocks"
       className="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex flex-col gap-2 sm:inset-x-auto sm:right-6 sm:bottom-6 sm:w-[22rem]"
     >
-      {toasts.map((toast) => (
-        <BlockToast key={toast.block.hash} toast={toast} pools={pools} onDismiss={dismiss} />
-      ))}
+      {/* Anchored at the bottom, as the stack is: a toast leaving fades where it was */}
+      <AnimatePresence mode="popLayout" anchorY="bottom" initial={false}>
+        {toasts.map((toast) => (
+          <BlockToast key={toast.block.hash} toast={toast} pools={pools} onDismiss={dismiss} />
+        ))}
+      </AnimatePresence>
     </ol>
   );
 }

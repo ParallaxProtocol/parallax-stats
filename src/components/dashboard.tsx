@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, type ReactNode } from "react";
+import { MotionConfig } from "motion/react";
 import { miningDifficulty } from "@/lib/asert";
 import { onMainnet, summarize } from "@/lib/derive";
 import { majorityLevel, spreadLevel, thinMarket } from "@/lib/alert-levels";
@@ -43,9 +44,12 @@ export function Dashboard({
   releases: PublishedRelease[];
 }) {
   return (
-    <LiveProvider initial={initial}>
-      <Live world={world} publicNodes={publicNodes} latestRelease={latestRelease} releaseCommits={releaseCommits} releases={releases} />
-    </LiveProvider>
+    // Every animation follows the viewer's reduced motion setting: transforms and heights jump, fades stay
+    <MotionConfig reducedMotion="user">
+      <LiveProvider initial={initial}>
+        <Live world={world} publicNodes={publicNodes} latestRelease={latestRelease} releaseCommits={releaseCommits} releases={releases} />
+      </LiveProvider>
+    </MotionConfig>
   );
 }
 

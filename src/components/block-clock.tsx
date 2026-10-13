@@ -99,7 +99,9 @@ export function BlockClock({ bestBlock, foundAt }: { bestBlock: number; foundAt:
           aria-valuenow={Math.min(elapsed, target * SPAN)}
           aria-valuetext={`${formatClock(elapsed)} since the last block; the target is 10 minutes`}
         >
+          {/* Keyed by the block, so a new one starts the fill afresh rather than draining it back */}
           <div
+            key={foundAt}
             className="brand-gradient-mark absolute inset-y-0 left-0 transition-[width] duration-1000 ease-linear"
             style={{ width: `${fill * 100}%` }}
           />
@@ -162,6 +164,7 @@ export function MiniClock({ bestBlock, foundAt }: { bestBlock: number; foundAt: 
       {foundAt > 0 && <span className="hidden text-muted-foreground sm:inline">{formatClock(elapsed)} ago</span>}
       <span className="relative hidden h-1 w-24 bg-border sm:block" aria-hidden>
         <span
+          key={foundAt}
           className="brand-gradient-mark absolute inset-y-0 left-0 transition-[width] duration-1000 ease-linear"
           style={{ width: `${fill * 100}%` }}
         />

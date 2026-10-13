@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { motion } from "motion/react";
 import type { Level } from "@/lib/alert-levels";
+import { FADE_IN, FADE_OUT, SPRING } from "./motion";
 import { Tooltip } from "./tooltip";
 
 export interface SectionLink {
@@ -52,23 +54,6 @@ export function SectionNav({ sections, aside, asideAfter }: { sections: SectionL
       el.removeEventListener("scroll", update);
     };
   }, []);
-
-  // The indicator slides under the current tab: its offset and width, measured from the link
-  const [mark, setMark] = useState<{ left: number; width: number } | null>(null);
-
-  useLayoutEffect(() => {
-    const el = list.current;
-    const link = current ? el?.querySelector<HTMLElement>(`a[href="#${current}"]`) : null;
-
-    if (!el || !link) return setMark(null);
-
-    const place = () => setMark({ left: link.offsetLeft, width: link.offsetWidth });
-    const observer = new ResizeObserver(place);
-
-    observer.observe(el);
-
-    return () => observer.disconnect();
-  }, [current]);
 
   // How far down the page the reader is, as a hairline along the bar's bottom edge
   const [progress, setProgress] = useState(0);
@@ -138,8 +123,10 @@ export function SectionNav({ sections, aside, asideAfter }: { sections: SectionL
       className="sticky top-0 z-30 -mx-4 border-b border-border bg-background/80 px-4 backdrop-blur-md sm:-mx-6 sm:px-6"
     >
       <div className="relative flex items-center justify-between gap-6">
-        <ol
+        {/* Scrolls sideways when narrow: Motion allows for that when moving the current tab's mark */}
+        <motion.ol
           ref={list}
+          layoutScroll
           className="relative flex min-w-0 gap-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none]"
           style={{
             maskImage: `linear-gradient(to right, ${more.left ? "transparent, black 24px" : "black"}, ${more.right ? "black calc(100% - 32px), transparent" : "black"})`,
@@ -149,12 +136,19 @@ export function SectionNav({ sections, aside, asideAfter }: { sections: SectionL
             const here = current === section.id;
 
             return (
-              <li key={section.id}>
+              <li key={section.id} className="relative">
+                {/* The current tab's mark, a wash behind it and an underline in the logo's gradient, springs from tab to tab */}
+                {here && (
+                  <motion.span aria-hidden layoutId="section-nav-current" transition={SPRING} className="pointer-events-none absolute inset-0">
+                    <span className="absolute inset-x-0 inset-y-1.5 rounded-sm bg-foreground/[0.06]" />
+                    <span className="brand-gradient-mark absolute inset-x-0 bottom-0 h-0.5 rounded-full" />
+                  </motion.span>
+                )}
                 <a
                   href={`#${section.id}`}
                   aria-current={here ? "location" : undefined}
-                  className={`group/tab my-1.5 flex items-center gap-2 rounded-sm px-2.5 py-1.5 font-mono text-[11px] tracking-wider uppercase transition-colors ${
-                    here ? "bg-foreground/[0.06] text-foreground" : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground"
+                  className={`group/tab relative my-1.5 flex items-center gap-2 rounded-sm px-2.5 py-1.5 font-mono text-[11px] tracking-wider uppercase transition-colors ${
+                    here ? "text-foreground" : "text-muted-foreground hover:bg-foreground/[0.04] hover:text-foreground"
                   }`}
                 >
                   <span
@@ -172,27 +166,21 @@ export function SectionNav({ sections, aside, asideAfter }: { sections: SectionL
               </li>
             );
           })}
-          {/* The current tab's underline, in the logo's gradient, sliding from tab to tab */}
-          <li
-            aria-hidden
-            className="brand-gradient-mark pointer-events-none absolute bottom-0 left-0 h-0.5 rounded-full transition-[translate,width,opacity] duration-300 ease-out"
-            style={{ width: mark?.width ?? 0, translate: `${mark?.left ?? 0}px 0`, opacity: mark ? 1 : 0 }}
-          />
-        </ol>
+        </motion.ol>
         {aside && (
           // Inert while hidden, so its controls take neither clicks nor focus, and out of the
-          // flow, so the links have the bar's full width until the block clock scrolls away
-          <div
+          // flow, so the links have the bar's full width until the block clock scrolls away.
+          // Kept mounted, so a panel opened from it survives; it fades out quickly, as it may
+          // briefly lie over the links
+          <motion.div
             inert={!showAside}
-            className={`flex shrink-0 items-center gap-2 ${
-              // Fades in, but leaves at once: out of the flow it would sit over the links while fading
-              showAside
-                ? "translate-y-0 opacity-100 transition-[opacity,translate] duration-300 ease-out motion-reduce:transition-none"
-                : "pointer-events-none absolute right-0 -translate-y-2 opacity-0"
-            }`}
+            className={`flex shrink-0 items-center gap-2 ${showAside ? "" : "pointer-events-none absolute right-0"}`}
+            initial={false}
+            animate={showAside ? { opacity: 1, y: 0 } : { opacity: 0, y: -8 }}
+            transition={showAside ? FADE_IN : FADE_OUT}
           >
             {aside}
-          </div>
+          </motion.div>
         )}
       </div>
       <span aria-hidden className="absolute inset-x-0 -bottom-px h-px origin-left bg-brand-mark/70" style={{ scale: `${progress} 1` }} />

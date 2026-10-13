@@ -1,6 +1,7 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useState, type PointerEvent, type ReactNode } from "react";
+import { Fragment, useState, type PointerEvent, type ReactNode } from "react";
+import { AnimatePresence, motion } from "motion/react";
 import { createPortal } from "react-dom";
 import {
   clientVersion,
@@ -26,6 +27,7 @@ import { CopyButton } from "./copy-button";
 import { GRADE_NAME, GRADE_TEXT } from "./indicator";
 import { Label } from "./plate";
 import { useServerNow } from "./live/provider";
+import { SPRING } from "./motion";
 import { usePersistent } from "./use-persistent";
 import { Tooltip } from "./tooltip";
 
@@ -383,115 +385,86 @@ function DetailSection({ title, rows }: { title: string; rows: [string, ReactNod
 }
 
 /**
- * Details is the expanded panel under a node's row. It animates its
- * height open and closed, staying mounted while it collapses; the parent
- * drops it once onClosed fires.
+ * Details is the expanded panel under a node's row. Its height opens and
+ * closes on the same spring as the alerts; the parent keeps it in an
+ * AnimatePresence, which holds it in place until it has closed.
  */
-function Details({
-  node,
-  colSpan,
-  open,
-  now,
-  onClosed,
-}: {
-  node: PublicNode;
-  colSpan: number;
-  open: boolean;
-  now: number;
-  onClosed: () => void;
-}) {
-  const [shown, setShown] = useState(false);
+function Details({ node, colSpan, now }: { node: PublicNode; colSpan: number; now: number }) {
   const { info, stats, geo } = node;
   const truncate = (text: string) => <span className="truncate">{text}</span>;
-
-  useEffect(() => {
-    // Start collapsed, then open on the next frame so the height animates
-    const frame = requestAnimationFrame(() => setShown(open));
-
-    if (open) return () => cancelAnimationFrame(frame);
-
-    // Drop the panel even if no transition runs to signal the end
-    const fallback = window.setTimeout(onClosed, 400);
-
-    return () => {
-      cancelAnimationFrame(frame);
-      window.clearTimeout(fallback);
-    };
-  }, [open, onClosed]);
 
   return (
     <tr className="border-b border-border/50">
       <td colSpan={colSpan} className="p-0">
-        <div
-          className={`grid transition-[grid-template-rows,opacity] duration-300 ease-out ${shown ? "grid-rows-[1fr] opacity-100" : "grid-rows-[0fr] opacity-0"}`}
-          onTransitionEnd={(e) => {
-            if (!open && e.propertyName === "grid-template-rows") onClosed();
-          }}
+        <motion.div
+          className="overflow-hidden"
+          initial={{ height: 0, opacity: 0 }}
+          animate={{ height: "auto", opacity: 1 }}
+          exit={{ height: 0, opacity: 0 }}
+          transition={SPRING}
         >
-          <div className="min-h-0 overflow-hidden">
-            <div className="border-l-2 border-brand bg-background/50 px-6 py-5 sm:pl-12">
-              {!node.trusted && (
-                <p className="mb-5 flex max-w-3xl gap-2 border border-border bg-surface-elevated px-3 py-2 text-xs text-muted-foreground">
-                  <svg viewBox="0 0 16 16" className="mt-px size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
-                    <circle cx="8" cy="8" r="6.5" />
-                    <path d="M8 7.2v4M8 4.8v.1" strokeLinecap="round" />
-                  </svg>
-                  Unverified node. Everything here is reported by the node itself, and it is listed under a pseudonym:
-                  only nodes run by the dashboard operator show the name they chose.
-                </p>
-              )}
-              <div className="grid max-w-6xl grid-cols-1 gap-x-10 gap-y-6 md:grid-cols-3">
-                <DetailSection
-                  title="Node"
-                  rows={[
-                    ["Client", truncate(info.node || "unknown"), info.node],
-                    ["Network", info.net || "unknown"],
-                    ["Protocols", truncate(info.protocol || "unknown"), info.protocol],
-                    ["Port", info.port ? String(info.port) : "unknown"],
-                    ["System", [info.os, info.os_v].filter(Boolean).join(" ") || "unknown"],
-                    ["Location", geo?.country ? countryName(geo.country) : "unknown"],
-                  ]}
-                />
-                <DetailSection
-                  title="Latest block"
-                  rows={[
-                    ["Number", `#${formatInt(stats.block.number)}`],
-                    [
-                      "Hash",
-                      <>
-                        <span className="truncate">{shortHash(stats.block.hash)}</span>
-                        <CopyButton value={stats.block.hash} label="block hash" />
-                      </>,
-                      stats.block.hash,
-                    ],
-                    ["Reported", formatAgo(stats.block.received, now)],
-                    ["Transactions", formatInt(stats.block.txCount)],
-                    ["Total difficulty", truncate(formatInt(Number(stats.block.totalDifficulty))), stats.block.totalDifficulty],
-                    ["Average propagation", timedAverage(node) === null ? <Dash /> : formatMs(stats.propagationAvg)],
-                  ]}
-                />
-                <DetailSection
-                  title="Activity"
-                  rows={
-                    stats.active
-                      ? [
-                          ["Peers", formatInt(stats.peers), fewPeersHint(stats.active, stats.peers)],
-                          ["Latency to peers", stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"],
-                          ["Mempool size", <MempoolSize key="pending" pending={stats.pending} />],
-                          ["Mining", stats.mining ? formatHashrate(stats.hashrate) : "no"],
-                          ["Gas price", formatGasPrice(stats.gasPrice)],
-                        ]
-                      : [
-                          ["Status", "offline"],
-                          ["Last connected", node.offlineSince ? formatAgo(node.offlineSince, now) : "unknown"],
-                          ["Uptime", `${stats.uptime}%`],
-                        ]
-                  }
-                />
-              </div>
+          <div className="border-l-2 border-brand bg-background/50 px-6 py-5 sm:pl-12">
+            {!node.trusted && (
+              <p className="mb-5 flex max-w-3xl gap-2 border border-border bg-surface-elevated px-3 py-2 text-xs text-muted-foreground">
+                <svg viewBox="0 0 16 16" className="mt-px size-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.4" aria-hidden>
+                  <circle cx="8" cy="8" r="6.5" />
+                  <path d="M8 7.2v4M8 4.8v.1" strokeLinecap="round" />
+                </svg>
+                Unverified node. Everything here is reported by the node itself, and it is listed under a pseudonym:
+                only nodes run by the dashboard operator show the name they chose.
+              </p>
+            )}
+            <div className="grid max-w-6xl grid-cols-1 gap-x-10 gap-y-6 md:grid-cols-3">
+              <DetailSection
+                title="Node"
+                rows={[
+                  ["Client", truncate(info.node || "unknown"), info.node],
+                  ["Network", info.net || "unknown"],
+                  ["Protocols", truncate(info.protocol || "unknown"), info.protocol],
+                  ["Port", info.port ? String(info.port) : "unknown"],
+                  ["System", [info.os, info.os_v].filter(Boolean).join(" ") || "unknown"],
+                  ["Location", geo?.country ? countryName(geo.country) : "unknown"],
+                ]}
+              />
+              <DetailSection
+                title="Latest block"
+                rows={[
+                  ["Number", `#${formatInt(stats.block.number)}`],
+                  [
+                    "Hash",
+                    <>
+                      <span className="truncate">{shortHash(stats.block.hash)}</span>
+                      <CopyButton value={stats.block.hash} label="block hash" />
+                    </>,
+                    stats.block.hash,
+                  ],
+                  ["Reported", formatAgo(stats.block.received, now)],
+                  ["Transactions", formatInt(stats.block.txCount)],
+                  ["Total difficulty", truncate(formatInt(Number(stats.block.totalDifficulty))), stats.block.totalDifficulty],
+                  ["Average propagation", timedAverage(node) === null ? <Dash /> : formatMs(stats.propagationAvg)],
+                ]}
+              />
+              <DetailSection
+                title="Activity"
+                rows={
+                  stats.active
+                    ? [
+                        ["Peers", formatInt(stats.peers), fewPeersHint(stats.active, stats.peers)],
+                        ["Latency to peers", stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"],
+                        ["Mempool size", <MempoolSize key="pending" pending={stats.pending} />],
+                        ["Mining", stats.mining ? formatHashrate(stats.hashrate) : "no"],
+                        ["Gas price", formatGasPrice(stats.gasPrice)],
+                      ]
+                    : [
+                        ["Status", "offline"],
+                        ["Last connected", node.offlineSince ? formatAgo(node.offlineSince, now) : "unknown"],
+                        ["Uptime", `${stats.uptime}%`],
+                      ]
+                }
+              />
             </div>
           </div>
-        </div>
+        </motion.div>
       </td>
     </tr>
   );
@@ -513,12 +486,8 @@ export function NodeTable({
   const [sort, setSort] = usePersistent<Sort | null>("node-sort", null);
   const [pins, setPins] = usePersistent<string[]>("pins", NO_PINS);
   const [open, setOpen] = useState<string | null>(null);
-  // A panel that is animating closed stays mounted until it finishes
-  const [closing, setClosing] = useState<string | null>(null);
-  const onClosed = useCallback(() => setClosing(null), []);
 
   function toggle(id: string) {
-    if (open !== null) setClosing(open);
     setOpen(open === id ? null : id);
   }
   const sorted = sortNodes(nodes, sort, pins);
@@ -743,9 +712,9 @@ export function NodeTable({
                         {stats.uptime}%
                       </Cell>
                     </tr>
-                    {(expanded || closing === node.id) && (
-                      <Details node={node} colSpan={colSpan} open={expanded} now={now} onClosed={onClosed} />
-                    )}
+                    <AnimatePresence initial={false}>
+                      {expanded && <Details key="details" node={node} colSpan={colSpan} now={now} />}
+                    </AnimatePresence>
                   </Fragment>
                 );
               })}
