@@ -367,7 +367,7 @@ export function figures({
       trend: trends.volume ?? [],
       format: dollars,
       detail: () => "mean of the 24 hour volume",
-      waiting: "Collecting prices",
+      waiting: "Collecting volume",
       link: priceLink,
     },
     issuance: {

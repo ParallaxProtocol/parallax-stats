@@ -8,6 +8,7 @@ import { canVerify, MIN_VERIFIED, reportsSyncing } from "../lib/version.ts";
 import { History, type Head, type HistoryRequest, type HistoryState } from "./history.ts";
 import { Incidents, observe, type IncidentsState } from "./incidents.ts";
 import { NodeRecord, type Login, type NodeState } from "./node.ts";
+import type { MarketPoint } from "./price.ts";
 import { Readings, type ReadingsState } from "./readings.ts";
 import { cleanId, type ReportedBlock, type ReportedStats } from "./sanitize.ts";
 import type { Settings } from "./settings.ts";
@@ -372,6 +373,11 @@ export class Registry {
   /** recordReading adds a reading of the node list's figures, the recommended fee, and the LAX price and volume, to the trends. */
   recordReading(gasPrice: string | null, now = Date.now(), usd: number | null = null, volume: number | null = null): void {
     this.readings.record(summarize(this.all()), gasPrice, now, usd, volume);
+  }
+
+  /** backfillMarket fills the price and volume trends where no reading was taken, from the coin's history. */
+  backfillMarket(points: MarketPoint[], now = Date.now()): void {
+    this.readings.backfill(points, now);
   }
 
   /**

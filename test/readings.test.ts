@@ -117,3 +117,37 @@ test("the trading volume is read with the price, and readings saved before it st
   assert.equal(restored.series([T0]).price[0], 0.02);
   assert.equal(restored.series([T0]).volume[0], null);
 });
+
+test("the week's market history fills the slices without readings of their own, and leaves the rest", () => {
+  const readings = new Readings();
+  const now = T0 * 1000 + HOUR;
+  const at = (slicesAgo: number, hours: number) => (T0 - slicesAgo * TREND_SLICE_S) * 1000 + hours * HOUR;
+
+  // The slice in progress has a reading of its own, of the price only
+  readings.record(summary(2, 2, 100, 99), null, now, 0.015, null);
+  readings.backfill(
+    [
+      // Two slices back: no readings there, so both come from the history
+      { at: at(2, 0), usd: 0.004, volume: 60 },
+      { at: at(2, 1), usd: 0.006, volume: 80 },
+      // The slice in progress: its own price stands, the volume comes from the history
+      { at: at(0, 0), usd: 0.5, volume: 600 },
+      // Older than the week: left out
+      { at: at(TREND_SLICES, 0), usd: 1, volume: 1 },
+    ],
+    now,
+  );
+
+  const starts = trendStarts(now);
+  const series = readings.series(starts);
+  const i = starts.length - 1;
+
+  assert.ok(Math.abs(series.price[i - 2]! - 0.005) < 1e-12);
+  assert.equal(series.volume[i - 2], 70);
+  assert.equal(series.active[i - 2], null);
+  assert.equal(series.price[i - 1], null);
+  assert.equal(series.price[i], 0.015);
+  assert.equal(series.volume[i], 600);
+  assert.equal(series.active[i], 2);
+  assert.equal(readings.toState().slices.length, 2);
+});

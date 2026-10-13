@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import test from "node:test";
-import { fetchMarkets, fetchPrice } from "../src/server/price.ts";
+import { fetchHistory, fetchMarkets, fetchPrice } from "../src/server/price.ts";
 
 /** coingecko serves one canned body (or status) for an endpoint and returns the API's base URL. */
 async function coingecko(body: unknown, status = 200, path = /^\/simple\/price\?ids=parallax-2&vs_currencies=usd/): Promise<{ api: string; close: () => void }> {
@@ -133,6 +133,49 @@ test("unusable ticker answers give no markets", async () => {
     const api = await coingecko(body, status, TICKERS);
 
     assert.equal(await fetchMarkets("parallax-2", api.api), null);
+    api.close();
+  }
+});
+
+const HISTORY = /^\/coins\/parallax-2\/market_chart\?vs_currency=usd&days=7$/;
+
+test("the week's price and volume are read from CoinGecko's market chart, oldest first", async () => {
+  const api = await coingecko(
+    {
+      prices: [
+        [2000, 0.015],
+        [1000, 0.004],
+        [3000, "x"],
+      ],
+      total_volumes: [
+        [1000, 62.9],
+        [2000, 627],
+        [3000, 500],
+      ],
+      market_caps: [],
+    },
+    200,
+    HISTORY,
+  );
+
+  assert.deepEqual(await fetchHistory("parallax-2", api.api), [
+    { at: 1000, usd: 0.004, volume: 62.9 },
+    { at: 2000, usd: 0.015, volume: 627 },
+    // The broken price is left out, the volume beside it kept
+    { at: 3000, usd: null, volume: 500 },
+  ]);
+  api.close();
+});
+
+test("unusable market chart answers give no history", async () => {
+  for (const [body, status] of [
+    [{}, 200],
+    [{ prices: [] }, 200],
+    [{ error: "coin not found" }, 404],
+  ] as const) {
+    const api = await coingecko(body, status, HISTORY);
+
+    assert.equal(await fetchHistory("parallax-2", api.api), null);
     api.close();
   }
 });

@@ -1,7 +1,8 @@
 // The LAX price in US dollars, from CoinGecko's public API, which needs no
 // key. The hub polls it every few minutes for everyone, so viewers never
 // call CoinGecko themselves and the free rate limit is never near. Where it
-// trades, exchange by exchange, comes from the same API less often.
+// trades, exchange by exchange, comes from the same API less often, and
+// the last week's price and volume once, to fill the trends.
 
 import type { Market, Price } from "../lib/protocol.ts";
 
@@ -101,6 +102,58 @@ export async function fetchMarkets(id: string, api = COINGECKO_API): Promise<Mar
         .sort((a, b) => b.volume24h - a.volume24h)
         .slice(0, MAX_MARKETS)
     );
+  } catch {
+    return null;
+  }
+}
+
+/** The coin's price and 24 hour volume at a moment, from its history. */
+export interface MarketPoint {
+  /** ms */
+  at: number;
+  usd: number | null;
+  volume: number | null;
+}
+
+/**
+ * fetchHistory returns the coin's price and 24 hour volume over the last
+ * 7 days, hourly, oldest first, or null when they cannot be read.
+ */
+export async function fetchHistory(id: string, api = COINGECKO_API): Promise<MarketPoint[] | null> {
+  try {
+    const res = await fetch(`${api}/coins/${encodeURIComponent(id)}/market_chart?vs_currency=usd&days=7`, {
+      headers: { Accept: "application/json", "User-Agent": "parallax-stats" },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
+
+    if (!res.ok) return null;
+
+    const body = (await res.json()) as { prices?: unknown; total_volumes?: unknown };
+
+    if (!Array.isArray(body.prices) || !Array.isArray(body.total_volumes)) return null;
+
+    // Each series is [ms, value] pairs; one broken pair is left out, not the whole week
+    const points = new Map<number, MarketPoint>();
+    const take = (series: unknown[], field: "usd" | "volume", min: number) => {
+      for (const pair of series) {
+        if (!Array.isArray(pair)) continue;
+
+        const [at, value] = pair as unknown[];
+
+        if (typeof at !== "number" || !Number.isFinite(at) || typeof value !== "number" || !Number.isFinite(value)) continue;
+        if (value < min || value > MAX_USD * (field === "volume" ? 1e6 : 1)) continue;
+
+        const point = points.get(at) ?? { at, usd: null, volume: null };
+
+        point[field] = value;
+        points.set(at, point);
+      }
+    };
+
+    take(body.prices, "usd", Number.MIN_VALUE);
+    take(body.total_volumes, "volume", 0);
+
+    return [...points.values()].sort((a, b) => a.at - b.at);
   } catch {
     return null;
   }

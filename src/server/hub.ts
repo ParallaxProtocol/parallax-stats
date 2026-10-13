@@ -20,6 +20,7 @@ import {
 } from "../lib/protocol.ts";
 import { authenticate, clientIP, RateLimiter, TokenBucket, WRONG_NAME } from "./guard.ts";
 import { log } from "./log.ts";
+import type { MarketPoint } from "./price.ts";
 import { STATE_VERSION, type Store } from "./persist.ts";
 import { LoginRefused, Registry } from "./registry.ts";
 import { cleanBlock, cleanHistory, cleanId, cleanInfo, cleanLatency, cleanPending, cleanStats } from "./sanitize.ts";
@@ -57,6 +58,8 @@ export interface HubOptions {
   fetchPrice?: () => Promise<Price | null>;
   /** Reads where LAX trades; polled every MARKETS_POLL_MS. */
   fetchMarkets?: () => Promise<Market[] | null>;
+  /** Reads the last week's LAX price and volume, to fill the trends; read at startup, and again with the markets until it succeeds. */
+  fetchHistory?: () => Promise<MarketPoint[] | null>;
   /** Where state is saved across restarts; without one it lives in memory only. */
   store?: Store;
 }
@@ -215,12 +218,30 @@ export function createHub(settings: Settings, options: HubOptions = {}): Hub {
   let markets: Market[] | null = null;
 
   async function pollMarkets(): Promise<void> {
+    void fillHistory();
+
     const next = await options.fetchMarkets?.();
 
     if (!next || JSON.stringify(next) === JSON.stringify(markets)) return;
 
     markets = next;
     broadcast({ type: "markets", markets });
+  }
+
+  // The week's price and volume, where the dashboard took no readings of its own: before it
+  // read them, or while it was down. Once is enough; readings take over from there
+  let historyFilled = !options.fetchHistory;
+
+  async function fillHistory(): Promise<void> {
+    if (historyFilled) return;
+
+    const points = await options.fetchHistory?.();
+
+    if (!points || historyFilled) return;
+
+    historyFilled = true;
+    registry.backfillMarket(points);
+    scheduleCharts();
   }
 
   void pollMarkets();

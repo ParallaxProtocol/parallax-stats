@@ -7,7 +7,7 @@ import next from "next";
 import { createGeoLookup } from "./src/server/geo.ts";
 import { openStore } from "./src/server/persist.ts";
 import { createHub } from "./src/server/hub.ts";
-import { fetchMarkets, fetchPrice } from "./src/server/price.ts";
+import { fetchHistory, fetchMarkets, fetchPrice } from "./src/server/price.ts";
 import { fetchGasPrice } from "./src/server/rpc.ts";
 import { log } from "./src/server/log.ts";
 import { loadSettings } from "./src/server/settings.ts";
@@ -42,6 +42,7 @@ const hub = createHub(settings, {
   fetchGasPrice: () => fetchGasPrice(rpcURL),
   fetchPrice: settings.coingeckoId ? () => fetchPrice(settings.coingeckoId!) : undefined,
   fetchMarkets: settings.coingeckoId ? () => fetchMarkets(settings.coingeckoId!) : undefined,
+  fetchHistory: settings.coingeckoId ? () => fetchHistory(settings.coingeckoId!) : undefined,
   store: settings.dataDir ? openStore(settings.dataDir) : undefined,
 });
 
