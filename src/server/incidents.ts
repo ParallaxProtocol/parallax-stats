@@ -2,9 +2,11 @@
 // the server as incidents with a start and an end, so the page can show a
 // timeline and it survives restarts. A condition must hold for a while
 // before it opens an incident, and be gone for a while before it closes
-// one, so a figure hovering around a threshold does not leave dozens.
+// one, so a figure hovering around a threshold does not leave dozens. A
+// majority also closes only well below where it opened, as a week's share
+// can sit around half for months.
 
-import { DEEP_REORG, majority, reorgLevel, SLOW_SPREAD_MS, spreadLevel } from "../lib/alert-levels.ts";
+import { DEEP_REORG, majority, MAJORITY_RELEASE_SHARE, nearMajority, reorgLevel, SLOW_SPREAD_MS, spreadLevel } from "../lib/alert-levels.ts";
 import { formatClock, formatInt, formatMs, shortHash } from "../lib/format.ts";
 import type { Charts, Incident, IncidentKind, IncidentLog, MiningPool } from "../lib/protocol.ts";
 import { HIDDEN_CHANCE, UNUSUAL_CHANCE, watch, WATCH_MIN_BLOCKS, WATCH_MIN_SHARE } from "../lib/withholding.ts";
@@ -40,6 +42,8 @@ export interface Observation {
   detail: string;
   /** When the condition began, when it knows: a quiet spell began with the miner's last block. */
   since?: number;
+  /** Only enough to keep an open incident going: it opens none. */
+  sustains?: boolean;
 }
 
 /** An incident as kept: with the number its worst point was judged by. */
@@ -77,12 +81,19 @@ export function observe(charts: Charts | null, now: number): Partial<{ [K in Spa
     };
   }
 
-  const held = majority(charts);
+  // Short of a majority but near it, the top miner keeps an open incident going
+  const opens = majority(charts);
+  const held = opens ?? nearMajority(charts);
 
   if (held) {
     const name = held.miner.pool?.name ?? shortHash(held.miner.miner);
 
-    seen.majority = { level: "critical", peak: held.share, detail: `${name} mined ${Math.round(held.share * 100)}% of the week's blocks` };
+    seen.majority = {
+      level: "critical",
+      peak: held.share,
+      detail: `${name} mined ${Math.round(held.share * 100)}% of the week's blocks`,
+      ...(opens ? {} : { sustains: true }),
+    };
   }
 
   const quiet = watch(charts, now);
@@ -140,8 +151,9 @@ export class Incidents {
     let changed = false;
 
     for (const kind of ["majority", "withholding", "spread", "split"] as const) {
-      const observation = seen[kind];
       const open = this.list.find((r) => r.kind === kind && r.end === null);
+      // One that only sustains an incident counts as gone while none is open
+      const observation = open || !seen[kind]?.sustains ? seen[kind] : undefined;
       const confirm = kind === "withholding" ? QUIET_CONFIRM_MS : CONFIRM_MS;
 
       if (observation) {
@@ -302,7 +314,8 @@ export class Incidents {
       for (const entry of counts) if (entry[1] > top[1]) top = entry;
 
       const share = top[1] / total;
-      const held = total >= 10 && top[1] * 2 > total;
+      // Opened by a majority, and kept open until the share falls below MAJORITY_RELEASE_SHARE
+      const held = total >= 10 && (open ? top[1] >= MAJORITY_RELEASE_SHARE * total : top[1] * 2 > total);
       const detail = `${named(top[0])} mined ${Math.round(share * 100)}% of the week's blocks`;
       const at = block.timestamp * 1000;
 

@@ -53,6 +53,36 @@ test("an incident keeps its worst point, and closes when the condition was first
   assert.equal(incidents.log().list.length, 1);
 });
 
+test("a majority closes only once the top miner's share falls below 45%, and a share near half opens none", () => {
+  // The top miner's share of the week, as the server judges it
+  const week = (blocks: number) =>
+    observe({ miners: [{ miner: "0xabc", pool: { name: "rplant.xyz", url: null }, blocks }], minerBlocks: 1000, health: { split: null }, propagation: { spread: null } } as unknown as Charts, T0);
+  const incidents = new Incidents(T0);
+
+  assert.equal(week(480).majority?.sustains, true);
+  assert.equal(week(440).majority, undefined);
+
+  // 48% alone opens nothing
+  incidents.update(week(480), T0);
+  incidents.update(week(480), T0 + 20 * MIN);
+  assert.equal(incidents.log().list.length, 0);
+
+  incidents.update(week(520), T0 + 30 * MIN);
+  incidents.update(week(520), T0 + 40 * MIN);
+  assert.equal(incidents.log().list[0].end, null);
+
+  // Back under half but above 45%: still open, and still recording its worst point
+  incidents.update(week(470), T0 + 50 * MIN);
+  incidents.update(week(470), T0 + 2 * 60 * MIN);
+  assert.equal(incidents.log().list[0].end, null);
+  assert.equal(incidents.log().list[0].detail, "rplant.xyz mined 52% of the week's blocks");
+
+  incidents.update(week(440), T0 + 3 * 60 * MIN);
+  incidents.update(week(440), T0 + 3 * 60 * MIN + 10 * MIN);
+  assert.equal(incidents.log().list[0].end, T0 + 3 * 60 * MIN);
+  assert.equal(incidents.log().list.length, 1);
+});
+
 test("deep reorganizations are moments, followed as they are measured deeper", () => {
   const incidents = new Incidents(T0);
 
@@ -105,6 +135,36 @@ test("past majorities are rebuilt from saved blocks, a majority holding from the
   assert.equal(held.detail, "Big Pool mined 67% of the week's blocks");
   assert.notEqual(held.end, null);
   assert.equal(incidents.needsRebuild, false);
+});
+
+test("a rebuilt majority stays open while the top share stays above 45%", () => {
+  const pool = "0x" + "a".repeat(40);
+  const other = "0x" + "b".repeat(40);
+  const third = "0x" + "c".repeat(40);
+  const blocks: TimelineBlock[] = [];
+  // A week's share of 60%, then 47%, 55% and 47% again: a share around half, judged on its own the
+  // majority would end and begin again. Then 30%, which ends it
+  const days = [...Array(8).fill(0.6), ...Array(7).fill(0.47), ...Array(7).fill(0.55), ...Array(7).fill(0.47), ...Array(8).fill(0.3)];
+
+  days.forEach((share, d) => {
+    for (let n = 0; n < 144; n++) {
+      const height = d * 144 + n + 1;
+
+      // Spread through the day: the pool takes the block whenever its running count steps up, two others the rest
+      const miner = Math.floor((n + 1) * share) > Math.floor(n * share) ? pool : height % 2 ? other : third;
+
+      blocks.push({ height, timestamp: 1_700_000_000 + height * 600, miner });
+    }
+  });
+
+  const incidents = new Incidents(T0);
+
+  incidents.rebuild(blocks, new Map());
+
+  const majorities = incidents.log().list.filter((i) => i.kind === "majority");
+
+  assert.equal(majorities.length, 1);
+  assert.notEqual(majorities[0].end, null);
 });
 
 test("a majority still holding when rebuilt carries on in the live record", () => {

@@ -15,6 +15,13 @@ export const DEEP_REORG = 3;
 export const VERY_DEEP_REORG = 6;
 /** Fewer blocks than this say too little about who mines. */
 export const MAJORITY_MIN_BLOCKS = 10;
+/**
+ * A majority incident, once open, stays open until the top miner's share of
+ * the week falls below this: about 3 standard errors under half at a week's
+ * 1,000 or so blocks, so a share hovering around half leaves one incident,
+ * not dozens.
+ */
+export const MAJORITY_RELEASE_SHARE = 0.45;
 /** Blocks taking longer than these to reach most verified nodes are slow, and far too slow. */
 export const SLOW_SPREAD_MS = PROPAGATION_BANDS[1];
 export const VERY_SLOW_SPREAD_MS = PROPAGATION_BANDS[2];
@@ -69,6 +76,14 @@ export function majority(charts: Charts | null): { miner: Charts["miners"][numbe
   const blocks = charts?.minerBlocks ?? 0;
 
   return top && blocks >= MAJORITY_MIN_BLOCKS && top.blocks * 2 > blocks ? { miner: top, share: top.blocks / blocks, blocks } : null;
+}
+
+/** nearMajority is the top miner while its share of the week, short of a majority, keeps an open majority incident going. */
+export function nearMajority(charts: Charts | null): { miner: Charts["miners"][number]; share: number; blocks: number } | null {
+  const top = charts?.miners[0];
+  const blocks = charts?.minerBlocks ?? 0;
+
+  return top && blocks >= MAJORITY_MIN_BLOCKS && top.blocks >= MAJORITY_RELEASE_SHARE * blocks ? { miner: top, share: top.blocks / blocks, blocks } : null;
 }
 
 export function majorityLevel(charts: Charts | null): Level | null {
