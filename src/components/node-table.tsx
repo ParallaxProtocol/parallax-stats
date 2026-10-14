@@ -183,9 +183,19 @@ function MempoolSize({ pending }: { pending: number }) {
   return <>{`${formatInt(pending)} ${pending === 1 ? "txn" : "txns"}`}</>;
 }
 
+/**
+ * miningRate describes a mining node's hashrate. A node counts only its own
+ * CPU and what remote miners submit through eth_submitHashrate, so a node
+ * behind pool software that fetches work but never forwards its hashrate
+ * reports 0 while mining: that is unknown, not zero.
+ */
+function miningRate(hashrate: number): string {
+  return hashrate > 0 ? formatHashrate(hashrate) : "hashrate not reported";
+}
+
 /** MiningStatus is a pickaxe for a mining node, with its hashrate on hover, and a dash otherwise. */
 function MiningStatus({ mining, hashrate, className = "" }: { mining: boolean; hashrate: number; className?: string }) {
-  const label = mining ? `Mining at ${formatHashrate(hashrate)}` : "Not mining";
+  const label = mining ? (hashrate > 0 ? `Mining at ${formatHashrate(hashrate)}` : "Mining, hashrate not reported") : "Not mining";
 
   return (
     <td className={`px-3 py-3 ${className}`}>
@@ -452,7 +462,7 @@ function Details({ node, colSpan, now }: { node: PublicNode; colSpan: number; no
                         ["Peers", formatInt(stats.peers), fewPeersHint(stats.active, stats.peers)],
                         ["Latency to peers", stats.peerLatency ? `${stats.peerLatency} ms` : "n/a"],
                         ["Mempool size", <MempoolSize key="pending" pending={stats.pending} />],
-                        ["Mining", stats.mining ? formatHashrate(stats.hashrate) : "no"],
+                        ["Mining", stats.mining ? miningRate(stats.hashrate) : "no"],
                         ["Gas price", formatGasPrice(stats.gasPrice)],
                       ]
                     : [
