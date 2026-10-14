@@ -55,10 +55,10 @@ test("what a miner could hide from the watch shrinks as the wait grows", () => {
 test("a miner seen mining in the open needs far fewer confirmations, though more than one hiding nothing", () => {
   const table: [number, number][] = [
     [0.1, 6],
-    [0.3, 19],
-    [0.4, 32],
-    [0.45, 51],
-    [0.49, 205],
+    [0.3, 22],
+    [0.4, 36],
+    [0.45, 56],
+    [0.49, 218],
   ];
 
   for (const [q, z] of table) {

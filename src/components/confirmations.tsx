@@ -31,7 +31,7 @@ function wait(confirmations: number): string {
 function quietFor({ stretch }: Watch): string {
   return stretch.found === 0
     ? `no block for ${formatClock(stretch.seconds * 1000)}`
-    : `${formatInt(stretch.found)} blocks in ${formatClock(stretch.seconds * 1000)} where ${formatInt(Math.round(stretch.expected))} were expected`;
+    : `${formatInt(stretch.found)}${stretch.published != null ? ` of ${formatInt(stretch.published)}` : ""} blocks in ${formatClock(stretch.seconds * 1000)} where ${formatInt(Math.round(stretch.expected))} were expected`;
 }
 
 /** Row is one line of the tile's table: what it applies to, and the wait. */

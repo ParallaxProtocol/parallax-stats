@@ -785,7 +785,7 @@ export function Method({
                 Those odds assume the miner was mining in secret the whole time the payment was being confirmed, getting a head start.
                 But hashrate cannot be in two places at once: if its blocks keep arriving at the rate its share says they should, it was
                 not. It could only start after the payment is accepted, from as far behind as the payment is deep, and needs far fewer
-                confirmations. It could still hide part of its hashrate and pass the gap off as bad luck, up to about a quarter of it, so
+                confirmations. It could still hide part of its hashrate and pass the gap off as bad luck, up to about a third of it, so
                 the shorter waits allow for that. They hold for payments accepted while the status dot is green.
               </p>
               <Odds initial={share !== null && share < 0.5 ? Math.max(5, Math.round(share * 100)) : 30} />
@@ -810,7 +810,9 @@ export function Method({
                 Hashrate spent on a secret chain is missing from the public one, so a miner mining in secret stops publishing blocks, or
                 publishes fewer than its share. The tile watches the largest miner&apos;s last 144 blocks, once it has{" "}
                 {Math.round(WATCH_MIN_SHARE * 100)}% of the blocks or more. A miner that is merely down looks the same, and is treated
-                the same: if a reversal came, it would come from that miner.
+                the same: if a reversal came, it would come from that miner. Fewer blocks only count against it while it also publishes
+                less than its share of everyone&apos;s: when hashrate leaves every pool alike, all of them slow down together, and that
+                is not mining in secret.
               </p>
               <dl className="grid gap-x-6 gap-y-2.5 sm:grid-cols-2">
                 {DOT.map(({ grade, label, when }) => (

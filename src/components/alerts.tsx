@@ -386,7 +386,7 @@ export function useAlerts({
       title:
         stretch.found === 0
           ? `${name} has published no block for ${formatClock(stretch.seconds * 1000)}.`
-          : `${name} published ${plural(stretch.found, "block")} in ${formatClock(stretch.seconds * 1000)}, against ${formatInt(Math.round(stretch.expected))} expected.`,
+          : `${name} published ${stretch.published != null ? `${formatInt(stretch.found)} of the ${plural(stretch.published, "block")}` : plural(stretch.found, "block")} in ${formatClock(stretch.seconds * 1000)}, against ${formatInt(Math.round(stretch.expected))} expected.`,
       body: `It found ${Math.round(share * 100)}% of the week's blocks. A miner that stops publishing may be mining a chain in secret to replace recent payments, or may just be down: payments in blocks after #${formatInt(stretch.height)} are not settled until it is back.`,
       ask: { who: "If you accept LAX", what: `hold off on payments confirmed after block #${formatInt(stretch.height)}.` },
       facts: [`1 in ${formatCompact(1 / chance)} if mining openly`],

@@ -238,6 +238,8 @@ function watchDetails(charts: Charts | null, now: number) {
     since: quiet.stretch.timestamp * 1000,
     found: quiet.stretch.found,
     expected: quiet.stretch.expected,
+    // Every miner's blocks after `fromHeight`; null when the newest height is not known
+    published: quiet.stretch.published,
     // The chance of a stretch that quiet while mining openly; at 0.01 or more it counts as mining in the open
     chance: quiet.chance,
     open: open(quiet),

@@ -9,7 +9,7 @@
 // payment would cost: the rewards of the blocks of its own that the miner
 // throws away to do it.
 
-import { OPEN_CHANCE, poissonAtMost, stretchWeight, WATCH_BLOCKS } from "./withholding.ts";
+import { binomialAtMost, OPEN_CHANCE, poissonAtMost, stretchWeight, WATCH_BLOCKS } from "./withholding.ts";
 
 /** Confidence levels the dashboard reports, as the chance an attack fails. */
 export const CONFIDENCE = [0.99, 0.999, 0.9999] as const;
@@ -60,8 +60,10 @@ export function attackerSuccess(q: number, z: number, hidden = q): number {
  * hiddenShare is the most of its share `q` a miner could mine in secret
  * while a payment gets `z` confirmations and still, as a rule, be called
  * mining in the open by the watch: its blocks among them would come at
- * `q - h` of `1 - h`, against `q` expected, and pass for luck. The watch
- * sees no further back than WATCH_BLOCKS of its blocks.
+ * `q - h` of `1 - h`, against `q` expected, and pass for luck by the
+ * clock or by its share of the public blocks, whichever is likelier, as
+ * the watch judges them. The watch sees no further back than WATCH_BLOCKS
+ * of its blocks.
  */
 export function hiddenShare(q: number, z: number): number {
   if (q <= 0 || z === 0) return q;
@@ -75,7 +77,9 @@ export function hiddenShare(q: number, z: number): number {
     const seen = Math.floor(((q - h) * window) / (1 - h));
     const expected = (q * window) / (1 - h);
 
-    if (stretchWeight(seen + 1) * poissonAtMost(seen, expected) >= OPEN_CHANCE) low = h;
+    const odds = seen > 0 ? Math.max(poissonAtMost(seen, expected), binomialAtMost(seen, Math.floor(window), q)) : poissonAtMost(seen, expected);
+
+    if (stretchWeight(seen + 1) * odds >= OPEN_CHANCE) low = h;
     else high = h;
   }
 

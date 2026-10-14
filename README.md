@@ -244,7 +244,7 @@ numbers; shares are fractions from 0 to 1.
 | `hashprice` | what a hash earns in a day, in LAX, fees included: `laxPerHashPerSecondPerDay`, the same per the page's `unit` (such as `MH/s`) as `laxPerUnitPerDay`, which `difficulty` it uses (`next` or `latest`), and `blockPayLax`: the next block's reward plus recent blocks' mean fees |
 | `securityBudget` | what miners earn in a day at the last 24 hours' pace of blocks: `laxPerDay`, `scheduledLaxPerDay` (at the 10 minute target), and that pace as `blockTimeSeconds` |
 | `mempool` | `pending` (the median of synced nodes), `pressure` (the room the waiting transactions need, as a share of a block) and `blocksToClear` |
-| `confirmations` | the wait to recommend against the largest miner of the last 7 days: `largestMiner` (`name`, `address`, `share`), `judged` (false with too few blocks to judge), `majority` (no wait is certain), `levels`: `blocks` and `waitSeconds` for each `confidence` (0.99, 0.999, 0.9999), `null` past 1,000 blocks; `openLevels`, the same for a payment accepted while the miner is seen mining in the open; `reversalCost`: what replacing a payment with `blocks` confirmations (6, 12, 24) costs the miner, in `lax` and `usd` (`null` without a price); and `watch`, whether it still mines in the open (`null` under a 25% share): `lastBlock` (`height`, `timestamp`), its quietest recent stretch from `fromHeight` and `since` with `found` of `expected` blocks, the `chance` of that while mining openly, `open` (the chance is 0.01 or more: the page shows `openLevels`), and `level` (`warn`, `critical` or `null`) |
+| `confirmations` | the wait to recommend against the largest miner of the last 7 days: `largestMiner` (`name`, `address`, `share`), `judged` (false with too few blocks to judge), `majority` (no wait is certain), `levels`: `blocks` and `waitSeconds` for each `confidence` (0.99, 0.999, 0.9999), `null` past 1,000 blocks; `openLevels`, the same for a payment accepted while the miner is seen mining in the open; `reversalCost`: what replacing a payment with `blocks` confirmations (6, 12, 24) costs the miner, in `lax` and `usd` (`null` without a price); and `watch`, whether it still mines in the open (`null` under a 25% share): `lastBlock` (`height`, `timestamp`), its quietest recent stretch from `fromHeight` and `since` with `found` of `expected` blocks (and of the `published` blocks every miner found after it), the `chance` of that while mining openly, `open` (the chance is 0.01 or more: the page shows `openLevels`), and `level` (`warn`, `critical` or `null`) |
 | `latestBlocks` | the last 40 blocks: `transactions` (`total`, `perBlock`), `averageFullness`, `fees` (`reportedBlocks`, `averageLax`, `shareOfReward`), and `list`, newest first: `number`, `timestamp`, `miner`, `pool`, `transactions`, `gasUsed`, `gasLimit`, `feesWei`, `blockTimeSeconds` |
 | `supply` | `issuedLax`, `issuedShare`, `capLax`, `leftToMineLax`, `blockRewardLax`, `dailyIssuanceLax`, and `halving`: `era`, `nextAt`, `blocksToGo`, `eraProgress`, `leftThisEraLax`, `nextRewardLax`, and when it is `expected` at the target block time |
 | `uptime` | `verifiedAveragePercent`: verified nodes' average uptime |
@@ -316,8 +316,8 @@ Tells the caller whether they can report under a node name: `available`,
   mining in the open (the tile's green dot, below) it cannot have, beyond
   what could pass for bad luck, and needs far fewer: the tile then allows
   for the most of its share it could hide while the dot stays green, about
-  a quarter, and asks for 19 blocks against 30%, 51 against 45% and 205
-  against 49%, for payments accepted while the dot is green. A pool counts
+  a third near a majority, and asks for 22 blocks against 30%, 56 against
+  45% and 218 against 49%, for payments accepted while the dot is green. A pool counts
   as one miner.
   With a majority no number is certain, so the tile shows what replacing a
   payment would cost that miner instead: about its share of the rewards of
@@ -326,16 +326,20 @@ Tells the caller whether they can report under a node name: `available`,
   leaves out what cannot be counted, such as the pool's miners leaving.
 - **Potential hidden mining**: to replace payments the largest miner has
   to mine a chain in secret, and the hashrate it gives that chain goes
-  missing from the public one. So the tile also watches, for a miner with
-  25% of the blocks or more, how long since its last block, and over its
-  last 144 blocks, the stretch it published fewest in for its share
-  (allowing for the stretches looked at). The dot is green while that is
-  ordinary luck, grey once a miner mining openly would show it less than
-  once in 100 times, amber at once in 10,000, with an alert, and red at
-  once in a million, with payments on hold: at 94% of the blocks, about
-  1 h 20 min and 2 h without one of its blocks. Colour on the tile only
-  ever means this, what is happening now; what the largest miner could do
-  is the decentralization tile's and the majority alert's. A miner that is
+  missing from the public one. So the tile also watches, for a miner
+  with 25% of the blocks or more, how long since its last block, and
+  over its last 144 blocks, the stretch it published fewest in for its
+  share (allowing for the stretches looked at). A stretch in which it
+  published some blocks also has to be unlikely against its share of
+  every miner's blocks after it, so hashrate leaving every pool alike,
+  which slows all of them, is not taken for hidden mining; a silence is
+  judged by the clock alone. The dot is green while that is ordinary
+  luck, grey once a miner mining openly would show it less than once in
+  100 times, amber at once in 10,000, with an alert, and red at once in
+  a million, with payments on hold: at 94% of the blocks, about 1 h 20
+  min and 2 h without one of its blocks. Colour on the tile only ever
+  means this, what is happening now; what the largest miner could do is
+  the decentralization tile's and the majority alert's. A miner that is
   merely down looks the same, and is flagged the same: the blocks after
   its last one are the ones a secret chain would replace.
 - **Mempool pressure** is the room the transactions waiting in the

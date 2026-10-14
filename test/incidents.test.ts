@@ -125,6 +125,7 @@ test("the largest miner going quiet opens at once, dated from its last block, an
     miners: [{ miner: "0xabc", pool: { name: "rplant.xyz", url: null }, blocks: 940 }],
     minerBlocks: 1000,
     avgBlocktime: 500,
+    height: [500],
     topMinerBlocks: [{ height: 500, timestamp: last }],
     health: { split: null },
     propagation: { spread: null },

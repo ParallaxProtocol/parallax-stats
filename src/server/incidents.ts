@@ -107,10 +107,12 @@ export function observe(charts: Charts | null, now: number): Partial<{ [K in Spa
 }
 
 /** quietDetail says how quiet the largest miner has been: rplant.xyz published no block after #59,663 for 2 h 05 min. */
-function quietDetail(name: string, stretch: { height: number; found: number; expected: number; seconds: number }): string {
+function quietDetail(name: string, stretch: { height: number; found: number; expected: number; seconds: number; published?: number | null }): string {
+  const of = stretch.published != null ? `${formatInt(stretch.found)} of the ${plural(stretch.published, "block")}` : plural(stretch.found, "block");
+
   return stretch.found === 0
     ? `${name} published no block after #${formatInt(stretch.height)} for ${formatClock(stretch.seconds * 1000)}`
-    : `${name} published ${plural(stretch.found, "block")} after #${formatInt(stretch.height)} in ${formatClock(stretch.seconds * 1000)}, against ${formatInt(Math.round(stretch.expected))} expected`;
+    : `${name} published ${of} after #${formatInt(stretch.height)} in ${formatClock(stretch.seconds * 1000)}, against ${formatInt(Math.round(stretch.expected))} expected`;
 }
 
 /** worse reports whether an observation is worse than what an incident has recorded. */
