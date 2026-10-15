@@ -427,8 +427,9 @@ export function figures({
       grade: summary.uptime !== null ? gradeUptime(summary.uptime) : "off",
       gradeNote: summary.uptime !== null ? `Verified nodes have been up ${Math.round(summary.uptime)}% of the time, on average. 90% or more is healthy.` : undefined,
       note: "verified nodes",
-      trend: trends.uptime,
-      format: (v) => `${v.toFixed(1)}%`,
+      // Whole percents, as the headline shows: a node missing minutes would otherwise fill the scale
+      trend: trends.uptime.map((v) => (v === null ? null : Math.round(v))),
+      format: (v) => `${Math.round(v)}%`,
       detail: () => "mean, verified nodes",
       waiting: "Collecting readings",
     },
